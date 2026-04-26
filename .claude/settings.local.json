@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(where node:*)",
+      "Read(//c/Users/kmviv/**)",
+      "Bash(nodist list:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(npx prisma *)",
+      "Bash(xargs grep *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(curl -s \"http://localhost:3000/portfolios/new\")",
+      "Bash(grep -oE 'name=\"\\\\$ACTION_[^\"]*\"|action=\"[^\"]*\"')",
+      "Bash(curl -s \"http://localhost:3000/portfolios\")",
+      "Bash(curl -s \"http://localhost:3000/portfolios/does-not-exist\")",
+      "Bash(curl -s \"http://localhost:3000/portfolios/clsmoke0000000000000000\")",
+      "Bash(grep -aA8 \"Route \\\\\"/portfolios/\\\\[portfolioId\\\\]\\\\\":\" \"C:/Users/kmviv/AppData/Local/Temp/claude/D--VSCode-Projects-portfolio-manager/b4b22466-767d-45ac-a216-111b7d35fc4d/tasks/b1j1v9b9t.output\")",
+      "Bash(cp /dev/null \"C:/Users/kmviv/AppData/Local/Temp/claude/D--VSCode-Projects-portfolio-manager/b4b22466-767d-45ac-a216-111b7d35fc4d/tasks/b1j1v9b9t.output\")",
+      "Bash(curl -s -o /dev/null \"http://localhost:3000/dashboard\")",
+      "Bash(curl -s -o /dev/null \"http://localhost:3000/portfolios/clsmoke0000000000000000\")"
+    ]
+  }
+}

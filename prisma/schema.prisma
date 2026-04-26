@@ -1,0 +1,281 @@
+// Portfolio Manager database schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Settings (single-user, one row)
+// ─────────────────────────────────────────────────────────────
+
+model Settings {
+  id                  String   @id @default("singleton")
+  defaultBaseCurrency String   @default("USD")
+  pushEnabled         Boolean  @default(false)
+  pushSubscription    Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Portfolio
+// ─────────────────────────────────────────────────────────────
+
+model Portfolio {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  baseCurrency String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  trades  Trade[]
+  alerts  Alert[]
+  reviews Review[]
+
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Instrument (stock / ETF / etc.)
+// ─────────────────────────────────────────────────────────────
+
+model Instrument {
+  id             String   @id @default(cuid())
+  symbol         String
+  exchange       String
+  yahooSymbol    String   @unique
+  name           String
+  currency       String
+  sector         String?
+  industry       String?
+  instrumentType String   @default("EQUITY")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trades  Trade[]
+  prices  PriceHistory[]
+  alerts  Alert[]
+  reviews Review[]
+  notes   StockNote[]
+
+  @@index([symbol, exchange])
+  @@index([yahooSymbol])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Trade
+// ─────────────────────────────────────────────────────────────
+
+enum TradeType {
+  BUY
+  SELL
+}
+
+model Trade {
+  id           String    @id @default(cuid())
+  portfolioId  String
+  instrumentId String
+  type         TradeType
+  quantity     Decimal   @db.Decimal(18, 8)
+  price        Decimal   @db.Decimal(18, 8)
+  currency     String
+  fxRate       Decimal?  @db.Decimal(18, 8)
+  fees         Decimal   @default(0) @db.Decimal(18, 4)
+  date         DateTime
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
+
+  @@index([portfolioId, date])
+  @@index([instrumentId, date])
+  @@index([portfolioId, instrumentId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Price History (EOD)
+// ─────────────────────────────────────────────────────────────
+
+model PriceHistory {
+  id           String   @id @default(cuid())
+  instrumentId String
+  date         DateTime @db.Date
+  open         Decimal  @db.Decimal(18, 4)
+  high         Decimal  @db.Decimal(18, 4)
+  low          Decimal  @db.Decimal(18, 4)
+  close        Decimal  @db.Decimal(18, 4)
+  volume       BigInt?
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, date])
+  @@index([instrumentId, date(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// FX Rate (daily exchange rates)
+// ─────────────────────────────────────────────────────────────
+
+model FxRate {
+  id   String   @id @default(cuid())
+  pair String
+  date DateTime @db.Date
+  rate Decimal  @db.Decimal(18, 8)
+
+  @@unique([pair, date])
+  @@index([pair, date(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Alerts
+// ─────────────────────────────────────────────────────────────
+
+enum AlertType {
+  PRICE_ABOVE
+  PRICE_BELOW
+  PCT_CHANGE
+  REVIEW_TIMER
+  ALLOCATION_DRIFT
+  DIVIDEND_EVENT
+  EARNINGS_EVENT
+}
+
+enum AlertStatus {
+  ACTIVE
+  TRIGGERED
+  SNOOZED
+  DISMISSED
+}
+
+model Alert {
+  id           String      @id @default(cuid())
+  type         AlertType
+  status       AlertStatus @default(ACTIVE)
+  portfolioId  String?
+  instrumentId String?
+
+  // Price alert fields
+  priceTarget    Decimal? @db.Decimal(18, 4)
+  priceDirection String?
+  pctChange      Decimal? @db.Decimal(8, 4)
+  referencePrice Decimal? @db.Decimal(18, 4)
+
+  // Time-based review fields
+  reviewIntervalDays Int?
+  lastReviewDate     DateTime?
+
+  // Allocation drift fields
+  allocationThreshold Decimal? @db.Decimal(8, 4)
+
+  // Snooze fields
+  snoozedUntil DateTime?
+
+  message     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  triggeredAt DateTime?
+
+  portfolio     Portfolio?     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument    Instrument?    @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  reviews       Review[]
+  notifications Notification[]
+
+  @@index([status, type])
+  @@index([instrumentId, status])
+  @@index([portfolioId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Review (task queue)
+// ─────────────────────────────────────────────────────────────
+
+enum ReviewStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ReviewAction {
+  HOLD
+  BUY
+  SELL
+  WATCH
+  OTHER
+}
+
+model Review {
+  id            String        @id @default(cuid())
+  status        ReviewStatus  @default(PENDING)
+  alertId       String?
+  portfolioId   String?
+  instrumentId  String?
+  triggerReason String
+  notes         String?
+  action        ReviewAction?
+  priority      Int           @default(0)
+  decisionDate  DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  alert      Alert?      @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  portfolio  Portfolio?  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument? @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([status, priority(sort: Desc)])
+  @@index([instrumentId, status])
+  @@index([portfolioId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Stock Notes (per-instrument user notes)
+// ─────────────────────────────────────────────────────────────
+
+model StockNote {
+  id           String   @id @default(cuid())
+  instrumentId String
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([instrumentId, updatedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────
+
+enum NotificationType {
+  PRICE_ALERT
+  REVIEW_DUE
+  ALLOCATION_DRIFT
+  DIVIDEND_EVENT
+  EARNINGS_EVENT
+  SYSTEM
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  dismissed Boolean          @default(false)
+  alertId   String?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  alert Alert? @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  @@index([read, dismissed, createdAt(sort: Desc)])
+  @@index([alertId])
+}

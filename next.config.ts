@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  cacheComponents: true,
+  serverExternalPackages: ["yahoo-finance2"],
 };
 
 export default nextConfig;
