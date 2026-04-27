@@ -1,29 +1,64 @@
+import { Suspense } from "react";
+import { AllocationChart, AllocationChartSkeleton } from "@/components/dashboard/allocation-chart";
+import { PortfolioSummaryList, PortfolioSummaryListSkeleton } from "@/components/dashboard/portfolio-summary-list";
+import { ReviewsSummary, ReviewsSummarySkeleton } from "@/components/dashboard/reviews-summary";
+import { SummaryCards, SummaryCardsSkeleton } from "@/components/dashboard/summary-cards";
+import { TopMovers, TopMoversSkeleton } from "@/components/dashboard/top-movers";
+import { ValueChart, ValueChartSkeleton } from "@/components/dashboard/value-chart";
+
 export default function DashboardPage() {
   return (
-    <div className="mx-auto max-w-6xl">
-      <header className="mb-8 border-b border-border pb-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-10">
+      <header className="border-b border-border pb-6">
         <p className="label">Today</p>
         <h1 className="display mt-2 text-4xl text-foreground">Dashboard</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Aggregate value, performance and review queue across every portfolio. Detail panels arrive
-          in Phase 3.
+          Aggregate value, performance, and movement across every portfolio.
         </p>
       </header>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <PlaceholderCard label="Total value" />
-        <PlaceholderCard label="Unrealized P&L" />
-        <PlaceholderCard label="Daily change" />
-      </div>
-    </div>
-  );
-}
+      <Suspense fallback={<SummaryCardsSkeleton />}>
+        <SummaryCards />
+      </Suspense>
 
-function PlaceholderCard({ label }: { label: string }) {
-  return (
-    <div className="hairline bg-surface p-5">
-      <p className="label">{label}</p>
-      <p className="display tabular mt-3 text-3xl text-subtle">—</p>
+      <section className="flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">Value over time</h2>
+        <Suspense fallback={<ValueChartSkeleton />}>
+          <ValueChart days={90} />
+        </Suspense>
+      </section>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <section className="flex flex-col gap-3">
+          <h2 className="display text-2xl text-foreground">Allocation</h2>
+          <Suspense fallback={<AllocationChartSkeleton />}>
+            <AllocationChart groupBy="portfolio" />
+          </Suspense>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="display text-2xl text-foreground">Top movers</h2>
+          <Suspense fallback={<TopMoversSkeleton />}>
+            <TopMovers />
+          </Suspense>
+        </section>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <section className="flex flex-col gap-3">
+          <h2 className="display text-2xl text-foreground">Portfolios</h2>
+          <Suspense fallback={<PortfolioSummaryListSkeleton />}>
+            <PortfolioSummaryList />
+          </Suspense>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="display text-2xl text-foreground">Reviews</h2>
+          <Suspense fallback={<ReviewsSummarySkeleton />}>
+            <ReviewsSummary />
+          </Suspense>
+        </section>
+      </div>
     </div>
   );
 }

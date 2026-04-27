@@ -1,28 +1,6 @@
 import Link from "next/link";
-import {
-  Bell,
-  Briefcase,
-  ClipboardCheck,
-  LayoutDashboard,
-  LineChart,
-  Settings,
-} from "lucide-react";
 import { NavLink } from "./nav-link";
-
-const ICON_CLASS = "h-4 w-4";
-const ICON_STROKE = 1.5;
-
-const PRIMARY_NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-  { href: "/portfolios", label: "Portfolios", icon: <Briefcase className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-  { href: "/stocks", label: "Stocks", icon: <LineChart className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-  { href: "/alerts", label: "Alerts", icon: <Bell className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-  { href: "/reviews", label: "Reviews", icon: <ClipboardCheck className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-];
-
-const SECONDARY_NAV = [
-  { href: "/settings", label: "Settings", icon: <Settings className={ICON_CLASS} strokeWidth={ICON_STROKE} /> },
-];
+import { PRIMARY_NAV, SECONDARY_NAV } from "./nav-config";
 
 export function Sidebar() {
   return (

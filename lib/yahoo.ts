@@ -1,4 +1,3 @@
-import "server-only";
 import YahooFinance from "yahoo-finance2";
 
 const yahoo = new YahooFinance({
@@ -166,4 +165,93 @@ export async function fetchFxRate(pair: string): Promise<number | null> {
 
 export async function fetchFxHistory(pair: string, from: Date, to: Date = new Date()) {
   return fetchDailyHistory(`${pair.toUpperCase()}=X`, from, to);
+}
+
+export type FinancialSummary = {
+  yahooSymbol: string;
+  marketCap: number | null;
+  peRatio: number | null;
+  forwardPE: number | null;
+  eps: number | null;
+  dividendYield: number | null;
+  dividendRate: number | null;
+  beta: number | null;
+  weekHigh52: number | null;
+  weekLow52: number | null;
+  averageVolume: number | null;
+  bookValue: number | null;
+  priceToBook: number | null;
+  profitMargin: number | null;
+  returnOnEquity: number | null;
+  revenueGrowth: number | null;
+  earningsGrowth: number | null;
+  totalRevenue: number | null;
+  freeCashflow: number | null;
+  longBusinessSummary: string | null;
+};
+
+export async function fetchFinancialSummary(yahooSymbol: string): Promise<FinancialSummary | null> {
+  const sym = yahooSymbol.trim().toUpperCase();
+  if (!sym) return null;
+
+  try {
+    const summary = await yahoo.quoteSummary(sym, {
+      modules: ["summaryDetail", "defaultKeyStatistics", "financialData", "summaryProfile"],
+    });
+
+    const detail = summary.summaryDetail;
+    const stats = summary.defaultKeyStatistics;
+    const fin = summary.financialData;
+    const profile = summary.summaryProfile;
+
+    return {
+      yahooSymbol: sym,
+      marketCap: detail?.marketCap ?? null,
+      peRatio: detail?.trailingPE ?? null,
+      forwardPE: detail?.forwardPE ?? stats?.forwardPE ?? null,
+      eps: stats?.trailingEps ?? null,
+      dividendYield: detail?.dividendYield ?? null,
+      dividendRate: detail?.dividendRate ?? null,
+      beta: detail?.beta ?? stats?.beta ?? null,
+      weekHigh52: detail?.fiftyTwoWeekHigh ?? null,
+      weekLow52: detail?.fiftyTwoWeekLow ?? null,
+      averageVolume: detail?.averageVolume ?? null,
+      bookValue: stats?.bookValue ?? null,
+      priceToBook: stats?.priceToBook ?? null,
+      profitMargin: fin?.profitMargins ?? null,
+      returnOnEquity: fin?.returnOnEquity ?? null,
+      revenueGrowth: fin?.revenueGrowth ?? null,
+      earningsGrowth: fin?.earningsGrowth ?? null,
+      totalRevenue: fin?.totalRevenue ?? null,
+      freeCashflow: fin?.freeCashflow ?? null,
+      longBusinessSummary: profile?.longBusinessSummary ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type NewsItem = {
+  uuid: string;
+  title: string;
+  link: string;
+  publisher: string;
+  publishedAt: Date;
+  thumbnail: string | null;
+};
+
+export async function fetchNews(yahooSymbol: string, count = 8): Promise<NewsItem[]> {
+  try {
+    const result = await yahoo.search(yahooSymbol, { quotesCount: 0, newsCount: count });
+    return result.news.map((n) => ({
+      uuid: n.uuid,
+      title: n.title,
+      link: n.link,
+      publisher: n.publisher ?? "",
+      publishedAt: n.providerPublishTime instanceof Date ? n.providerPublishTime : new Date(n.providerPublishTime),
+      thumbnail: n.thumbnail?.resolutions?.[0]?.url ?? null,
+    }));
+  } catch {
+    return [];
+  }
 }

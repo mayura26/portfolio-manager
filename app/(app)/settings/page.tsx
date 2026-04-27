@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getSettings } from "@/actions/settings";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { PushToggle } from "@/components/settings/push-toggle";
 import { Skeleton } from "@/components/shared/skeleton";
 
 export default function SettingsPage() {
@@ -10,18 +11,39 @@ export default function SettingsPage() {
         <p className="label">Configuration</p>
         <h1 className="display mt-2 text-4xl text-foreground">Settings</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Global preferences. Push notifications and key management arrive in Phase 5.
+          Global preferences and notification controls.
         </p>
       </header>
 
-      <Suspense fallback={<Skeleton className="h-40 w-full max-w-xl" />}>
-        <SettingsContent />
-      </Suspense>
+      <div className="flex flex-col gap-12">
+        <section>
+          <h2 className="display mb-4 text-2xl text-foreground">General</h2>
+          <Suspense fallback={<Skeleton className="h-40 w-full max-w-xl" />}>
+            <GeneralSettings />
+          </Suspense>
+        </section>
+
+        <section>
+          <h2 className="display mb-2 text-2xl text-foreground">Push notifications</h2>
+          <p className="mb-4 max-w-prose text-sm text-muted">
+            Receive triggered alerts on your phone or desktop. Requires the app to be installed as a
+            PWA on iOS.
+          </p>
+          <Suspense fallback={<Skeleton className="h-12 w-64" />}>
+            <PushSection />
+          </Suspense>
+        </section>
+      </div>
     </div>
   );
 }
 
-async function SettingsContent() {
+async function GeneralSettings() {
   const settings = await getSettings();
   return <SettingsForm defaults={{ defaultBaseCurrency: settings.defaultBaseCurrency }} />;
+}
+
+async function PushSection() {
+  const settings = await getSettings();
+  return <PushToggle initiallyEnabled={settings.pushEnabled} />;
 }

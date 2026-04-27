@@ -7,21 +7,28 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
-    "format": "biome format --write"
+    "format": "biome format --write",
+    "cron:prices": "tsx scripts/cron-prices.ts",
+    "cron:fx-rates": "tsx scripts/cron-fx-rates.ts",
+    "cron:alerts": "tsx scripts/cron-alerts.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@tanstack/react-table": "^8.21.3",
+    "@types/web-push": "^3.6.4",
     "date-fns": "^4.1.0",
     "decimal.js": "^10.6.0",
     "lucide-react": "^1.11.0",
     "next": "16.2.4",
     "prisma": "^7.8.0",
     "react": "19.2.4",
+    "react-day-picker": "^9.14.0",
     "react-dom": "19.2.4",
-    "server-only": "^0.0.1",
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.8.1",
     "sonner": "^2.0.7",
+    "web-push": "^3.6.7",
     "yahoo-finance2": "^3.14.0",
     "zod": "^4.3.6"
   },
@@ -33,6 +40,7 @@
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

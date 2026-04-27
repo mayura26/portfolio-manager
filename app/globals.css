@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
 
 /* ─────────────────────────────────────────────────────────────
    The Considered Ledger — design tokens
@@ -6,6 +7,8 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: light dark;
+
   /* Surface */
   --background: #faf7f2;        /* parchment */
   --surface: #f4efe6;           /* card */
@@ -178,4 +181,123 @@ input, select, textarea, button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   react-day-picker theme — wired to design tokens
+   ───────────────────────────────────────────────────────────── */
+
+.rdp-root {
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: var(--gain-soft);
+  --rdp-day_button-border-radius: 0;
+  --rdp-day_button-border: 1px solid transparent;
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+  --rdp-day_button-height: 34px;
+  --rdp-day_button-width: 34px;
+  --rdp-selected-border: 1px solid var(--accent);
+  --rdp-today-color: var(--accent);
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-nav-height: 2rem;
+  --rdp-weekday-text-transform: uppercase;
+  --rdp-weekday-font-size: 0.6875rem;
+  --rdp-weekday-opacity: 1;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+}
+
+.rdp-month_caption {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.rdp-weekday {
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
+.rdp-day_button {
+  font-variant-numeric: tabular-nums;
+}
+
+.rdp-day_button:hover:not([disabled]) {
+  background: var(--surface);
+}
+
+.rdp-selected .rdp-day_button {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.rdp-today:not(.rdp-selected) .rdp-day_button {
+  border-color: var(--border-strong);
+}
+
+.rdp-chevron {
+  fill: var(--muted);
+}
+
+.rdp-button_previous:hover .rdp-chevron,
+.rdp-button_next:hover .rdp-chevron {
+  fill: var(--foreground);
+}
+
+/* Caption month/year dropdowns — native selects styled to match the surface.
+   Important for dark mode: defaults bleed parchment into the option list. */
+.rdp-dropdown_root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rdp-dropdown {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.25rem 1.25rem 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.rdp-dropdown:hover {
+  border-color: var(--border-strong);
+}
+
+.rdp-dropdown:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Best-effort: most browsers honor option background/color, though the
+   highlighted (currently-hovered) item is OS-controlled. */
+.rdp-dropdown option {
+  background: var(--surface-elevated);
+  color: var(--foreground);
+}
+
+.rdp-dropdown option:checked {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* Replacement chevron since appearance:none hides the native one */
+.rdp-dropdown_root::after {
+  content: "";
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--muted);
+  transform: translateY(-25%);
+  pointer-events: none;
 }
