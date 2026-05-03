@@ -26,5 +26,10 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/app/generated ./app/generated
+# Coolify (or any scheduler) can run the same image: npm run cron:prices | cron:fx-rates | cron:alerts
+# with DATABASE_URL (and VAPID_* + VAPID_EMAIL if push from alerts) from the platform.
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 EXPOSE 3000
 CMD ["npm", "run", "start"]
