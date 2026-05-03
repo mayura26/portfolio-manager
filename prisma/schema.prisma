@@ -18,6 +18,8 @@ model Settings {
   defaultBaseCurrency String   @default("USD")
   pushEnabled         Boolean  @default(false)
   pushSubscription    Json?
+  watchlistAiModel    String   @default("gpt-5.4")
+  watchlistAiReasoning String  @default("medium")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -58,11 +60,12 @@ model Instrument {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  trades  Trade[]
-  prices  PriceHistory[]
-  alerts  Alert[]
-  reviews Review[]
-  notes   StockNote[]
+  trades         Trade[]
+  prices         PriceHistory[]
+  alerts         Alert[]
+  reviews        Review[]
+  notes          StockNote[]
+  watchlistItems WatchlistItem[]
 
   @@index([symbol, exchange])
   @@index([yahooSymbol])
@@ -187,6 +190,7 @@ model Alert {
   instrument    Instrument?    @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   reviews       Review[]
   notifications Notification[]
+  watchlistItem WatchlistItem?
 
   @@index([status, type])
   @@index([instrumentId, status])
@@ -278,4 +282,35 @@ model Notification {
 
   @@index([read, dismissed, createdAt(sort: Desc)])
   @@index([alertId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Watchlist
+// ─────────────────────────────────────────────────────────────
+
+enum WatchlistStatus {
+  WATCHING
+  ARCHIVED
+  BOUGHT
+}
+
+model WatchlistItem {
+  id           String          @id @default(cuid())
+  instrumentId String
+  status       WatchlistStatus @default(WATCHING)
+
+  buyRangeLow  Decimal? @db.Decimal(18, 4)
+  buyRangeHigh Decimal? @db.Decimal(18, 4)
+  aiAnalysis   Json?
+  alertId      String?  @unique
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  alert      Alert?     @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  @@unique([instrumentId])
+  @@index([status, createdAt(sort: Desc)])
 }

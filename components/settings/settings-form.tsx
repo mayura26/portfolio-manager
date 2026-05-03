@@ -7,6 +7,8 @@ import { updateSettings, type SettingsActionState } from "@/actions/settings";
 type Props = {
   defaults: {
     defaultBaseCurrency: string;
+    watchlistAiModel: string;
+    watchlistAiReasoning: string;
   };
 };
 
@@ -44,6 +46,50 @@ export function SettingsForm({ defaults }: Props) {
         </p>
         {fieldErrors?.defaultBaseCurrency?.[0] ? (
           <p className="text-xs text-loss">{fieldErrors.defaultBaseCurrency[0]}</p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="watchlistAiModel" className="label">
+          Watchlist AI model
+        </label>
+        <select
+          id="watchlistAiModel"
+          name="watchlistAiModel"
+          defaultValue={defaults.watchlistAiModel}
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+        >
+          <option value="gpt-5.4">gpt-5.4 — higher quality, 250K tokens/day free quota</option>
+          <option value="gpt-5.4-mini">gpt-5.4-mini — faster, 2.5M tokens/day free quota</option>
+        </select>
+        <p className="text-xs text-subtle">
+          Used when you click <strong>Analyse</strong> on a watchlist item to suggest a buy zone.
+        </p>
+        {fieldErrors?.watchlistAiModel?.[0] ? (
+          <p className="text-xs text-loss">{fieldErrors.watchlistAiModel[0]}</p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="watchlistAiReasoning" className="label">
+          Reasoning effort
+        </label>
+        <select
+          id="watchlistAiReasoning"
+          name="watchlistAiReasoning"
+          defaultValue={defaults.watchlistAiReasoning}
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+        >
+          <option value="minimal">Minimal — fastest, shallowest</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium (default)</option>
+          <option value="high">High — slowest, most thorough</option>
+        </select>
+        <p className="text-xs text-subtle">
+          Higher reasoning produces more considered analysis but uses more tokens and takes longer.
+        </p>
+        {fieldErrors?.watchlistAiReasoning?.[0] ? (
+          <p className="text-xs text-loss">{fieldErrors.watchlistAiReasoning[0]}</p>
         ) : null}
       </div>
 

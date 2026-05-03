@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bookmark,
   Briefcase,
   ClipboardCheck,
   LayoutDashboard,
@@ -42,6 +43,11 @@ export const PRIMARY_NAV: NavItem[] = [
     href: "/reviews",
     label: "Reviews",
     icon: <ClipboardCheck className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
+  },
+  {
+    href: "/watchlist",
+    label: "Watchlist",
+    icon: <Bookmark className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
   },
 ];
 

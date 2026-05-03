@@ -40,7 +40,15 @@ export default function SettingsPage() {
 
 async function GeneralSettings() {
   const settings = await getSettings();
-  return <SettingsForm defaults={{ defaultBaseCurrency: settings.defaultBaseCurrency }} />;
+  return (
+    <SettingsForm
+      defaults={{
+        defaultBaseCurrency: settings.defaultBaseCurrency,
+        watchlistAiModel: settings.watchlistAiModel,
+        watchlistAiReasoning: settings.watchlistAiReasoning,
+      }}
+    />
+  );
 }
 
 async function PushSection() {

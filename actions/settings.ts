@@ -26,6 +26,8 @@ export async function updateSettings(
   const parsed = settingsSchema.safeParse({
     defaultBaseCurrency: formData.get("defaultBaseCurrency"),
     pushEnabled: formData.get("pushEnabled") === "on",
+    watchlistAiModel: formData.get("watchlistAiModel") ?? undefined,
+    watchlistAiReasoning: formData.get("watchlistAiReasoning") ?? undefined,
   });
 
   if (!parsed.success) {

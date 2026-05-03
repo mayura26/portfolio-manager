@@ -135,9 +135,52 @@ export type StockNoteInput = z.infer<typeof stockNoteSchema>;
 
 // ─── Settings ─────────────────────────────────────────────────
 
+export const watchlistAiModelEnum = z.enum(["gpt-5.4", "gpt-5.4-mini"]);
+
+export type WatchlistAiModel = z.infer<typeof watchlistAiModelEnum>;
+
+export const watchlistAiReasoningEnum = z.enum(["minimal", "low", "medium", "high"]);
+
+export type WatchlistAiReasoning = z.infer<typeof watchlistAiReasoningEnum>;
+
 export const settingsSchema = z.object({
   defaultBaseCurrency: currencySchema,
   pushEnabled: z.boolean().optional().default(false),
+  watchlistAiModel: watchlistAiModelEnum.optional().default("gpt-5.4"),
+  watchlistAiReasoning: watchlistAiReasoningEnum.optional().default("medium"),
 });
 
 export type SettingsInput = z.infer<typeof settingsSchema>;
+
+// ─── Watchlist ────────────────────────────────────────────────
+
+export const watchlistItemSchema = z
+  .object({
+    yahooSymbol: z.string().trim().min(1, "Symbol is required"),
+    buyRangeLow: decimalString.optional().nullable(),
+    buyRangeHigh: decimalString.optional().nullable(),
+    notes: z
+      .string()
+      .trim()
+      .max(1000)
+      .optional()
+      .transform((v) => (v?.length ? v : null)),
+  })
+  .refine(
+    (d) => !d.buyRangeLow || !d.buyRangeHigh || Number(d.buyRangeHigh) > Number(d.buyRangeLow),
+    { message: "High must exceed low", path: ["buyRangeHigh"] },
+  );
+
+export type WatchlistItemInput = z.infer<typeof watchlistItemSchema>;
+
+export const buyRangeSchema = z
+  .object({
+    buyRangeLow: positiveDecimal,
+    buyRangeHigh: positiveDecimal,
+  })
+  .refine((d) => Number(d.buyRangeHigh) > Number(d.buyRangeLow), {
+    message: "High must exceed low",
+    path: ["buyRangeHigh"],
+  });
+
+export type BuyRangeInput = z.infer<typeof buyRangeSchema>;
