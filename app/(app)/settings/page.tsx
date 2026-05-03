@@ -1,10 +1,14 @@
 import { Suspense } from "react";
 import { getSettings } from "@/actions/settings";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { PushToggle } from "@/components/settings/push-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { Skeleton } from "@/components/shared/skeleton";
+import { isAuthFullyConfigured } from "@/lib/auth-env";
 
 export default function SettingsPage() {
+  const authGate = isAuthFullyConfigured();
+
   return (
     <div className="mx-auto max-w-3xl">
       <header className="mb-8 border-b border-border pb-6">
@@ -35,6 +39,17 @@ export default function SettingsPage() {
             <PushSection />
           </Suspense>
         </section>
+
+        {authGate ? (
+          <section>
+            <h2 className="display mb-2 text-2xl text-foreground">Account</h2>
+            <p className="mb-4 max-w-prose text-sm text-muted">
+              End your session on this device. You will need to sign in again to
+              use the app.
+            </p>
+            <SignOutButton />
+          </section>
+        ) : null}
       </div>
     </div>
   );

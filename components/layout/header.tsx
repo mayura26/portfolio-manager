@@ -1,13 +1,17 @@
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { HeaderAuth } from "@/components/layout/header-auth";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import {
   NotificationBell,
   NotificationBellSkeleton,
 } from "@/components/notifications/notification-bell";
+import { isAuthFullyConfigured } from "@/lib/auth-env";
 
 export function Header() {
+  const showAuthControls = isAuthFullyConfigured();
+
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur md:px-6">
       <div className="flex items-center gap-2 md:hidden">
@@ -22,6 +26,7 @@ export function Header() {
       <div className="hidden md:block" />
 
       <div className="flex items-center gap-2">
+        <HeaderAuth enabled={showAuthControls} />
         <Suspense fallback={<NotificationBellSkeleton />}>
           <NotificationBell />
         </Suspense>
