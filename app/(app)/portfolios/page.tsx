@@ -1,10 +1,10 @@
-import { Suspense } from "react";
-import Link from "next/link";
 import { Briefcase, Plus } from "lucide-react";
-import { db } from "@/lib/db";
+import Link from "next/link";
+import { Suspense } from "react";
 import { PortfolioCard } from "@/components/portfolios/portfolio-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 export default function PortfoliosPage() {
   return (
@@ -14,7 +14,8 @@ export default function PortfoliosPage() {
           <p className="label">Holdings</p>
           <h1 className="display mt-2 text-4xl text-foreground">Portfolios</h1>
           <p className="mt-2 max-w-prose text-sm text-muted">
-            A portfolio is a logical grouping of trades reported in a single base currency.
+            A portfolio is a logical grouping of trades reported in a single
+            base currency.
           </p>
         </div>
         <Link

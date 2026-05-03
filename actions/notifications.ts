@@ -8,7 +8,9 @@ function revalidate() {
   revalidatePath("/dashboard");
 }
 
-export async function markNotificationRead(notificationId: string): Promise<void> {
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<void> {
   await db.notification.update({
     where: { id: notificationId },
     data: { read: true },
@@ -16,7 +18,9 @@ export async function markNotificationRead(notificationId: string): Promise<void
   revalidate();
 }
 
-export async function dismissNotification(notificationId: string): Promise<void> {
+export async function dismissNotification(
+  notificationId: string,
+): Promise<void> {
   await db.notification.update({
     where: { id: notificationId },
     data: { dismissed: true, read: true },

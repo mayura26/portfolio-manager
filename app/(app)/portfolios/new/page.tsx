@@ -1,9 +1,9 @@
-import { Suspense } from "react";
 import Link from "next/link";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { createPortfolio } from "@/actions/portfolios";
 import { PortfolioForm } from "@/components/portfolios/portfolio-form";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 export default function NewPortfolioPage() {
   return (

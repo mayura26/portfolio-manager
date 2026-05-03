@@ -47,28 +47,41 @@ export async function createTrade(
   }
 
   const data = parsed.data;
-  const portfolio = await db.portfolio.findUnique({ where: { id: data.portfolioId } });
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: data.portfolioId },
+  });
   if (!portfolio) {
     return { ok: false, error: "Portfolio not found" };
   }
 
-  let instrument;
+  let instrument: Awaited<ReturnType<typeof findOrCreateInstrument>>;
   try {
     instrument = await findOrCreateInstrument(data.yahooSymbol);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not look up instrument" };
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Could not look up instrument",
+    };
   }
 
   const tradeCurrency = data.currency.toUpperCase();
   let fxRate: string | null = null;
   if (tradeCurrency !== portfolio.baseCurrency) {
     try {
-      const rate = await getFxRate(tradeCurrency, portfolio.baseCurrency, data.date);
+      const rate = await getFxRate(
+        tradeCurrency,
+        portfolio.baseCurrency,
+        data.date,
+      );
       fxRate = rate.toString();
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Unable to fetch FX rate for this trade",
+        error:
+          err instanceof Error
+            ? err.message
+            : "Unable to fetch FX rate for this trade",
       };
     }
   }
@@ -116,23 +129,34 @@ export async function updateTrade(
     return { ok: false, error: "Cannot move trade between portfolios" };
   }
 
-  let instrument;
+  let instrument: Awaited<ReturnType<typeof findOrCreateInstrument>>;
   try {
     instrument = await findOrCreateInstrument(data.yahooSymbol);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not look up instrument" };
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Could not look up instrument",
+    };
   }
 
   const tradeCurrency = data.currency.toUpperCase();
   let fxRate: string | null = null;
   if (tradeCurrency !== trade.portfolio.baseCurrency) {
     try {
-      const rate = await getFxRate(tradeCurrency, trade.portfolio.baseCurrency, data.date);
+      const rate = await getFxRate(
+        tradeCurrency,
+        trade.portfolio.baseCurrency,
+        data.date,
+      );
       fxRate = rate.toString();
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Unable to fetch FX rate for this trade",
+        error:
+          err instanceof Error
+            ? err.message
+            : "Unable to fetch FX rate for this trade",
       };
     }
   }

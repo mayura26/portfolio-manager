@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { db } from "@/lib/db";
+import Link from "next/link";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
+import { db } from "@/lib/db";
 import { formatRelative } from "@/lib/format";
 
 export async function ReviewsSummary() {
@@ -25,14 +25,13 @@ export async function ReviewsSummary() {
             {pendingCount}
             <span className="ml-2 text-base text-muted">pending</span>
             {inProgressCount > 0 ? (
-              <span className="ml-2 text-base text-info">+{inProgressCount} active</span>
+              <span className="ml-2 text-base text-info">
+                +{inProgressCount} active
+              </span>
             ) : null}
           </p>
         </div>
-        <Link
-          href="/reviews"
-          className="text-xs text-accent hover:underline"
-        >
+        <Link href="/reviews" className="text-xs text-accent hover:underline">
           Open queue →
         </Link>
       </div>
@@ -56,7 +55,9 @@ export async function ReviewsSummary() {
                   <p className="mt-1 text-sm text-foreground">
                     {r.instrument ? (
                       <span>
-                        <span className="tabular font-medium">{r.instrument.symbol}</span>{" "}
+                        <span className="tabular font-medium">
+                          {r.instrument.symbol}
+                        </span>{" "}
                         <span className="text-muted">{r.instrument.name}</span>
                       </span>
                     ) : r.portfolio ? (
@@ -65,7 +66,9 @@ export async function ReviewsSummary() {
                       <span className="text-muted">General</span>
                     )}
                   </p>
-                  <p className="line-clamp-1 text-xs text-muted">{r.triggerReason}</p>
+                  <p className="line-clamp-1 text-xs text-muted">
+                    {r.triggerReason}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 text-xs text-subtle">
                   <span>{formatRelative(r.createdAt)}</span>

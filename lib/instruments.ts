@@ -12,11 +12,14 @@ export async function findOrCreateInstrument(yahooSymbol: string) {
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) throw new Error("Symbol is required");
 
-  const existing = await db.instrument.findUnique({ where: { yahooSymbol: sym } });
+  const existing = await db.instrument.findUnique({
+    where: { yahooSymbol: sym },
+  });
   if (existing) return existing;
 
   const meta = await lookupInstrument(sym);
-  if (!meta) throw new Error(`Could not find instrument ${sym} on Yahoo Finance`);
+  if (!meta)
+    throw new Error(`Could not find instrument ${sym} on Yahoo Finance`);
 
   const created = await db.instrument.create({
     data: {

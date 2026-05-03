@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { ReviewStatusBadge } from "./review-status-badge";
+import Link from "next/link";
 import { formatDate, formatRelative } from "@/lib/format";
+import { ReviewStatusBadge } from "./review-status-badge";
 
 type ReviewRow = {
   id: string;
@@ -27,13 +27,17 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
           <div className="flex items-center gap-2">
             <ReviewStatusBadge status={review.status} />
             {review.priority > 0 ? (
-              <span className="label text-warning">Priority {review.priority}</span>
+              <span className="label text-warning">
+                Priority {review.priority}
+              </span>
             ) : null}
           </div>
           <h3 className="mt-2 text-base text-foreground">
             {review.instrument ? (
               <span>
-                <span className="tabular font-medium">{review.instrument.symbol}</span>{" "}
+                <span className="tabular font-medium">
+                  {review.instrument.symbol}
+                </span>{" "}
                 <span className="text-muted">{review.instrument.name}</span>
               </span>
             ) : review.portfolio ? (

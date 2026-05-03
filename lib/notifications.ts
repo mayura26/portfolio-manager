@@ -1,6 +1,6 @@
 import webpush from "web-push";
-import { db } from "@/lib/db";
 import type { NotificationType } from "@/app/generated/prisma/enums";
+import { db } from "@/lib/db";
 
 let vapidConfigured = false;
 
@@ -34,7 +34,10 @@ export async function createNotification(input: CreateNotificationInput) {
     },
   });
 
-  await sendPush(input.title, input.message, { notificationId: created.id, alertId: input.alertId });
+  await sendPush(input.title, input.message, {
+    notificationId: created.id,
+    alertId: input.alertId,
+  });
 
   return created;
 }
@@ -50,13 +53,19 @@ async function sendPush(
   if (!settings?.pushEnabled || !settings.pushSubscription) return;
 
   try {
-    const subscription = settings.pushSubscription as unknown as webpush.PushSubscription;
+    const subscription =
+      settings.pushSubscription as unknown as webpush.PushSubscription;
     await webpush.sendNotification(
       subscription,
       JSON.stringify({ title, body, data }),
     );
   } catch (err) {
-    if (err && typeof err === "object" && "statusCode" in err && (err as { statusCode: number }).statusCode === 410) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "statusCode" in err &&
+      (err as { statusCode: number }).statusCode === 410
+    ) {
       // Subscription expired — clear it
       await db.settings.update({
         where: { id: "singleton" },

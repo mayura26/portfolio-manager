@@ -1,13 +1,21 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
-import { FinancialsPanel, FinancialsPanelSkeleton } from "@/components/stocks/financials-panel";
+import { Suspense } from "react";
+import {
+  FinancialsPanel,
+  FinancialsPanelSkeleton,
+} from "@/components/stocks/financials-panel";
 import { NewsFeed, NewsFeedSkeleton } from "@/components/stocks/news-feed";
-import { PriceChart, PriceChartSkeleton } from "@/components/stocks/price-chart";
+import {
+  PriceChart,
+  PriceChartSkeleton,
+} from "@/components/stocks/price-chart";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ symbol: string }>;
 
-export default function StockOverviewPage({ params }: PageProps<"/stocks/[symbol]">) {
+export default function StockOverviewPage({
+  params,
+}: PageProps<"/stocks/[symbol]">) {
   return (
     <div className="grid gap-10 lg:grid-cols-3">
       <div className="flex flex-col gap-10 lg:col-span-2">
@@ -41,7 +49,13 @@ async function PriceChartLoader({ params }: { params: Params }) {
   const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
-  return <PriceChart yahooSymbol={instrument.yahooSymbol} currency={instrument.currency} days={180} />;
+  return (
+    <PriceChart
+      yahooSymbol={instrument.yahooSymbol}
+      currency={instrument.currency}
+      days={180}
+    />
+  );
 }
 
 async function FinancialsLoader({ params }: { params: Params }) {
@@ -49,7 +63,12 @@ async function FinancialsLoader({ params }: { params: Params }) {
   const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
-  return <FinancialsPanel yahooSymbol={instrument.yahooSymbol} currency={instrument.currency} />;
+  return (
+    <FinancialsPanel
+      yahooSymbol={instrument.yahooSymbol}
+      currency={instrument.currency}
+    />
+  );
 }
 
 async function NewsLoader({ params }: { params: Params }) {

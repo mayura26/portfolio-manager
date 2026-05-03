@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
 import { Bell, BellOff } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 
 type Props = {
   initiallyEnabled: boolean;
@@ -27,7 +27,9 @@ export function PushToggle({ initiallyEnabled }: Props) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ok =
-      "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window;
     setSupported(ok);
     if (ok) {
       navigator.serviceWorker.ready
@@ -42,7 +44,9 @@ export function PushToggle({ initiallyEnabled }: Props) {
   async function subscribe() {
     setError(null);
     if (!VAPID_PUBLIC_KEY) {
-      setError("VAPID public key is not configured. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY in .env.");
+      setError(
+        "VAPID public key is not configured. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY in .env.",
+      );
       return;
     }
     try {
@@ -55,7 +59,10 @@ export function PushToggle({ initiallyEnabled }: Props) {
       const key = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength) as ArrayBuffer,
+        applicationServerKey: key.buffer.slice(
+          key.byteOffset,
+          key.byteOffset + key.byteLength,
+        ) as ArrayBuffer,
       });
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
@@ -118,10 +125,13 @@ export function PushToggle({ initiallyEnabled }: Props) {
       {error ? <p className="text-xs text-loss">{error}</p> : null}
       {!VAPID_PUBLIC_KEY ? (
         <p className="text-xs text-warning">
-          To enable, generate VAPID keys (e.g. <code className="font-mono">npx web-push generate-vapid-keys</code>) and add
+          To enable, generate VAPID keys (e.g.{" "}
+          <code className="font-mono">npx web-push generate-vapid-keys</code>)
+          and add
           <code className="mx-1 font-mono">NEXT_PUBLIC_VAPID_PUBLIC_KEY</code>,
           <code className="mx-1 font-mono">VAPID_PRIVATE_KEY</code>, and
-          <code className="mx-1 font-mono">VAPID_EMAIL</code> to <code className="font-mono">.env</code>.
+          <code className="mx-1 font-mono">VAPID_EMAIL</code> to{" "}
+          <code className="font-mono">.env</code>.
         </p>
       ) : null}
     </div>

@@ -1,10 +1,10 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { createTrade } from "@/actions/trades";
-import { TradeForm } from "@/components/trades/trade-form";
 import { Skeleton } from "@/components/shared/skeleton";
+import { TradeForm } from "@/components/trades/trade-form";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -20,7 +20,9 @@ export default function NewTradePage({
 
 async function NewTradeContent({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({ where: { id: portfolioId } });
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+  });
   if (!portfolio) notFound();
 
   return (

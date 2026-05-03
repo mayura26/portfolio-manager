@@ -16,11 +16,15 @@ function startOfDay(d: Date): Date {
 }
 
 async function discoverPairs(): Promise<string[]> {
-  const portfolios = await db.portfolio.findMany({ select: { baseCurrency: true } });
+  const portfolios = await db.portfolio.findMany({
+    select: { baseCurrency: true },
+  });
   const baseCurrencies = new Set(portfolios.map((p) => p.baseCurrency));
   if (baseCurrencies.size === 0) return [];
 
-  const instruments = await db.instrument.findMany({ select: { currency: true } });
+  const instruments = await db.instrument.findMany({
+    select: { currency: true },
+  });
   const instrumentCurrencies = new Set(instruments.map((i) => i.currency));
 
   const pairs = new Set<string>();
@@ -49,13 +53,20 @@ async function run() {
       for (const bar of bars) {
         await db.fxRate.upsert({
           where: { pair_date: { pair, date: startOfDay(bar.date) } },
-          create: { pair, date: startOfDay(bar.date), rate: bar.close.toString() },
+          create: {
+            pair,
+            date: startOfDay(bar.date),
+            rate: bar.close.toString(),
+          },
           update: { rate: bar.close.toString() },
         });
         totalBars++;
       }
     } catch (err) {
-      failures.push({ pair, error: err instanceof Error ? err.message : String(err) });
+      failures.push({
+        pair,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

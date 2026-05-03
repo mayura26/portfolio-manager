@@ -49,19 +49,23 @@ export function AllocationChartClient({ slices, baseCurrency }: Props) {
               stroke="var(--background)"
               strokeWidth={1}
             >
-              {slices.map((_, idx) => (
-                <Cell key={idx} fill={PALETTE[idx % PALETTE.length]} />
+              {slices.map((slice, idx) => (
+                <Cell key={slice.key} fill={PALETTE[idx % PALETTE.length]} />
               ))}
             </Pie>
             <Tooltip
               formatter={(value, _name, item) => {
-                const numeric = typeof value === "number" ? value : Number(value);
+                const numeric =
+                  typeof value === "number" ? value : Number(value);
                 const pct = item?.payload?.percent;
                 const formatted = new Intl.NumberFormat("en-US", {
                   style: "currency",
                   currency: baseCurrency,
                 }).format(numeric);
-                return [formatted + (pct ? ` (${pct.toFixed(1)}%)` : ""), item?.payload?.label];
+                return [
+                  formatted + (pct ? ` (${pct.toFixed(1)}%)` : ""),
+                  item?.payload?.label,
+                ];
               }}
               contentStyle={{
                 background: "var(--surface-elevated)",
@@ -87,7 +91,9 @@ export function AllocationChartClient({ slices, baseCurrency }: Props) {
               />
               <span className="truncate text-foreground">{s.label}</span>
             </div>
-            <span className="tabular shrink-0 text-muted">{s.percent.toFixed(1)}%</span>
+            <span className="tabular shrink-0 text-muted">
+              {s.percent.toFixed(1)}%
+            </span>
           </li>
         ))}
       </ul>

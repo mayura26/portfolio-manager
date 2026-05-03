@@ -1,12 +1,14 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
-import { StockNotesEditor } from "@/components/stocks/stock-notes-editor";
+import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
+import { StockNotesEditor } from "@/components/stocks/stock-notes-editor";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ symbol: string }>;
 
-export default function StockNotesPage({ params }: PageProps<"/stocks/[symbol]/notes">) {
+export default function StockNotesPage({
+  params,
+}: PageProps<"/stocks/[symbol]/notes">) {
   return (
     <Suspense fallback={<Skeleton className="h-64 w-full" />}>
       <StockNotesContent params={params} />
@@ -25,5 +27,7 @@ async function StockNotesContent({ params }: { params: Params }) {
   });
   if (!instrument) notFound();
 
-  return <StockNotesEditor instrumentId={instrument.id} notes={instrument.notes} />;
+  return (
+    <StockNotesEditor instrumentId={instrument.id} notes={instrument.notes} />
+  );
 }

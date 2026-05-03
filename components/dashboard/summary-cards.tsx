@@ -5,53 +5,62 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 export async function SummaryCards() {
   const data = await getDashboardSummary();
 
-  const unrealizedTone =
-    data.totalUnrealizedPnL.isZero()
-      ? "neutral"
-      : data.totalUnrealizedPnL.isPositive()
-        ? "gain"
-        : "loss";
-  const realizedTone =
-    data.totalRealizedPnL.isZero()
-      ? "neutral"
-      : data.totalRealizedPnL.isPositive()
-        ? "gain"
-        : "loss";
-  const dailyTone =
-    data.totalDailyChange.isZero()
-      ? "neutral"
-      : data.totalDailyChange.isPositive()
-        ? "gain"
-        : "loss";
+  const unrealizedTone = data.totalUnrealizedPnL.isZero()
+    ? "neutral"
+    : data.totalUnrealizedPnL.isPositive()
+      ? "gain"
+      : "loss";
+  const realizedTone = data.totalRealizedPnL.isZero()
+    ? "neutral"
+    : data.totalRealizedPnL.isPositive()
+      ? "gain"
+      : "loss";
+  const dailyTone = data.totalDailyChange.isZero()
+    ? "neutral"
+    : data.totalDailyChange.isPositive()
+      ? "gain"
+      : "loss";
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
         label="Market value"
-        value={formatCurrency(data.totalMarketValueBase.toString(), data.baseCurrency)}
+        value={formatCurrency(
+          data.totalMarketValueBase.toString(),
+          data.baseCurrency,
+        )}
         hint={`${data.portfolioCount} ${data.portfolioCount === 1 ? "portfolio" : "portfolios"} · ${data.holdingCount} ${data.holdingCount === 1 ? "holding" : "holdings"}`}
       />
       <StatCard
         label="Unrealized P&L"
-        value={formatCurrency(data.totalUnrealizedPnL.toString(), data.baseCurrency, {
-          signed: true,
-        })}
+        value={formatCurrency(
+          data.totalUnrealizedPnL.toString(),
+          data.baseCurrency,
+          {
+            signed: true,
+          },
+        )}
         delta={{
-          value:
-            data.totalCostBase.gt(0)
-              ? formatPercent(
-                  data.totalUnrealizedPnL.dividedBy(data.totalCostBase).toString(),
-                  { signed: true },
-                )
-              : "—",
+          value: data.totalCostBase.gt(0)
+            ? formatPercent(
+                data.totalUnrealizedPnL
+                  .dividedBy(data.totalCostBase)
+                  .toString(),
+                { signed: true },
+              )
+            : "—",
           tone: unrealizedTone,
         }}
       />
       <StatCard
         label="Daily change"
-        value={formatCurrency(data.totalDailyChange.toString(), data.baseCurrency, {
-          signed: true,
-        })}
+        value={formatCurrency(
+          data.totalDailyChange.toString(),
+          data.baseCurrency,
+          {
+            signed: true,
+          },
+        )}
         delta={
           data.totalDailyChangePercent
             ? {
@@ -66,11 +75,20 @@ export async function SummaryCards() {
       />
       <StatCard
         label="Realized P&L"
-        value={formatCurrency(data.totalRealizedPnL.toString(), data.baseCurrency, {
-          signed: true,
-        })}
+        value={formatCurrency(
+          data.totalRealizedPnL.toString(),
+          data.baseCurrency,
+          {
+            signed: true,
+          },
+        )}
         delta={{
-          value: realizedTone === "gain" ? "Banked gains" : realizedTone === "loss" ? "Realized loss" : "—",
+          value:
+            realizedTone === "gain"
+              ? "Banked gains"
+              : realizedTone === "loss"
+                ? "Realized loss"
+                : "—",
           tone: realizedTone,
         }}
       />

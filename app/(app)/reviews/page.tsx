@@ -1,10 +1,10 @@
-import { Suspense } from "react";
 import { ClipboardCheck } from "lucide-react";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { ReviewCard } from "@/components/reviews/review-card";
 import { ReviewFilters } from "@/components/reviews/review-filters";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 type SearchParams = Promise<{ status?: string }>;
 
@@ -13,7 +13,9 @@ type Status = (typeof VALID_STATUSES)[number];
 
 function parseStatus(value: string | undefined): Status | "all" {
   if (!value || value === "all") return "all";
-  return (VALID_STATUSES as readonly string[]).includes(value) ? (value as Status) : "PENDING";
+  return (VALID_STATUSES as readonly string[]).includes(value)
+    ? (value as Status)
+    : "PENDING";
 }
 
 export default function ReviewsPage({ searchParams }: PageProps<"/reviews">) {
@@ -23,7 +25,8 @@ export default function ReviewsPage({ searchParams }: PageProps<"/reviews">) {
         <p className="label">Decision queue</p>
         <h1 className="display mt-2 text-4xl text-foreground">Reviews</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Triggered alerts open a review here. Walk through them deliberately and record your reasoning.
+          Triggered alerts open a review here. Walk through them deliberately
+          and record your reasoning.
         </p>
       </header>
 

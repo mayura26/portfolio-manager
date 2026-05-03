@@ -1,10 +1,10 @@
-import { Suspense } from "react";
-import Link from "next/link";
 import { Bell, Plus } from "lucide-react";
-import { db } from "@/lib/db";
+import Link from "next/link";
+import { Suspense } from "react";
 import { AlertCard } from "@/components/alerts/alert-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 export default function AlertsPage() {
   return (
@@ -14,7 +14,8 @@ export default function AlertsPage() {
           <p className="label">Watchlist</p>
           <h1 className="display mt-2 text-4xl text-foreground">Alerts</h1>
           <p className="mt-2 max-w-prose text-sm text-muted">
-            Configurable triggers that produce review tasks and notifications when conditions hit.
+            Configurable triggers that produce review tasks and notifications
+            when conditions hit.
           </p>
         </div>
         <Link

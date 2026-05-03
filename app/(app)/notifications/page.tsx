@@ -1,10 +1,13 @@
-import { Suspense } from "react";
 import { BellOff } from "lucide-react";
-import { db } from "@/lib/db";
-import { dismissAllNotifications, markAllNotificationsRead } from "@/actions/notifications";
+import { Suspense } from "react";
+import {
+  dismissAllNotifications,
+  markAllNotificationsRead,
+} from "@/actions/notifications";
 import { NotificationItem } from "@/components/notifications/notification-item";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 export default function NotificationsPage() {
   return (
@@ -46,11 +49,16 @@ async function NotificationsList() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted">
-        <span>{unreadCount} unread of {notifications.length}</span>
+        <span>
+          {unreadCount} unread of {notifications.length}
+        </span>
         <div className="flex items-center gap-3">
           {unreadCount > 0 ? (
             <form action={markAllNotificationsRead}>
-              <button type="submit" className="text-muted hover:text-foreground">
+              <button
+                type="submit"
+                className="text-muted hover:text-foreground"
+              >
                 Mark all read
               </button>
             </form>

@@ -1,13 +1,13 @@
-import { Suspense } from "react";
+import { Briefcase, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Briefcase, Plus } from "lucide-react";
-import { db } from "@/lib/db";
-import { computeHoldings } from "@/lib/holdings";
+import { Suspense } from "react";
 import { HoldingsTable } from "@/components/portfolios/holdings-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 import { formatCurrency, pnlClass } from "@/lib/format";
+import { computeHoldings } from "@/lib/holdings";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -23,7 +23,9 @@ export default function PortfolioOverviewPage({
 
 async function PortfolioOverview({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({ where: { id: portfolioId } });
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+  });
   if (!portfolio) notFound();
 
   const data = await computeHoldings(portfolioId);
@@ -45,26 +47,41 @@ async function PortfolioOverview({ params }: { params: Params }) {
   return (
     <div className="flex flex-col gap-8">
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Market value" value={formatCurrency(data.totalMarketValueBase.toString(), data.baseCurrency)} />
+        <Stat
+          label="Market value"
+          value={formatCurrency(
+            data.totalMarketValueBase.toString(),
+            data.baseCurrency,
+          )}
+        />
         <Stat
           label="Unrealized P&L"
-          value={formatCurrency(data.totalUnrealizedPnL.toString(), data.baseCurrency, {
-            signed: true,
-          })}
+          value={formatCurrency(
+            data.totalUnrealizedPnL.toString(),
+            data.baseCurrency,
+            {
+              signed: true,
+            },
+          )}
           tone={pnlClass(data.totalUnrealizedPnL.toString())}
         />
         <Stat
           label="Realized P&L"
-          value={formatCurrency(data.totalRealizedPnL.toString(), data.baseCurrency, {
-            signed: true,
-          })}
+          value={formatCurrency(
+            data.totalRealizedPnL.toString(),
+            data.baseCurrency,
+            {
+              signed: true,
+            },
+          )}
           tone={pnlClass(data.totalRealizedPnL.toString())}
         />
       </div>
 
       {data.hasMissingPrices ? (
         <p className="text-xs text-warning">
-          Some instruments are missing recent prices. Trigger the price cron or wait for it to run.
+          Some instruments are missing recent prices. Trigger the price cron or
+          wait for it to run.
         </p>
       ) : null}
 
@@ -83,7 +100,9 @@ async function PortfolioOverview({ params }: { params: Params }) {
           <HoldingsTable data={data} />
         </div>
       ) : (
-        <p className="text-sm text-muted">No open positions. Realized P&L includes closed trades.</p>
+        <p className="text-sm text-muted">
+          No open positions. Realized P&L includes closed trades.
+        </p>
       )}
     </div>
   );
@@ -101,7 +120,11 @@ function Stat({
   return (
     <div className="hairline bg-surface p-5">
       <p className="label">{label}</p>
-      <p className={`display tabular mt-3 text-2xl ${tone ?? "text-foreground"}`}>{value}</p>
+      <p
+        className={`display tabular mt-3 text-2xl ${tone ?? "text-foreground"}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

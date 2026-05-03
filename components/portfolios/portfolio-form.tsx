@@ -1,12 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
 import Link from "next/link";
-import { CurrencySelect } from "@/components/shared/currency-select";
+import { useActionState } from "react";
 import type { ActionState } from "@/actions/portfolios";
+import { CurrencySelect } from "@/components/shared/currency-select";
 
 type Props = {
-  action: (state: ActionState | undefined, formData: FormData) => Promise<ActionState>;
+  action: (
+    state: ActionState | undefined,
+    formData: FormData,
+  ) => Promise<ActionState>;
   defaults?: {
     name?: string;
     description?: string | null;
@@ -16,11 +19,16 @@ type Props = {
   cancelHref: string;
 };
 
-export function PortfolioForm({ action, defaults, submitLabel, cancelHref }: Props) {
-  const [state, formAction, pending] = useActionState<ActionState | undefined, FormData>(
-    action,
-    undefined,
-  );
+export function PortfolioForm({
+  action,
+  defaults,
+  submitLabel,
+  cancelHref,
+}: Props) {
+  const [state, formAction, pending] = useActionState<
+    ActionState | undefined,
+    FormData
+  >(action, undefined);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
@@ -86,7 +94,10 @@ export function PortfolioForm({ action, defaults, submitLabel, cancelHref }: Pro
         >
           {pending ? "Saving…" : submitLabel}
         </button>
-        <Link href={cancelHref} className="px-4 py-2 text-sm text-muted hover:text-foreground">
+        <Link
+          href={cancelHref}
+          className="px-4 py-2 text-sm text-muted hover:text-foreground"
+        >
           Cancel
         </Link>
         {state?.ok ? <span className="text-sm text-gain">Saved</span> : null}

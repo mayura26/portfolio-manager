@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { type SettingsActionState, updateSettings } from "@/actions/settings";
 import { CurrencySelect } from "@/components/shared/currency-select";
-import { updateSettings, type SettingsActionState } from "@/actions/settings";
 
 type Props = {
   defaults: {
@@ -13,10 +13,10 @@ type Props = {
 };
 
 export function SettingsForm({ defaults }: Props) {
-  const [state, formAction, pending] = useActionState<SettingsActionState | undefined, FormData>(
-    updateSettings,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    SettingsActionState | undefined,
+    FormData
+  >(updateSettings, undefined);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
@@ -42,10 +42,13 @@ export function SettingsForm({ defaults }: Props) {
           required
         />
         <p className="text-xs text-subtle">
-          Pre-selected when creating new portfolios. Existing portfolios keep their own currency.
+          Pre-selected when creating new portfolios. Existing portfolios keep
+          their own currency.
         </p>
         {fieldErrors?.defaultBaseCurrency?.[0] ? (
-          <p className="text-xs text-loss">{fieldErrors.defaultBaseCurrency[0]}</p>
+          <p className="text-xs text-loss">
+            {fieldErrors.defaultBaseCurrency[0]}
+          </p>
         ) : null}
       </div>
 
@@ -59,11 +62,16 @@ export function SettingsForm({ defaults }: Props) {
           defaultValue={defaults.watchlistAiModel}
           className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
         >
-          <option value="gpt-5.4">gpt-5.4 — higher quality, 250K tokens/day free quota</option>
-          <option value="gpt-5.4-mini">gpt-5.4-mini — faster, 2.5M tokens/day free quota</option>
+          <option value="gpt-5.4">
+            gpt-5.4 — higher quality, 250K tokens/day free quota
+          </option>
+          <option value="gpt-5.4-mini">
+            gpt-5.4-mini — faster, 2.5M tokens/day free quota
+          </option>
         </select>
         <p className="text-xs text-subtle">
-          Used when you click <strong>Analyse</strong> on a watchlist item to suggest a buy zone.
+          Used when you click <strong>Analyse</strong> on a watchlist item to
+          suggest a buy zone.
         </p>
         {fieldErrors?.watchlistAiModel?.[0] ? (
           <p className="text-xs text-loss">{fieldErrors.watchlistAiModel[0]}</p>
@@ -86,10 +94,13 @@ export function SettingsForm({ defaults }: Props) {
           <option value="high">High — slowest, most thorough</option>
         </select>
         <p className="text-xs text-subtle">
-          Higher reasoning produces more considered analysis but uses more tokens and takes longer.
+          Higher reasoning produces more considered analysis but uses more
+          tokens and takes longer.
         </p>
         {fieldErrors?.watchlistAiReasoning?.[0] ? (
-          <p className="text-xs text-loss">{fieldErrors.watchlistAiReasoning[0]}</p>
+          <p className="text-xs text-loss">
+            {fieldErrors.watchlistAiReasoning[0]}
+          </p>
         ) : null}
       </div>
 

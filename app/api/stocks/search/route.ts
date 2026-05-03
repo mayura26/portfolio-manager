@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { searchSymbols } from "@/lib/yahoo";
 
 export async function GET(request: NextRequest) {

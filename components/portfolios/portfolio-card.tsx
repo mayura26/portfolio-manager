@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { formatRelative } from "@/lib/format";
 
 type Props = {
@@ -20,9 +20,13 @@ export function PortfolioCard({ portfolio }: Props) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="display truncate text-xl text-foreground">{portfolio.name}</h3>
+          <h3 className="display truncate text-xl text-foreground">
+            {portfolio.name}
+          </h3>
           {portfolio.description ? (
-            <p className="mt-1 line-clamp-2 text-sm text-muted">{portfolio.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-muted">
+              {portfolio.description}
+            </p>
           ) : null}
         </div>
         <ArrowUpRight

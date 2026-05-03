@@ -10,24 +10,24 @@
   color-scheme: light dark;
 
   /* Surface */
-  --background: #faf7f2;        /* parchment */
-  --surface: #f4efe6;           /* card */
-  --surface-elevated: #ffffff;  /* modals, popovers */
-  --foreground: #1a1814;        /* warm ink */
-  --muted: #6b6358;             /* secondary text */
-  --subtle: #9a9085;            /* tertiary text */
-  --border: #e8e0d2;            /* hairline */
-  --border-strong: #d4c9b5;     /* divider */
+  --background: #faf7f2; /* parchment */
+  --surface: #f4efe6; /* card */
+  --surface-elevated: #ffffff; /* modals, popovers */
+  --foreground: #1a1814; /* warm ink */
+  --muted: #6b6358; /* secondary text */
+  --subtle: #9a9085; /* tertiary text */
+  --border: #e8e0d2; /* hairline */
+  --border-strong: #d4c9b5; /* divider */
 
   /* Accent */
-  --accent: #c9512e;            /* terracotta */
+  --accent: #c9512e; /* terracotta */
   --accent-hover: #b04527;
   --accent-foreground: #ffffff;
 
   /* Financial semantics */
-  --gain: #2f6f4a;              /* muted forest */
+  --gain: #2f6f4a; /* muted forest */
   --gain-soft: #e8f0ea;
-  --loss: #a8442c;              /* muted brick */
+  --loss: #a8442c; /* muted brick */
   --loss-soft: #f5e8e3;
   --neutral: #6b6358;
 
@@ -40,16 +40,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f0e12;        /* deep midnight */
+    --background: #0f0e12; /* deep midnight */
     --surface: #17161b;
     --surface-elevated: #1f1d23;
-    --foreground: #ede6d8;        /* bone white */
+    --foreground: #ede6d8; /* bone white */
     --muted: #8a8378;
     --subtle: #5c554c;
     --border: #2a2730;
     --border-strong: #3a3640;
 
-    --accent: #d96a47;            /* warmer terracotta on dark */
+    --accent: #d96a47; /* warmer terracotta on dark */
     --accent-hover: #e07a59;
     --accent-foreground: #0f0e12;
 
@@ -100,15 +100,21 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "ss01", "cv01";
   /* Subtle paper grain — barely perceptible */
-  background-image:
-    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.015) 1px, transparent 0);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.015) 1px,
+    transparent 0
+  );
   background-size: 4px 4px;
 }
 
 @media (prefers-color-scheme: dark) {
   body {
-    background-image:
-      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.015) 1px, transparent 0);
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 0
+    );
   }
 }
 
@@ -152,13 +158,23 @@ body {
    ───────────────────────────────────────────────────────────── */
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -173,7 +189,10 @@ body {
    Form base resets
    ───────────────────────────────────────────────────────────── */
 
-input, select, textarea, button {
+input,
+select,
+textarea,
+button {
   font-family: inherit;
 }
 

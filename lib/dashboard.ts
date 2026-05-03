@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
-import { db } from "@/lib/db";
-import { computeHoldings, type Holding } from "@/lib/holdings";
-import { getFxRate } from "@/lib/fx";
 import { getSettings } from "@/actions/settings";
+import { db } from "@/lib/db";
+import { getFxRate } from "@/lib/fx";
+import { computeHoldings, type Holding } from "@/lib/holdings";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -66,7 +66,9 @@ type DashboardWorkingSet = {
 async function buildWorkingSet(): Promise<DashboardWorkingSet> {
   const [settings, portfolios] = await Promise.all([
     getSettings(),
-    db.portfolio.findMany({ select: { id: true, name: true, baseCurrency: true } }),
+    db.portfolio.findMany({
+      select: { id: true, name: true, baseCurrency: true },
+    }),
   ]);
 
   const baseCurrency = settings.defaultBaseCurrency;
@@ -83,13 +85,19 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
         ? ONE
         : await getFxRate(portfolio.baseCurrency, baseCurrency);
 
-    totalRealizedGlobal = totalRealizedGlobal.plus(data.totalRealizedPnL.times(portfolioToGlobal));
+    totalRealizedGlobal = totalRealizedGlobal.plus(
+      data.totalRealizedPnL.times(portfolioToGlobal),
+    );
 
     for (const h of data.holdings) {
       const costGlobal = h.costBase.times(portfolioToGlobal);
       const realizedGlobal = h.realizedPnL.times(portfolioToGlobal);
-      const marketValueGlobal = h.marketValueBase ? h.marketValueBase.times(portfolioToGlobal) : null;
-      const unrealizedGlobal = h.unrealizedPnL ? h.unrealizedPnL.times(portfolioToGlobal) : null;
+      const marketValueGlobal = h.marketValueBase
+        ? h.marketValueBase.times(portfolioToGlobal)
+        : null;
+      const unrealizedGlobal = h.unrealizedPnL
+        ? h.unrealizedPnL.times(portfolioToGlobal)
+        : null;
 
       const yesterday = await loadPreviousClose(h.instrumentId, h.priceAsOf);
       let dailyChangeGlobal: Decimal | null = null;
@@ -97,9 +105,15 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
       if (h.marketPrice && yesterday) {
         const priceDelta = h.marketPrice.minus(yesterday);
         const instrumentToGlobal =
-          h.currency === baseCurrency ? ONE : await getFxRate(h.currency, baseCurrency);
-        dailyChangeGlobal = priceDelta.times(h.quantity).times(instrumentToGlobal);
-        dailyChangePercent = yesterday.isZero() ? null : priceDelta.dividedBy(yesterday).times(100);
+          h.currency === baseCurrency
+            ? ONE
+            : await getFxRate(h.currency, baseCurrency);
+        dailyChangeGlobal = priceDelta
+          .times(h.quantity)
+          .times(instrumentToGlobal);
+        dailyChangePercent = yesterday.isZero()
+          ? null
+          : priceDelta.dividedBy(yesterday).times(100);
       }
 
       enriched.push({
@@ -117,7 +131,13 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
     }
   }
 
-  return { baseCurrency, portfolios, enriched, totalRealizedGlobal, hasMissingPrices };
+  return {
+    baseCurrency,
+    portfolios,
+    enriched,
+    totalRealizedGlobal,
+    hasMissingPrices,
+  };
 }
 
 async function loadPreviousClose(
@@ -143,7 +163,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   for (const h of ws.enriched) {
     totalCostBase = totalCostBase.plus(h.costGlobal);
-    if (h.marketValueGlobal) totalMarketValueBase = totalMarketValueBase.plus(h.marketValueGlobal);
+    if (h.marketValueGlobal)
+      totalMarketValueBase = totalMarketValueBase.plus(h.marketValueGlobal);
     if (h.dailyChangeGlobal) {
       totalDailyChange = totalDailyChange.plus(h.dailyChangeGlobal);
     } else {
@@ -172,7 +193,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   };
 }
 
-export async function getAllocation(groupBy: AllocationGroupBy = "portfolio"): Promise<{
+export async function getAllocation(
+  groupBy: AllocationGroupBy = "portfolio",
+): Promise<{
   baseCurrency: string;
   total: Decimal;
   slices: AllocationSlice[];
@@ -207,12 +230,14 @@ export async function getAllocation(groupBy: AllocationGroupBy = "portfolio"): P
     total = total.plus(h.marketValueGlobal);
   }
 
-  const slices: AllocationSlice[] = Array.from(buckets.entries()).map(([key, b]) => ({
-    key,
-    label: b.label,
-    value: b.value,
-    percent: total.gt(0) ? b.value.dividedBy(total).times(100) : ZERO,
-  }));
+  const slices: AllocationSlice[] = Array.from(buckets.entries()).map(
+    ([key, b]) => ({
+      key,
+      label: b.label,
+      value: b.value,
+      percent: total.gt(0) ? b.value.dividedBy(total).times(100) : ZERO,
+    }),
+  );
 
   slices.sort((a, b) => b.value.comparedTo(a.value));
 
@@ -226,12 +251,16 @@ export async function getTopMovers(limit = 5): Promise<{
   const ws = await buildWorkingSet();
   const movers: TopMover[] = ws.enriched
     .filter(
-      (h): h is EnrichedHolding & {
+      (
+        h,
+      ): h is EnrichedHolding & {
         marketValueGlobal: Decimal;
         dailyChangeGlobal: Decimal;
         dailyChangePercent: Decimal;
       } =>
-        !!h.marketValueGlobal && !!h.dailyChangeGlobal && !!h.dailyChangePercent,
+        !!h.marketValueGlobal &&
+        !!h.dailyChangeGlobal &&
+        !!h.dailyChangePercent,
     )
     .map((h) => ({
       instrumentId: h.instrumentId,
@@ -242,7 +271,9 @@ export async function getTopMovers(limit = 5): Promise<{
       changeAmount: h.dailyChangeGlobal,
     }));
 
-  movers.sort((a, b) => b.changePercent.abs().comparedTo(a.changePercent.abs()));
+  movers.sort((a, b) =>
+    b.changePercent.abs().comparedTo(a.changePercent.abs()),
+  );
 
   return { baseCurrency: ws.baseCurrency, movers: movers.slice(0, limit) };
 }
@@ -256,7 +287,10 @@ export async function getValueHistory(days = 30): Promise<{
 
   const trades = await db.trade.findMany({
     orderBy: { date: "asc" },
-    include: { instrument: true, portfolio: { select: { baseCurrency: true } } },
+    include: {
+      instrument: true,
+      portfolio: { select: { baseCurrency: true } },
+    },
   });
 
   if (trades.length === 0) return { baseCurrency, points: [] };
@@ -274,7 +308,10 @@ export async function getValueHistory(days = 30): Promise<{
   });
 
   // Build per-instrument latest-close-up-to-date lookup
-  const pricesByInstrument = new Map<string, { date: Date; close: Decimal }[]>();
+  const pricesByInstrument = new Map<
+    string,
+    { date: Date; close: Decimal }[]
+  >();
   for (const p of prices) {
     let arr = pricesByInstrument.get(p.instrumentId);
     if (!arr) {
@@ -284,7 +321,10 @@ export async function getValueHistory(days = 30): Promise<{
     arr.push({ date: p.date, close: new Decimal(p.close.toString()) });
   }
 
-  const dates = uniqueSortedDates(prices.map((p) => p.date), startDate);
+  const dates = uniqueSortedDates(
+    prices.map((p) => p.date),
+    startDate,
+  );
   if (dates.length === 0) return { baseCurrency, points: [] };
 
   const fxCache = new Map<string, Decimal>();
@@ -306,8 +346,9 @@ export async function getValueHistory(days = 30): Promise<{
       if (qty.isZero()) continue;
       const close = priceOn(pricesByInstrument.get(instrumentId), day);
       if (!close) continue;
-      const instrument = trades.find((t) => t.instrumentId === instrumentId)!.instrument;
-      const fx = await fxOn(instrument.currency, baseCurrency);
+      const trade = trades.find((t) => t.instrumentId === instrumentId);
+      if (!trade) continue;
+      const fx = await fxOn(trade.instrument.currency, baseCurrency);
       dayValue = dayValue.plus(qty.times(close).times(fx));
     }
     points.push({ date: day, value: Number(dayValue.toFixed(2)) });
@@ -330,7 +371,12 @@ function uniqueSortedDates(dates: Date[], from: Date): Date[] {
 }
 
 function quantityHeldOn(
-  trades: { date: Date; instrumentId: string; type: "BUY" | "SELL"; quantity: { toString(): string } }[],
+  trades: {
+    date: Date;
+    instrumentId: string;
+    type: "BUY" | "SELL";
+    quantity: { toString(): string };
+  }[],
   instrumentId: string,
   asOf: Date,
 ): Decimal {

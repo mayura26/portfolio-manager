@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { setBuyRange } from "@/actions/watchlist";
 import type { WatchlistActionState } from "@/actions/watchlist";
+import { setBuyRange } from "@/actions/watchlist";
 
 type Props = {
   itemId: string;
@@ -11,12 +11,17 @@ type Props = {
   onSaved?: () => void;
 };
 
-export function BuyRangeForm({ itemId, currentLow, currentHigh, onSaved }: Props) {
+export function BuyRangeForm({
+  itemId,
+  currentLow,
+  currentHigh,
+  onSaved,
+}: Props) {
   const boundAction = setBuyRange.bind(null, itemId);
-  const [state, formAction, pending] = useActionState<WatchlistActionState | undefined, FormData>(
-    boundAction,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    WatchlistActionState | undefined,
+    FormData
+  >(boundAction, undefined);
 
   if (state?.ok && onSaved) {
     onSaved();

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 
 type Props = {
   instrument: {
@@ -20,8 +20,12 @@ export function StockCard({ instrument }: Props) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="display tabular text-xl text-foreground">{instrument.symbol}</p>
-          <p className="mt-1 line-clamp-2 text-sm text-muted">{instrument.name}</p>
+          <p className="display tabular text-xl text-foreground">
+            {instrument.symbol}
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm text-muted">
+            {instrument.name}
+          </p>
         </div>
         <ArrowUpRight
           className="h-4 w-4 shrink-0 text-subtle transition-colors group-hover:text-accent"
@@ -33,7 +37,9 @@ export function StockCard({ instrument }: Props) {
         <span className="label">
           {instrument.exchange} · {instrument.currency}
         </span>
-        {instrument.sector ? <span className="truncate">{instrument.sector}</span> : null}
+        {instrument.sector ? (
+          <span className="truncate">{instrument.sector}</span>
+        ) : null}
       </div>
     </Link>
   );

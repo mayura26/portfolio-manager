@@ -36,9 +36,14 @@ export function TradeTable({ portfolioId, trades }: Props) {
         </thead>
         <tbody>
           {trades.map((trade) => (
-            <tr key={trade.id} className="border-b border-border last:border-b-0">
+            <tr
+              key={trade.id}
+              className="border-b border-border last:border-b-0"
+            >
               <Td>
-                <span className="tabular text-muted">{formatDate(trade.date)}</span>
+                <span className="tabular text-muted">
+                  {formatDate(trade.date)}
+                </span>
               </Td>
               <Td>
                 <span
@@ -57,12 +62,16 @@ export function TradeTable({ portfolioId, trades }: Props) {
                   href={`/stocks/${trade.instrument.yahooSymbol}`}
                   className="text-foreground hover:text-accent"
                 >
-                  <span className="tabular font-medium">{trade.instrument.symbol}</span>{" "}
+                  <span className="tabular font-medium">
+                    {trade.instrument.symbol}
+                  </span>{" "}
                   <span className="text-muted">{trade.instrument.name}</span>
                 </Link>
               </Td>
               <Td align="right">
-                <span className="tabular">{formatQuantity(trade.quantity.toString())}</span>
+                <span className="tabular">
+                  {formatQuantity(trade.quantity.toString())}
+                </span>
               </Td>
               <Td align="right">
                 <span className="tabular">
@@ -76,7 +85,9 @@ export function TradeTable({ portfolioId, trades }: Props) {
               </Td>
               <Td align="right">
                 <span className="tabular text-muted">
-                  {trade.fxRate ? Number(trade.fxRate.toString()).toFixed(4) : "—"}
+                  {trade.fxRate
+                    ? Number(trade.fxRate.toString()).toFixed(4)
+                    : "—"}
                 </span>
               </Td>
               <Td align="right">
@@ -95,7 +106,13 @@ export function TradeTable({ portfolioId, trades }: Props) {
   );
 }
 
-function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+function Th({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
   return (
     <th
       className={`label px-3 py-3 ${align === "right" ? "text-right" : "text-left"}`}
@@ -114,6 +131,10 @@ function Td({
   align?: "left" | "right";
 }) {
   return (
-    <td className={`px-3 py-3 ${align === "right" ? "text-right" : "text-left"}`}>{children}</td>
+    <td
+      className={`px-3 py-3 ${align === "right" ? "text-right" : "text-left"}`}
+    >
+      {children}
+    </td>
   );
 }

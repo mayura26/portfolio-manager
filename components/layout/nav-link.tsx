@@ -13,7 +13,9 @@ type Props = {
 
 export function NavLink({ href, label, icon, exact = false }: Props) {
   const pathname = usePathname();
-  const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const active = exact
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <Link

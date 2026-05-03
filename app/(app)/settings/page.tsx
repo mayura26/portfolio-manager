@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { getSettings } from "@/actions/settings";
-import { SettingsForm } from "@/components/settings/settings-form";
 import { PushToggle } from "@/components/settings/push-toggle";
+import { SettingsForm } from "@/components/settings/settings-form";
 import { Skeleton } from "@/components/shared/skeleton";
 
 export default function SettingsPage() {
@@ -24,10 +24,12 @@ export default function SettingsPage() {
         </section>
 
         <section>
-          <h2 className="display mb-2 text-2xl text-foreground">Push notifications</h2>
+          <h2 className="display mb-2 text-2xl text-foreground">
+            Push notifications
+          </h2>
           <p className="mb-4 max-w-prose text-sm text-muted">
-            Receive triggered alerts on your phone or desktop. Requires the app to be installed as a
-            PWA on iOS.
+            Receive triggered alerts on your phone or desktop. Requires the app
+            to be installed as a PWA on iOS.
           </p>
           <Suspense fallback={<Skeleton className="h-12 w-64" />}>
             <PushSection />

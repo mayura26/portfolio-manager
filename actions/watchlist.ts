@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
 import { Prisma } from "@/app/generated/prisma/client";
-import { watchlistItemSchema, buyRangeSchema } from "@/lib/validators";
+import { db } from "@/lib/db";
 import { findOrCreateInstrument } from "@/lib/instruments";
-import { fetchFinancialSummary, fetchDailyHistory, fetchQuotes } from "@/lib/yahoo";
+import { buyRangeSchema, watchlistItemSchema } from "@/lib/validators";
 import { analyzeWatchlistBuyZone } from "@/lib/watchlist-ai";
+import {
+  fetchDailyHistory,
+  fetchFinancialSummary,
+  fetchQuotes,
+} from "@/lib/yahoo";
 
 export type WatchlistActionState =
   | { ok: true }
@@ -24,7 +28,11 @@ function revalidateAll() {
   revalidatePath("/dashboard");
 }
 
-async function createWatchlistAlert(instrumentId: string, symbol: string, buyRangeHigh: string) {
+async function createWatchlistAlert(
+  instrumentId: string,
+  symbol: string,
+  buyRangeHigh: string,
+) {
   const alert = await db.alert.create({
     data: {
       type: "PRICE_BELOW",
@@ -52,7 +60,8 @@ export async function addToWatchlist(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not resolve instrument",
+      error:
+        err instanceof Error ? err.message : "Could not resolve instrument",
     };
   }
 
@@ -87,7 +96,11 @@ export async function addToWatchlist(
   }
 
   if (data.buyRangeHigh) {
-    alertId = await createWatchlistAlert(instrument.id, instrument.symbol, data.buyRangeHigh);
+    alertId = await createWatchlistAlert(
+      instrument.id,
+      instrument.symbol,
+      data.buyRangeHigh,
+    );
   }
 
   await db.watchlistItem.upsert({
@@ -114,7 +127,9 @@ export async function addToWatchlist(
   redirect("/watchlist");
 }
 
-export async function analyzeWatchlistItem(itemId: string): Promise<WatchlistActionState> {
+export async function analyzeWatchlistItem(
+  itemId: string,
+): Promise<WatchlistActionState> {
   const item = await db.watchlistItem.findUnique({
     where: { id: itemId },
     include: { instrument: true },
@@ -142,8 +157,12 @@ export async function analyzeWatchlistItem(itemId: string): Promise<WatchlistAct
   const settings = await db.settings.findUnique({ where: { id: "singleton" } });
   const model = settings?.watchlistAiModel ?? "gpt-5.4";
   const reasoningEffort =
-    (settings?.watchlistAiReasoning as "minimal" | "low" | "medium" | "high" | undefined) ??
-    "medium";
+    (settings?.watchlistAiReasoning as
+      | "minimal"
+      | "low"
+      | "medium"
+      | "high"
+      | undefined) ?? "medium";
 
   let analysis: Awaited<ReturnType<typeof analyzeWatchlistBuyZone>>;
   try {
@@ -160,7 +179,10 @@ export async function analyzeWatchlistItem(itemId: string): Promise<WatchlistAct
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? `AI analysis failed: ${err.message}` : "AI analysis failed",
+      error:
+        err instanceof Error
+          ? `AI analysis failed: ${err.message}`
+          : "AI analysis failed",
     };
   }
 
@@ -248,10 +270,12 @@ export async function archiveWatchlistItem(itemId: string): Promise<void> {
   if (!item) return;
 
   if (item.alertId) {
-    await db.alert.update({
-      where: { id: item.alertId },
-      data: { status: "DISMISSED" },
-    }).catch(() => {});
+    await db.alert
+      .update({
+        where: { id: item.alertId },
+        data: { status: "DISMISSED" },
+      })
+      .catch(() => {});
   }
 
   await db.watchlistItem.update({
@@ -267,10 +291,12 @@ export async function markAsBought(itemId: string): Promise<void> {
   if (!item) return;
 
   if (item.alertId) {
-    await db.alert.update({
-      where: { id: item.alertId },
-      data: { status: "DISMISSED" },
-    }).catch(() => {});
+    await db.alert
+      .update({
+        where: { id: item.alertId },
+        data: { status: "DISMISSED" },
+      })
+      .catch(() => {});
   }
 
   await db.watchlistItem.update({

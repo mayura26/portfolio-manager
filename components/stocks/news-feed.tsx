@@ -1,5 +1,5 @@
-import { fetchNews } from "@/lib/yahoo";
 import { formatRelative } from "@/lib/format";
+import { fetchNews } from "@/lib/yahoo";
 
 type Props = {
   yahooSymbol: string;

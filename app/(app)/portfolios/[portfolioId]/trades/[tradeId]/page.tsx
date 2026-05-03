@@ -1,11 +1,11 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { deleteTrade, updateTrade } from "@/actions/trades";
-import { TradeForm } from "@/components/trades/trade-form";
-import { DeleteTradeButton } from "@/components/trades/delete-trade-button";
 import { Skeleton } from "@/components/shared/skeleton";
+import { DeleteTradeButton } from "@/components/trades/delete-trade-button";
+import { TradeForm } from "@/components/trades/trade-form";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ portfolioId: string; tradeId: string }>;
 
@@ -66,7 +66,8 @@ async function EditTradeContent({ params }: { params: Params }) {
       <section>
         <h2 className="display mb-2 text-2xl text-loss">Danger zone</h2>
         <p className="mb-4 max-w-prose text-sm text-muted">
-          Deleting a trade re-runs the FIFO accounting and may change cost basis and realized P&L.
+          Deleting a trade re-runs the FIFO accounting and may change cost basis
+          and realized P&L.
         </p>
         <DeleteTradeButton action={deleteAction} />
       </section>

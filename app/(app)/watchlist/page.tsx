@@ -1,11 +1,11 @@
-import { Suspense } from "react";
-import Link from "next/link";
 import { Bookmark, Plus } from "lucide-react";
-import { db } from "@/lib/db";
-import { fetchQuotes } from "@/lib/yahoo";
-import { WatchlistCard } from "@/components/watchlist/watchlist-card";
+import Link from "next/link";
+import { Suspense } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { WatchlistCard } from "@/components/watchlist/watchlist-card";
+import { db } from "@/lib/db";
+import { fetchQuotes } from "@/lib/yahoo";
 
 export default function WatchlistPage() {
   return (
@@ -15,7 +15,8 @@ export default function WatchlistPage() {
           <p className="label">Portfolio</p>
           <h1 className="display mt-2 text-4xl text-foreground">Watchlist</h1>
           <p className="mt-2 max-w-prose text-sm text-muted">
-            Stocks you want to buy when the price is right. Set a buy zone to get alerted.
+            Stocks you want to buy when the price is right. Set a buy zone to
+            get alerted.
           </p>
         </div>
         <Link
@@ -82,7 +83,9 @@ async function ArchivedSection() {
 
   if (archived.length === 0) return null;
 
-  const quotes = await fetchQuotes(archived.map((i) => i.instrument.yahooSymbol));
+  const quotes = await fetchQuotes(
+    archived.map((i) => i.instrument.yahooSymbol),
+  );
   const quoteMap = new Map(quotes.map((q) => [q.yahooSymbol, q]));
 
   return (

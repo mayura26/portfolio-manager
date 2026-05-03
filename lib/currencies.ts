@@ -27,7 +27,9 @@ export const CURRENCIES: readonly Currency[] = [
   { code: "MXN", name: "Mexican Peso", symbol: "Mex$" },
 ] as const;
 
-export const CURRENCY_CODES = CURRENCIES.map((c) => c.code) as readonly string[];
+export const CURRENCY_CODES = CURRENCIES.map(
+  (c) => c.code,
+) as readonly string[];
 
 const CURRENCY_BY_CODE = new Map(CURRENCIES.map((c) => [c.code, c]));
 

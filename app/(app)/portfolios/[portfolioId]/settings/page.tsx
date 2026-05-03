@@ -1,10 +1,10 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { deletePortfolio, updatePortfolio } from "@/actions/portfolios";
-import { PortfolioForm } from "@/components/portfolios/portfolio-form";
 import { DeletePortfolioButton } from "@/components/portfolios/delete-portfolio-button";
+import { PortfolioForm } from "@/components/portfolios/portfolio-form";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -20,7 +20,9 @@ export default function PortfolioSettingsPage({
 
 async function PortfolioSettings({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({ where: { id: portfolioId } });
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+  });
   if (!portfolio) notFound();
 
   const updateAction = updatePortfolio.bind(null, portfolio.id);
@@ -45,10 +47,13 @@ async function PortfolioSettings({ params }: { params: Params }) {
       <section>
         <h2 className="display mb-2 text-2xl text-loss">Danger zone</h2>
         <p className="mb-4 max-w-prose text-sm text-muted">
-          Deleting this portfolio removes it and all associated trades and alerts. This cannot be
-          undone.
+          Deleting this portfolio removes it and all associated trades and
+          alerts. This cannot be undone.
         </p>
-        <DeletePortfolioButton action={deleteAction} portfolioName={portfolio.name} />
+        <DeletePortfolioButton
+          action={deleteAction}
+          portfolioName={portfolio.name}
+        />
       </section>
     </div>
   );

@@ -7,7 +7,12 @@ type Props = {
   required?: boolean;
 };
 
-export function CurrencySelect({ id, name, defaultValue = "USD", required }: Props) {
+export function CurrencySelect({
+  id,
+  name,
+  defaultValue = "USD",
+  required,
+}: Props) {
   return (
     <select
       id={id ?? name}

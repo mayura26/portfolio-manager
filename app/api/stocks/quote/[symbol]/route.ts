@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { fetchQuotes } from "@/lib/yahoo";
 
 export async function GET(
@@ -11,7 +11,10 @@ export async function GET(
   try {
     const quotes = await fetchQuotes([decoded]);
     if (quotes.length === 0) {
-      return NextResponse.json({ error: "Quote not available" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Quote not available" },
+        { status: 404 },
+      );
     }
     return NextResponse.json({ quote: quotes[0] });
   } catch (err) {

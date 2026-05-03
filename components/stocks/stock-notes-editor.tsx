@@ -1,9 +1,14 @@
 "use client";
 
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
-import { createNote, deleteNote, updateNote, type NoteActionState } from "@/actions/instruments";
+import {
+  createNote,
+  deleteNote,
+  type NoteActionState,
+  updateNote,
+} from "@/actions/instruments";
 import { formatRelative } from "@/lib/format";
 
 type Note = {
@@ -108,18 +113,27 @@ function NoteView({ note, onEdit }: { note: Note; onEdit: () => void }) {
   );
 }
 
-function NoteComposer({ instrumentId, onDone }: { instrumentId: string; onDone: () => void }) {
-  const [state, formAction, pending] = useActionState<NoteActionState | undefined, FormData>(
-    createNote,
-    undefined,
-  );
+function NoteComposer({
+  instrumentId,
+  onDone,
+}: {
+  instrumentId: string;
+  onDone: () => void;
+}) {
+  const [state, formAction, pending] = useActionState<
+    NoteActionState | undefined,
+    FormData
+  >(createNote, undefined);
 
   if (state?.ok) {
     setTimeout(onDone, 0);
   }
 
   return (
-    <form action={formAction} className="hairline flex flex-col gap-3 bg-surface p-4">
+    <form
+      action={formAction}
+      className="hairline flex flex-col gap-3 bg-surface p-4"
+    >
       <input type="hidden" name="instrumentId" value={instrumentId} />
       <textarea
         name="content"
@@ -129,7 +143,9 @@ function NoteComposer({ instrumentId, onDone }: { instrumentId: string; onDone: 
         placeholder="Markdown supported. Capture thesis, catalysts, exit triggers."
         className="hairline w-full bg-surface-elevated px-3 py-2 text-sm text-foreground"
       />
-      {state && !state.ok ? <p className="text-xs text-loss">{state.error}</p> : null}
+      {state && !state.ok ? (
+        <p className="text-xs text-loss">{state.error}</p>
+      ) : null}
       <div className="flex items-center gap-3">
         <button
           type="submit"
@@ -161,10 +177,10 @@ function NoteEditor({
   onDone: () => void;
 }) {
   const action = updateNote.bind(null, note.id);
-  const [state, formAction, pending] = useActionState<NoteActionState | undefined, FormData>(
-    action,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    NoteActionState | undefined,
+    FormData
+  >(action, undefined);
 
   if (state?.ok) {
     setTimeout(onDone, 0);
@@ -172,7 +188,10 @@ function NoteEditor({
 
   return (
     <li>
-      <form action={formAction} className="hairline flex flex-col gap-3 bg-surface p-4">
+      <form
+        action={formAction}
+        className="hairline flex flex-col gap-3 bg-surface p-4"
+      >
         <input type="hidden" name="instrumentId" value={instrumentId} />
         <textarea
           name="content"
@@ -182,7 +201,9 @@ function NoteEditor({
           defaultValue={note.content}
           className="hairline w-full bg-surface-elevated px-3 py-2 text-sm text-foreground"
         />
-        {state && !state.ok ? <p className="text-xs text-loss">{state.error}</p> : null}
+        {state && !state.ok ? (
+          <p className="text-xs text-loss">{state.error}</p>
+        ) : null}
         <div className="flex items-center gap-3">
           <button
             type="submit"

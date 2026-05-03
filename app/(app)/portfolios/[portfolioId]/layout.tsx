@@ -1,13 +1,16 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { PortfolioTabs } from "@/components/portfolios/portfolio-tabs";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ portfolioId: string }>;
 
-export default function PortfolioLayout({ children, params }: LayoutProps<"/portfolios/[portfolioId]">) {
+export default function PortfolioLayout({
+  children,
+  params,
+}: LayoutProps<"/portfolios/[portfolioId]">) {
   return (
     <div className="mx-auto max-w-6xl">
       <Suspense fallback={<HeaderSkeleton />}>
@@ -25,7 +28,9 @@ export default function PortfolioLayout({ children, params }: LayoutProps<"/port
 
 async function PortfolioHeader({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({ where: { id: portfolioId } });
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+  });
   if (!portfolio) notFound();
 
   return (
@@ -39,9 +44,13 @@ async function PortfolioHeader({ params }: { params: Params }) {
 
       <header className="mb-6 border-b border-border pb-6">
         <p className="label">Base · {portfolio.baseCurrency}</p>
-        <h1 className="display mt-2 text-4xl text-foreground">{portfolio.name}</h1>
+        <h1 className="display mt-2 text-4xl text-foreground">
+          {portfolio.name}
+        </h1>
         {portfolio.description ? (
-          <p className="mt-2 max-w-prose text-sm text-muted">{portfolio.description}</p>
+          <p className="mt-2 max-w-prose text-sm text-muted">
+            {portfolio.description}
+          </p>
         ) : null}
       </header>
     </>

@@ -79,7 +79,12 @@ export const alertSchema = z
     instrumentId: z.string().min(1).nullable().optional(),
     priceTarget: decimalString.optional().nullable(),
     pctChange: decimalString.optional().nullable(),
-    reviewIntervalDays: z.coerce.number().int().positive().optional().nullable(),
+    reviewIntervalDays: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .nullable(),
     allocationThreshold: decimalString.optional().nullable(),
     message: z
       .string()
@@ -139,7 +144,12 @@ export const watchlistAiModelEnum = z.enum(["gpt-5.4", "gpt-5.4-mini"]);
 
 export type WatchlistAiModel = z.infer<typeof watchlistAiModelEnum>;
 
-export const watchlistAiReasoningEnum = z.enum(["minimal", "low", "medium", "high"]);
+export const watchlistAiReasoningEnum = z.enum([
+  "minimal",
+  "low",
+  "medium",
+  "high",
+]);
 
 export type WatchlistAiReasoning = z.infer<typeof watchlistAiReasoningEnum>;
 
@@ -167,7 +177,10 @@ export const watchlistItemSchema = z
       .transform((v) => (v?.length ? v : null)),
   })
   .refine(
-    (d) => !d.buyRangeLow || !d.buyRangeHigh || Number(d.buyRangeHigh) > Number(d.buyRangeLow),
+    (d) =>
+      !d.buyRangeLow ||
+      !d.buyRangeHigh ||
+      Number(d.buyRangeHigh) > Number(d.buyRangeLow),
     { message: "High must exceed low", path: ["buyRangeHigh"] },
   );
 

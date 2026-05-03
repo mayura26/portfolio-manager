@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { NavLink } from "./nav-link";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav-config";
+import { NavLink } from "./nav-link";
 
 export function Sidebar() {
   return (

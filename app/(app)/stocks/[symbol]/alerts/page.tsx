@@ -1,15 +1,17 @@
-import { Suspense } from "react";
+import { Bell, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Bell, Plus } from "lucide-react";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { AlertCard } from "@/components/alerts/alert-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ symbol: string }>;
 
-export default function StockAlertsPage({ params }: PageProps<"/stocks/[symbol]/alerts">) {
+export default function StockAlertsPage({
+  params,
+}: PageProps<"/stocks/[symbol]/alerts">) {
   return (
     <Suspense fallback={<Skeleton className="h-48 w-full" />}>
       <StockAlertsContent params={params} />
@@ -35,7 +37,8 @@ async function StockAlertsContent({ params }: { params: Params }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">
-          {instrument.alerts.length} {instrument.alerts.length === 1 ? "alert" : "alerts"}
+          {instrument.alerts.length}{" "}
+          {instrument.alerts.length === 1 ? "alert" : "alerts"}
         </p>
         <Link
           href={`/alerts/new?yahooSymbol=${encodeURIComponent(instrument.yahooSymbol)}`}

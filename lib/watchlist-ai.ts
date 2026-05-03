@@ -28,7 +28,8 @@ Rules for the response:
 - Rationale must be 2–4 plain-English sentences explaining the buy zone — no markdown, no JSON inside it`;
 
 function buildUserMessage(input: AnalysisInput): string {
-  const { symbol, name, currency, currentPrice, financials, recentBars } = input;
+  const { symbol, name, currency, currentPrice, financials, recentBars } =
+    input;
   const last20 = recentBars
     .slice(-20)
     .map((b) => b.close.toFixed(2))
@@ -55,7 +56,9 @@ function buildUserMessage(input: AnalysisInput): string {
   return `Analyse this stock and produce a buy-zone recommendation:\n${JSON.stringify(data, null, 2)}`;
 }
 
-export async function analyzeWatchlistBuyZone(input: AnalysisInput): Promise<WatchlistAiAnalysis> {
+export async function analyzeWatchlistBuyZone(
+  input: AnalysisInput,
+): Promise<WatchlistAiAnalysis> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
@@ -107,7 +110,11 @@ export async function analyzeWatchlistBuyZone(input: AnalysisInput): Promise<Wat
     throw new Error("AI response missing required fields");
   }
 
-  const result = parsed as { suggestedLow: number; suggestedHigh: number; rationale: string };
+  const result = parsed as {
+    suggestedLow: number;
+    suggestedHigh: number;
+    rationale: string;
+  };
 
   if (result.suggestedLow <= 0 || result.suggestedHigh <= result.suggestedLow) {
     throw new Error(

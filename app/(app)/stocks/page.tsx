@@ -1,9 +1,9 @@
-import { Suspense } from "react";
 import { LineChart } from "lucide-react";
-import { db } from "@/lib/db";
-import { StockCard } from "@/components/stocks/stock-card";
+import { Suspense } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { StockCard } from "@/components/stocks/stock-card";
+import { db } from "@/lib/db";
 
 export default function StocksPage() {
   return (
@@ -12,7 +12,8 @@ export default function StocksPage() {
         <p className="label">Universe</p>
         <h1 className="display mt-2 text-4xl text-foreground">Stocks</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Every instrument referenced by a trade. Click through for research, financials, and notes.
+          Every instrument referenced by a trade. Click through for research,
+          financials, and notes.
         </p>
       </header>
 

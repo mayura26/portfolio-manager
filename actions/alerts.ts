@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { alertSchema } from "@/lib/validators";
 import { findOrCreateInstrument } from "@/lib/instruments";
+import { alertSchema } from "@/lib/validators";
 
 export type AlertActionState =
   | { ok: true }
@@ -50,7 +50,8 @@ export async function createAlert(
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Could not resolve instrument",
+        error:
+          err instanceof Error ? err.message : "Could not resolve instrument",
       };
     }
   }
@@ -72,7 +73,10 @@ export async function createAlert(
 
   // Capture reference price for percent-move and allocation drift alerts
   let referencePrice: string | null = null;
-  if (data.instrumentId && (data.type === "PCT_CHANGE" || data.type === "ALLOCATION_DRIFT")) {
+  if (
+    data.instrumentId &&
+    (data.type === "PCT_CHANGE" || data.type === "ALLOCATION_DRIFT")
+  ) {
     const latest = await db.priceHistory.findFirst({
       where: { instrumentId: data.instrumentId },
       orderBy: { date: "desc" },
@@ -86,7 +90,12 @@ export async function createAlert(
       portfolioId: data.portfolioId ?? null,
       instrumentId: data.instrumentId ?? null,
       priceTarget: data.priceTarget ?? null,
-      priceDirection: data.type === "PRICE_ABOVE" ? "above" : data.type === "PRICE_BELOW" ? "below" : null,
+      priceDirection:
+        data.type === "PRICE_ABOVE"
+          ? "above"
+          : data.type === "PRICE_BELOW"
+            ? "below"
+            : null,
       pctChange: data.pctChange ?? null,
       referencePrice,
       reviewIntervalDays: data.reviewIntervalDays ?? null,

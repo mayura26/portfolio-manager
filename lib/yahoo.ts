@@ -12,28 +12,47 @@ export type SearchHit = {
   quoteType: string;
 };
 
-export async function searchSymbols(query: string, limit = 10): Promise<SearchHit[]> {
+export async function searchSymbols(
+  query: string,
+  limit = 10,
+): Promise<SearchHit[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const result = await yahoo.search(trimmed, { quotesCount: limit, newsCount: 0 });
+  const result = await yahoo.search(trimmed, {
+    quotesCount: limit,
+    newsCount: 0,
+  });
 
   return result.quotes
-    .filter((q): q is typeof q & { symbol: string } => "symbol" in q && typeof q.symbol === "string")
+    .filter(
+      (q): q is typeof q & { symbol: string } =>
+        "symbol" in q && typeof q.symbol === "string",
+    )
     .map((q) => {
       const yahooSymbol = q.symbol;
       const dotIdx = yahooSymbol.indexOf(".");
       const symbol = dotIdx >= 0 ? yahooSymbol.slice(0, dotIdx) : yahooSymbol;
       const exchange =
-        ("exchange" in q && typeof q.exchange === "string" ? q.exchange : undefined) ??
-        ("exchDisp" in q && typeof q.exchDisp === "string" ? q.exchDisp : undefined) ??
+        ("exchange" in q && typeof q.exchange === "string"
+          ? q.exchange
+          : undefined) ??
+        ("exchDisp" in q && typeof q.exchDisp === "string"
+          ? q.exchDisp
+          : undefined) ??
         "";
       const name =
-        ("longname" in q && typeof q.longname === "string" ? q.longname : undefined) ??
-        ("shortname" in q && typeof q.shortname === "string" ? q.shortname : undefined) ??
+        ("longname" in q && typeof q.longname === "string"
+          ? q.longname
+          : undefined) ??
+        ("shortname" in q && typeof q.shortname === "string"
+          ? q.shortname
+          : undefined) ??
         yahooSymbol;
       const quoteType =
-        ("quoteType" in q && typeof q.quoteType === "string" ? q.quoteType : undefined) ?? "EQUITY";
+        ("quoteType" in q && typeof q.quoteType === "string"
+          ? q.quoteType
+          : undefined) ?? "EQUITY";
       return { yahooSymbol, symbol, exchange, name, quoteType };
     });
 }
@@ -49,7 +68,9 @@ export type InstrumentMeta = {
   instrumentType: string;
 };
 
-export async function lookupInstrument(yahooSymbol: string): Promise<InstrumentMeta | null> {
+export async function lookupInstrument(
+  yahooSymbol: string,
+): Promise<InstrumentMeta | null> {
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) return null;
 
@@ -72,7 +93,8 @@ export async function lookupInstrument(yahooSymbol: string): Promise<InstrumentM
     name: price.longName ?? price.shortName ?? price.symbol,
     currency: price.currency.toUpperCase(),
     sector: profile && "sector" in profile ? (profile.sector ?? null) : null,
-    industry: profile && "industry" in profile ? (profile.industry ?? null) : null,
+    industry:
+      profile && "industry" in profile ? (profile.industry ?? null) : null,
     instrumentType: price.quoteType ?? "EQUITY",
   };
 }
@@ -88,8 +110,12 @@ export type QuoteSnapshot = {
   asOf: Date;
 };
 
-export async function fetchQuotes(yahooSymbols: string[]): Promise<QuoteSnapshot[]> {
-  const cleaned = Array.from(new Set(yahooSymbols.map((s) => s.trim().toUpperCase()).filter(Boolean)));
+export async function fetchQuotes(
+  yahooSymbols: string[],
+): Promise<QuoteSnapshot[]> {
+  const cleaned = Array.from(
+    new Set(yahooSymbols.map((s) => s.trim().toUpperCase()).filter(Boolean)),
+  );
   if (cleaned.length === 0) return [];
 
   const results = await yahoo.quote(cleaned);
@@ -101,12 +127,21 @@ export async function fetchQuotes(yahooSymbols: string[]): Promise<QuoteSnapshot
       yahooSymbol: q.symbol,
       price: q.regularMarketPrice as number,
       currency: (q.currency ?? "USD").toUpperCase(),
-      previousClose: typeof q.regularMarketPreviousClose === "number" ? q.regularMarketPreviousClose : null,
-      change: typeof q.regularMarketChange === "number" ? q.regularMarketChange : null,
+      previousClose:
+        typeof q.regularMarketPreviousClose === "number"
+          ? q.regularMarketPreviousClose
+          : null,
+      change:
+        typeof q.regularMarketChange === "number"
+          ? q.regularMarketChange
+          : null,
       changePercent:
-        typeof q.regularMarketChangePercent === "number" ? q.regularMarketChangePercent : null,
+        typeof q.regularMarketChangePercent === "number"
+          ? q.regularMarketChangePercent
+          : null,
       marketState: q.marketState ?? "CLOSED",
-      asOf: q.regularMarketTime instanceof Date ? q.regularMarketTime : new Date(),
+      asOf:
+        q.regularMarketTime instanceof Date ? q.regularMarketTime : new Date(),
     }));
 }
 
@@ -132,7 +167,15 @@ export async function fetchDailyHistory(
 
   return (result.quotes ?? [])
     .filter(
-      (q): q is typeof q & { date: Date; open: number; high: number; low: number; close: number } =>
+      (
+        q,
+      ): q is typeof q & {
+        date: Date;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+      } =>
         q.date instanceof Date &&
         typeof q.open === "number" &&
         typeof q.high === "number" &&
@@ -156,14 +199,19 @@ export async function fetchFxRate(pair: string): Promise<number | null> {
   const yahooSymbol = `${pair.toUpperCase()}=X`;
   try {
     const q = await yahoo.quote(yahooSymbol);
-    if (q && typeof q.regularMarketPrice === "number") return q.regularMarketPrice;
+    if (q && typeof q.regularMarketPrice === "number")
+      return q.regularMarketPrice;
   } catch {
     return null;
   }
   return null;
 }
 
-export async function fetchFxHistory(pair: string, from: Date, to: Date = new Date()) {
+export async function fetchFxHistory(
+  pair: string,
+  from: Date,
+  to: Date = new Date(),
+) {
   return fetchDailyHistory(`${pair.toUpperCase()}=X`, from, to);
 }
 
@@ -190,13 +238,20 @@ export type FinancialSummary = {
   longBusinessSummary: string | null;
 };
 
-export async function fetchFinancialSummary(yahooSymbol: string): Promise<FinancialSummary | null> {
+export async function fetchFinancialSummary(
+  yahooSymbol: string,
+): Promise<FinancialSummary | null> {
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) return null;
 
   try {
     const summary = await yahoo.quoteSummary(sym, {
-      modules: ["summaryDetail", "defaultKeyStatistics", "financialData", "summaryProfile"],
+      modules: [
+        "summaryDetail",
+        "defaultKeyStatistics",
+        "financialData",
+        "summaryProfile",
+      ],
     });
 
     const detail = summary.summaryDetail;
@@ -240,15 +295,24 @@ export type NewsItem = {
   thumbnail: string | null;
 };
 
-export async function fetchNews(yahooSymbol: string, count = 8): Promise<NewsItem[]> {
+export async function fetchNews(
+  yahooSymbol: string,
+  count = 8,
+): Promise<NewsItem[]> {
   try {
-    const result = await yahoo.search(yahooSymbol, { quotesCount: 0, newsCount: count });
+    const result = await yahoo.search(yahooSymbol, {
+      quotesCount: 0,
+      newsCount: count,
+    });
     return result.news.map((n) => ({
       uuid: n.uuid,
       title: n.title,
       link: n.link,
       publisher: n.publisher ?? "",
-      publishedAt: n.providerPublishTime instanceof Date ? n.providerPublishTime : new Date(n.providerPublishTime),
+      publishedAt:
+        n.providerPublishTime instanceof Date
+          ? n.providerPublishTime
+          : new Date(n.providerPublishTime),
       thumbnail: n.thumbnail?.resolutions?.[0]?.url ?? null,
     }));
   } catch {

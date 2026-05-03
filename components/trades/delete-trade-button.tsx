@@ -10,7 +10,9 @@ export function DeleteTradeButton({ action }: Props) {
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
-    const ok = window.confirm("Delete this trade? Holdings will be recalculated.");
+    const ok = window.confirm(
+      "Delete this trade? Holdings will be recalculated.",
+    );
     if (!ok) return;
     startTransition(() => {
       void action();

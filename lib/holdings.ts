@@ -46,7 +46,9 @@ function toDec(value: unknown): Decimal {
   return new Decimal(value as Decimal.Value);
 }
 
-export async function computeHoldings(portfolioId: string): Promise<PortfolioHoldings> {
+export async function computeHoldings(
+  portfolioId: string,
+): Promise<PortfolioHoldings> {
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
     include: {
@@ -63,7 +65,7 @@ export async function computeHoldings(portfolioId: string): Promise<PortfolioHol
 
   const baseCurrency = portfolio.baseCurrency;
   type InstrumentBucket = {
-    instrument: typeof portfolio.trades[number]["instrument"];
+    instrument: (typeof portfolio.trades)[number]["instrument"];
     lots: Lot[];
     realizedPnL: Decimal;
   };
@@ -78,7 +80,11 @@ export async function computeHoldings(portfolioId: string): Promise<PortfolioHol
     }
 
     const tradeFx =
-      trade.currency === baseCurrency ? ONE : trade.fxRate ? toDec(trade.fxRate) : ONE;
+      trade.currency === baseCurrency
+        ? ONE
+        : trade.fxRate
+          ? toDec(trade.fxRate)
+          : ONE;
     const qty = toDec(trade.quantity);
     const priceBase = toDec(trade.price).times(tradeFx);
     const feesBase = toDec(trade.fees).times(tradeFx);
@@ -108,7 +114,9 @@ export async function computeHoldings(portfolioId: string): Promise<PortfolioHol
     }
 
     if (remainingToSell.gt(0)) {
-      const sharePerUnit = qty.isZero() ? ZERO : qty.minus(remainingToSell).dividedBy(qty);
+      const sharePerUnit = qty.isZero()
+        ? ZERO
+        : qty.minus(remainingToSell).dividedBy(qty);
       proceeds = proceeds.times(sharePerUnit);
     }
 
@@ -131,7 +139,10 @@ export async function computeHoldings(portfolioId: string): Promise<PortfolioHol
   let hasMissingPrices = false;
 
   for (const [instrumentId, bucket] of byInstrument) {
-    const quantity = bucket.lots.reduce((acc, lot) => acc.plus(lot.quantity), ZERO);
+    const quantity = bucket.lots.reduce(
+      (acc, lot) => acc.plus(lot.quantity),
+      ZERO,
+    );
     const costBase = bucket.lots.reduce(
       (acc, lot) => acc.plus(lot.quantity.times(lot.unitCostBase)),
       ZERO,
@@ -194,7 +205,9 @@ export async function computeHoldings(portfolioId: string): Promise<PortfolioHol
 
   for (const h of holdings) {
     if (h.marketValueBase && totalMarketValueBase.gt(0)) {
-      h.allocationPercent = h.marketValueBase.dividedBy(totalMarketValueBase).times(100);
+      h.allocationPercent = h.marketValueBase
+        .dividedBy(totalMarketValueBase)
+        .times(100);
     }
   }
 

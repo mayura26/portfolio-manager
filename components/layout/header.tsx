@@ -1,8 +1,11 @@
-import { Suspense } from "react";
-import Link from "next/link";
 import { Menu } from "lucide-react";
+import Link from "next/link";
+import { Suspense } from "react";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { NotificationBell, NotificationBellSkeleton } from "@/components/notifications/notification-bell";
+import {
+  NotificationBell,
+  NotificationBellSkeleton,
+} from "@/components/notifications/notification-bell";
 
 export function Header() {
   return (

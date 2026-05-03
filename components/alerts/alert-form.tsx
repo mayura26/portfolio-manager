@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
 import Link from "next/link";
-import { TickerSearch } from "@/components/trades/ticker-search";
+import { useActionState, useState } from "react";
 import type { AlertActionState } from "@/actions/alerts";
+import { TickerSearch } from "@/components/trades/ticker-search";
 
 type AlertType =
   | "PRICE_ABOVE"
@@ -27,7 +27,10 @@ type Defaults = {
 };
 
 type Props = {
-  action: (state: AlertActionState | undefined, formData: FormData) => Promise<AlertActionState>;
+  action: (
+    state: AlertActionState | undefined,
+    formData: FormData,
+  ) => Promise<AlertActionState>;
   portfolios: Portfolio[];
   defaults?: Defaults;
   lockedPortfolioId?: string;
@@ -46,10 +49,10 @@ export function AlertForm({
   cancelHref,
 }: Props) {
   const [type, setType] = useState<AlertType>(defaults?.type ?? "PRICE_ABOVE");
-  const [state, formAction, pending] = useActionState<AlertActionState | undefined, FormData>(
-    action,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    AlertActionState | undefined,
+    FormData
+  >(action, undefined);
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
   const needsInstrument =
@@ -90,7 +93,11 @@ export function AlertForm({
         <Field id="yahooSymbol" label="Instrument">
           {lockedYahooSymbol ? (
             <>
-              <input type="hidden" name="yahooSymbol" value={lockedYahooSymbol} />
+              <input
+                type="hidden"
+                name="yahooSymbol"
+                value={lockedYahooSymbol}
+              />
               <p className="hairline bg-surface px-3 py-2 text-sm text-muted">
                 {lockedSymbolDisplay ?? lockedYahooSymbol}
               </p>
@@ -106,7 +113,11 @@ export function AlertForm({
       ) : null}
 
       {needsPortfolio ? (
-        <Field id="portfolioId" label="Portfolio" error={fieldErrors?.portfolioId?.[0]}>
+        <Field
+          id="portfolioId"
+          label="Portfolio"
+          error={fieldErrors?.portfolioId?.[0]}
+        >
           {lockedPortfolioId ? (
             <input type="hidden" name="portfolioId" value={lockedPortfolioId} />
           ) : (
@@ -129,7 +140,11 @@ export function AlertForm({
       ) : null}
 
       {type === "PRICE_ABOVE" || type === "PRICE_BELOW" ? (
-        <Field id="priceTarget" label="Price target" error={fieldErrors?.priceTarget?.[0]}>
+        <Field
+          id="priceTarget"
+          label="Price target"
+          error={fieldErrors?.priceTarget?.[0]}
+        >
           <input
             id="priceTarget"
             name="priceTarget"
@@ -222,7 +237,10 @@ export function AlertForm({
         >
           {pending ? "Saving…" : "Create alert"}
         </button>
-        <Link href={cancelHref} className="px-4 py-2 text-sm text-muted hover:text-foreground">
+        <Link
+          href={cancelHref}
+          className="px-4 py-2 text-sm text-muted hover:text-foreground"
+        >
           Cancel
         </Link>
       </div>

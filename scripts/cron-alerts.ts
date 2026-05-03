@@ -4,8 +4,8 @@
  *   npm run cron:alerts
  */
 import "dotenv/config";
-import { db } from "@/lib/db";
 import { evaluateAllAlerts } from "@/lib/alerts";
+import { db } from "@/lib/db";
 
 async function run() {
   const result = await evaluateAllAlerts();

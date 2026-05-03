@@ -1,4 +1,4 @@
-import { getAllocation, type AllocationGroupBy } from "@/lib/dashboard";
+import { type AllocationGroupBy, getAllocation } from "@/lib/dashboard";
 import { AllocationChartClient } from "./allocation-chart-client";
 
 type Props = {

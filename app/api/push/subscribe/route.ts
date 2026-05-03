@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 const SINGLETON_ID = "singleton";
@@ -12,7 +12,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (!body || typeof body !== "object" || !("endpoint" in body)) {
-    return NextResponse.json({ error: "Subscription required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Subscription required" },
+      { status: 400 },
+    );
   }
 
   await db.settings.upsert({

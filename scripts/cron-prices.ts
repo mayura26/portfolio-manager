@@ -49,7 +49,12 @@ async function run() {
     }
   }
 
-  return { ok: true, instruments: instruments.length, bars: totalBars, failures };
+  return {
+    ok: true,
+    instruments: instruments.length,
+    bars: totalBars,
+    failures,
+  };
 }
 
 run()

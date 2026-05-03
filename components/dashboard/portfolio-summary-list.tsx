@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { getPortfolioSummaries } from "@/lib/dashboard";
 import { formatCurrency, formatPercent, pnlClass } from "@/lib/format";
 
@@ -27,17 +27,31 @@ export async function PortfolioSummaryList() {
                 <span className="font-medium">{s.name}</span>
                 <span className="label ml-2">{s.baseCurrency}</span>
               </p>
-              <p className="label mt-1">Realized {formatCurrency(s.realizedPnL.toString(), s.baseCurrency, { signed: true })}</p>
+              <p className="label mt-1">
+                Realized{" "}
+                {formatCurrency(s.realizedPnL.toString(), s.baseCurrency, {
+                  signed: true,
+                })}
+              </p>
             </div>
             <div className="text-right">
               <p className="display tabular text-lg text-foreground">
                 {formatCurrency(s.marketValue.toString(), s.baseCurrency)}
               </p>
-              <p className={`tabular text-xs ${pnlClass(s.unrealizedPnL.toString())}`}>
-                {formatCurrency(s.unrealizedPnL.toString(), s.baseCurrency, { signed: true })}
+              <p
+                className={`tabular text-xs ${pnlClass(s.unrealizedPnL.toString())}`}
+              >
+                {formatCurrency(s.unrealizedPnL.toString(), s.baseCurrency, {
+                  signed: true,
+                })}
                 {s.unrealizedPercent ? (
                   <span className="ml-1 text-muted">
-                    ({formatPercent(s.unrealizedPercent.dividedBy(100).toString(), { signed: true })})
+                    (
+                    {formatPercent(
+                      s.unrealizedPercent.dividedBy(100).toString(),
+                      { signed: true },
+                    )}
+                    )
                   </span>
                 ) : null}
               </p>

@@ -1,9 +1,14 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
 import Link from "next/link";
-import { completeReview, deleteReview, reopenReview, startReview } from "@/actions/reviews";
+import { useActionState, useTransition } from "react";
 import type { ReviewActionState } from "@/actions/reviews";
+import {
+  completeReview,
+  deleteReview,
+  reopenReview,
+  startReview,
+} from "@/actions/reviews";
 
 type Props = {
   reviewId: string;
@@ -13,10 +18,10 @@ type Props = {
 
 export function ReviewActionForm({ reviewId, status, defaults }: Props) {
   const completeAction = completeReview.bind(null, reviewId);
-  const [state, formAction, pending] = useActionState<ReviewActionState | undefined, FormData>(
-    completeAction,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    ReviewActionState | undefined,
+    FormData
+  >(completeAction, undefined);
   const [transitioning, startTransition] = useTransition();
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
@@ -40,7 +45,11 @@ export function ReviewActionForm({ reviewId, status, defaults }: Props) {
           >
             {transitioning ? "Starting…" : "Start review"}
           </button>
-          <DangerButton reviewId={reviewId} pending={transitioning} startTransition={startTransition} />
+          <DangerButton
+            reviewId={reviewId}
+            pending={transitioning}
+            startTransition={startTransition}
+          />
         </div>
       </div>
     );
@@ -63,10 +72,17 @@ export function ReviewActionForm({ reviewId, status, defaults }: Props) {
           >
             {transitioning ? "Reopening…" : "Reopen"}
           </button>
-          <Link href="/reviews" className="px-4 py-2 text-sm text-muted hover:text-foreground">
+          <Link
+            href="/reviews"
+            className="px-4 py-2 text-sm text-muted hover:text-foreground"
+          >
             Back to queue
           </Link>
-          <DangerButton reviewId={reviewId} pending={transitioning} startTransition={startTransition} />
+          <DangerButton
+            reviewId={reviewId}
+            pending={transitioning}
+            startTransition={startTransition}
+          />
         </div>
       </div>
     );
@@ -133,10 +149,17 @@ export function ReviewActionForm({ reviewId, status, defaults }: Props) {
         >
           {pending ? "Saving…" : "Complete review"}
         </button>
-        <Link href="/reviews" className="px-4 py-2 text-sm text-muted hover:text-foreground">
+        <Link
+          href="/reviews"
+          className="px-4 py-2 text-sm text-muted hover:text-foreground"
+        >
           Cancel
         </Link>
-        <DangerButton reviewId={reviewId} pending={transitioning} startTransition={startTransition} />
+        <DangerButton
+          reviewId={reviewId}
+          pending={transitioning}
+          startTransition={startTransition}
+        />
       </div>
     </form>
   );

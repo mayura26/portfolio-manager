@@ -1,8 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
 import { Check, X } from "lucide-react";
-import { dismissNotification, markNotificationRead } from "@/actions/notifications";
+import { useTransition } from "react";
+import {
+  dismissNotification,
+  markNotificationRead,
+} from "@/actions/notifications";
 import { formatRelative } from "@/lib/format";
 
 type Notification = {
@@ -15,7 +18,11 @@ type Notification = {
   createdAt: Date;
 };
 
-export function NotificationItem({ notification }: { notification: Notification }) {
+export function NotificationItem({
+  notification,
+}: {
+  notification: Notification;
+}) {
   const [pending, startTransition] = useTransition();
 
   return (

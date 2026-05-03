@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { getTopMovers } from "@/lib/dashboard";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -21,7 +21,10 @@ export async function TopMovers() {
         const Icon = positive ? ArrowUpRight : ArrowDownRight;
         const tone = positive ? "text-gain" : "text-loss";
         return (
-          <li key={m.instrumentId} className="flex items-center justify-between gap-3 px-4 py-3">
+          <li
+            key={m.instrumentId}
+            className="flex items-center justify-between gap-3 px-4 py-3"
+          >
             <div className="min-w-0">
               <Link
                 href={`/stocks/${encodeURIComponent(m.symbol)}`}
@@ -31,13 +34,19 @@ export async function TopMovers() {
                 <span className="ml-2 text-muted">{m.name}</span>
               </Link>
               <p className="label">
-                {formatCurrency(m.marketValueBase.toString(), data.baseCurrency, { compact: true })}
+                {formatCurrency(
+                  m.marketValueBase.toString(),
+                  data.baseCurrency,
+                  { compact: true },
+                )}
               </p>
             </div>
             <div className={`flex items-center gap-1 text-sm ${tone}`}>
               <Icon className="h-4 w-4" strokeWidth={1.5} aria-hidden />
               <span className="tabular">
-                {formatPercent(m.changePercent.dividedBy(100).toString(), { signed: true })}
+                {formatPercent(m.changePercent.dividedBy(100).toString(), {
+                  signed: true,
+                })}
               </span>
             </div>
           </li>

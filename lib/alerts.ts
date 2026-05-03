@@ -47,12 +47,17 @@ export async function evaluateAllAlerts(): Promise<EvaluationResult> {
   return { evaluated: alerts.length, triggered, failures };
 }
 
-type AlertWithRelations = Awaited<ReturnType<typeof db.alert.findMany>>[number] & {
+type AlertWithRelations = Awaited<
+  ReturnType<typeof db.alert.findMany>
+>[number] & {
   instrument: Awaited<ReturnType<typeof db.instrument.findFirst>>;
   portfolio: Awaited<ReturnType<typeof db.portfolio.findFirst>>;
 };
 
-async function evaluateOne(alert: AlertWithRelations, now: Date): Promise<boolean> {
+async function evaluateOne(
+  alert: AlertWithRelations,
+  now: Date,
+): Promise<boolean> {
   switch (alert.type) {
     case "PRICE_ABOVE":
       return await evalPriceCross(alert, "above");
@@ -230,7 +235,10 @@ async function evalPctChange(alert: AlertWithRelations): Promise<boolean> {
   return true;
 }
 
-async function evalReviewTimer(alert: AlertWithRelations, now: Date): Promise<boolean> {
+async function evalReviewTimer(
+  alert: AlertWithRelations,
+  now: Date,
+): Promise<boolean> {
   if (!alert.reviewIntervalDays) return false;
   const last = alert.lastReviewDate ?? alert.createdAt;
   const due = new Date(last);
@@ -251,10 +259,15 @@ async function evalReviewTimer(alert: AlertWithRelations, now: Date): Promise<bo
   return true;
 }
 
-async function evalAllocationDrift(alert: AlertWithRelations): Promise<boolean> {
-  if (!alert.portfolioId || !alert.instrumentId || !alert.allocationThreshold) return false;
+async function evalAllocationDrift(
+  alert: AlertWithRelations,
+): Promise<boolean> {
+  if (!alert.portfolioId || !alert.instrumentId || !alert.allocationThreshold)
+    return false;
   const data = await computeHoldings(alert.portfolioId);
-  const holding = data.holdings.find((h) => h.instrumentId === alert.instrumentId);
+  const holding = data.holdings.find(
+    (h) => h.instrumentId === alert.instrumentId,
+  );
   if (!holding || !holding.allocationPercent) return false;
 
   const threshold = new Decimal(alert.allocationThreshold.toString());
@@ -277,5 +290,7 @@ async function evalAllocationDrift(alert: AlertWithRelations): Promise<boolean> 
 }
 
 function formatMoney(value: Decimal, currency: string): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value.toNumber());
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
+    value.toNumber(),
+  );
 }

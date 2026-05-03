@@ -16,9 +16,13 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
-    ),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
+        ),
+      ),
   );
   self.clients.claim();
 });
@@ -33,10 +37,13 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() =>
-        caches.match("/dashboard").then(
-          (cached) =>
-            cached ?? new Response("Offline", { status: 503, statusText: "Offline" }),
-        ),
+        caches
+          .match("/dashboard")
+          .then(
+            (cached) =>
+              cached ??
+              new Response("Offline", { status: 503, statusText: "Offline" }),
+          ),
       ),
     );
     return;
@@ -71,16 +78,20 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = event.notification.data?.alertId ? "/notifications" : "/dashboard";
+  const target = event.notification.data?.alertId
+    ? "/notifications"
+    : "/dashboard";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(target);
-          return client.focus();
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        for (const client of clients) {
+          if ("focus" in client) {
+            client.navigate(target);
+            return client.focus();
+          }
         }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(target);
-    }),
+        if (self.clients.openWindow) return self.clients.openWindow(target);
+      }),
   );
 });

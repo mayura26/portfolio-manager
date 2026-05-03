@@ -18,7 +18,8 @@ export function ReviewFilters() {
     <nav className="flex gap-1 border-b border-border">
       {TABS.map((tab) => {
         const active = tab.value === current;
-        const href = tab.value === "all" ? "/reviews" : `/reviews?status=${tab.value}`;
+        const href =
+          tab.value === "all" ? "/reviews" : `/reviews?status=${tab.value}`;
         return (
           <Link
             key={tab.value}

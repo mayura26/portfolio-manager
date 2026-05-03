@@ -1,11 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
 import Link from "next/link";
+import { useActionState } from "react";
+import type { TradeActionState } from "@/actions/trades";
 import { CurrencySelect } from "@/components/shared/currency-select";
 import { DatePicker } from "@/components/shared/date-picker";
 import { TickerSearch } from "@/components/trades/ticker-search";
-import type { TradeActionState } from "@/actions/trades";
 
 type Defaults = {
   yahooSymbol?: string;
@@ -20,7 +20,10 @@ type Defaults = {
 };
 
 type Props = {
-  action: (state: TradeActionState | undefined, formData: FormData) => Promise<TradeActionState>;
+  action: (
+    state: TradeActionState | undefined,
+    formData: FormData,
+  ) => Promise<TradeActionState>;
   portfolioId: string;
   baseCurrency: string;
   defaults?: Defaults;
@@ -40,10 +43,10 @@ export function TradeForm({
   submitLabel,
   cancelHref,
 }: Props) {
-  const [state, formAction, pending] = useActionState<TradeActionState | undefined, FormData>(
-    action,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    TradeActionState | undefined,
+    FormData
+  >(action, undefined);
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
   return (
@@ -59,7 +62,11 @@ export function TradeForm({
         </div>
       ) : null}
 
-      <Field id="yahooSymbol" label="Instrument" error={fieldErrors?.yahooSymbol?.[0]}>
+      <Field
+        id="yahooSymbol"
+        label="Instrument"
+        error={fieldErrors?.yahooSymbol?.[0]}
+      >
         <TickerSearch
           name="yahooSymbol"
           defaultYahooSymbol={defaults?.yahooSymbol}
@@ -86,12 +93,20 @@ export function TradeForm({
           </select>
         </Field>
         <Field id="date" label="Date" error={fieldErrors?.date?.[0]}>
-          <DatePicker name="date" defaultValue={defaults?.date ?? todayIsoDate()} required />
+          <DatePicker
+            name="date"
+            defaultValue={defaults?.date ?? todayIsoDate()}
+            required
+          />
         </Field>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field id="quantity" label="Quantity" error={fieldErrors?.quantity?.[0]}>
+        <Field
+          id="quantity"
+          label="Quantity"
+          error={fieldErrors?.quantity?.[0]}
+        >
           <input
             id="quantity"
             name="quantity"
@@ -104,7 +119,11 @@ export function TradeForm({
             className="hairline tabular w-full bg-surface px-3 py-2 text-sm text-foreground"
           />
         </Field>
-        <Field id="price" label="Price per share" error={fieldErrors?.price?.[0]}>
+        <Field
+          id="price"
+          label="Price per share"
+          error={fieldErrors?.price?.[0]}
+        >
           <input
             id="price"
             name="price"
@@ -133,7 +152,11 @@ export function TradeForm({
             required
           />
         </Field>
-        <Field id="fees" label="Fees (in trade currency)" error={fieldErrors?.fees?.[0]}>
+        <Field
+          id="fees"
+          label="Fees (in trade currency)"
+          error={fieldErrors?.fees?.[0]}
+        >
           <input
             id="fees"
             name="fees"
@@ -167,7 +190,10 @@ export function TradeForm({
         >
           {pending ? "Saving…" : submitLabel}
         </button>
-        <Link href={cancelHref} className="px-4 py-2 text-sm text-muted hover:text-foreground">
+        <Link
+          href={cancelHref}
+          className="px-4 py-2 text-sm text-muted hover:text-foreground"
+        >
           Cancel
         </Link>
         {state?.ok ? <span className="text-sm text-gain">Saved</span> : null}

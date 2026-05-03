@@ -1,11 +1,20 @@
 import Link from "next/link";
-import type { WatchlistItem, Instrument, Alert } from "@/app/generated/prisma/client";
-import { formatCurrency, formatPercent, formatRelative, pnlClass } from "@/lib/format";
-import type { QuoteSnapshot } from "@/lib/yahoo";
+import type {
+  Alert,
+  Instrument,
+  WatchlistItem,
+} from "@/app/generated/prisma/client";
+import {
+  formatCurrency,
+  formatPercent,
+  formatRelative,
+  pnlClass,
+} from "@/lib/format";
 import type { WatchlistAiAnalysis } from "@/lib/watchlist-ai";
-import { WatchlistStatusBadge } from "./watchlist-status-badge";
-import { WatchlistActions } from "./watchlist-actions";
+import type { QuoteSnapshot } from "@/lib/yahoo";
 import { BuyRangeForm } from "./buy-range-form";
+import { WatchlistActions } from "./watchlist-actions";
+import { WatchlistStatusBadge } from "./watchlist-status-badge";
 
 type WatchlistItemRow = WatchlistItem & {
   instrument: Instrument;
@@ -94,7 +103,9 @@ export function WatchlistCard({ item, quote }: Props) {
           <div className="flex items-center justify-between gap-2">
             <span className="label">Buy zone</span>
             <span className="tabular text-muted">
-              {buyLow !== null ? `${formatCurrency(buyLow, currency)} – ` : "up to "}
+              {buyLow !== null
+                ? `${formatCurrency(buyLow, currency)} – `
+                : "up to "}
               {formatCurrency(buyHigh, currency)}
             </span>
           </div>

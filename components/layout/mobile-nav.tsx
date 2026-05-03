@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
-import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from "./nav-config";
+import { useEffect, useState } from "react";
+import { type NavItem, PRIMARY_NAV, SECONDARY_NAV } from "./nav-config";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close drawer on route change
+  // Close drawer when the URL changes (pathname must be a dependency).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: effect intentionally re-runs on pathname; setOpen is stable but not the trigger
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -39,7 +40,11 @@ export function MobileNav() {
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-50 md:hidden"
+          role="dialog"
+          aria-modal="true"
+        >
           <div
             className="absolute inset-0 bg-foreground/30 backdrop-blur-sm"
             onClick={() => setOpen(false)}

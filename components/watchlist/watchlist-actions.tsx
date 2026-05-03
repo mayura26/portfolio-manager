@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
 import { Archive, CheckCircle, Sparkles, Trash2 } from "lucide-react";
+import { useTransition } from "react";
 import {
   analyzeWatchlistItem,
   archiveWatchlistItem,
@@ -81,7 +81,9 @@ function ActionButton({
       aria-label={label}
       className={[
         "inline-flex items-center gap-1 px-2 py-1 text-xs transition-colors disabled:opacity-50",
-        tone === "loss" ? "text-loss hover:underline" : "text-muted hover:text-foreground",
+        tone === "loss"
+          ? "text-loss hover:underline"
+          : "text-muted hover:text-foreground",
       ].join(" ")}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />

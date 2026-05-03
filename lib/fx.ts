@@ -32,7 +32,11 @@ export async function convert(
  * Resolve an FX rate. Tries DB for `asOf` (or latest before), then falls back
  * to Yahoo and upserts the result so subsequent calls are local.
  */
-export async function getFxRate(from: string, to: string, asOf: Date = new Date()): Promise<Decimal> {
+export async function getFxRate(
+  from: string,
+  to: string,
+  asOf: Date = new Date(),
+): Promise<Decimal> {
   if (from.toUpperCase() === to.toUpperCase()) return new Decimal(1);
 
   const pair = pairKey(from, to);

@@ -1,13 +1,15 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 import { formatCurrency, formatDate, formatQuantity } from "@/lib/format";
 
 type Params = Promise<{ symbol: string }>;
 
-export default function StockTradesPage({ params }: PageProps<"/stocks/[symbol]/trades">) {
+export default function StockTradesPage({
+  params,
+}: PageProps<"/stocks/[symbol]/trades">) {
   return (
     <Suspense fallback={<Skeleton className="h-64 w-full" />}>
       <StockTradesContent params={params} />
@@ -30,7 +32,9 @@ async function StockTradesContent({ params }: { params: Params }) {
   if (!instrument) notFound();
 
   if (instrument.trades.length === 0) {
-    return <p className="text-sm text-muted">No trades yet for this instrument.</p>;
+    return (
+      <p className="text-sm text-muted">No trades yet for this instrument.</p>
+    );
   }
 
   return (
@@ -47,9 +51,14 @@ async function StockTradesContent({ params }: { params: Params }) {
         </thead>
         <tbody>
           {instrument.trades.map((trade) => (
-            <tr key={trade.id} className="border-b border-border last:border-b-0">
+            <tr
+              key={trade.id}
+              className="border-b border-border last:border-b-0"
+            >
               <td className="px-3 py-3">
-                <span className="tabular text-muted">{formatDate(trade.date)}</span>
+                <span className="tabular text-muted">
+                  {formatDate(trade.date)}
+                </span>
               </td>
               <td className="px-3 py-3">
                 <Link
@@ -72,10 +81,14 @@ async function StockTradesContent({ params }: { params: Params }) {
                 </span>
               </td>
               <td className="px-3 py-3 text-right">
-                <span className="tabular">{formatQuantity(trade.quantity.toString())}</span>
+                <span className="tabular">
+                  {formatQuantity(trade.quantity.toString())}
+                </span>
               </td>
               <td className="px-3 py-3 text-right">
-                <span className="tabular">{formatCurrency(trade.price.toString(), trade.currency)}</span>
+                <span className="tabular">
+                  {formatCurrency(trade.price.toString(), trade.currency)}
+                </span>
               </td>
             </tr>
           ))}

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { AlertStatusBadge } from "./alert-status-badge";
-import { AlertActions } from "./alert-actions";
 import { formatRelative } from "@/lib/format";
+import { AlertActions } from "./alert-actions";
+import { AlertStatusBadge } from "./alert-status-badge";
 
 type AlertRow = {
   id: string;
@@ -49,11 +49,16 @@ export function AlertCard({ alert }: Props) {
                 href={`/stocks/${encodeURIComponent(alert.instrument.yahooSymbol)}`}
                 className="hover:text-accent"
               >
-                <span className="tabular font-medium">{alert.instrument.symbol}</span>{" "}
+                <span className="tabular font-medium">
+                  {alert.instrument.symbol}
+                </span>{" "}
                 <span className="text-muted">{alert.instrument.name}</span>
               </Link>
             ) : alert.portfolio ? (
-              <Link href={`/portfolios/${alert.portfolio.id}`} className="hover:text-accent">
+              <Link
+                href={`/portfolios/${alert.portfolio.id}`}
+                className="hover:text-accent"
+              >
                 {alert.portfolio.name}
               </Link>
             ) : (
@@ -84,11 +89,17 @@ export function AlertCard({ alert }: Props) {
 function describeCondition(alert: AlertRow): string {
   switch (alert.type) {
     case "PRICE_ABOVE":
-      return alert.priceTarget ? `When price rises above ${alert.priceTarget.toString()}.` : "Price target not set.";
+      return alert.priceTarget
+        ? `When price rises above ${alert.priceTarget.toString()}.`
+        : "Price target not set.";
     case "PRICE_BELOW":
-      return alert.priceTarget ? `When price falls below ${alert.priceTarget.toString()}.` : "Price target not set.";
+      return alert.priceTarget
+        ? `When price falls below ${alert.priceTarget.toString()}.`
+        : "Price target not set.";
     case "PCT_CHANGE":
-      return alert.pctChange ? `When price moves ±${alert.pctChange.toString()}% from reference.` : "Threshold not set.";
+      return alert.pctChange
+        ? `When price moves ±${alert.pctChange.toString()}% from reference.`
+        : "Threshold not set.";
     case "REVIEW_TIMER":
       return alert.reviewIntervalDays
         ? `Every ${alert.reviewIntervalDays} day${alert.reviewIntervalDays === 1 ? "" : "s"}.`

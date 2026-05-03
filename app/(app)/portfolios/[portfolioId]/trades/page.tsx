@@ -1,15 +1,17 @@
-import { Suspense } from "react";
+import { Plus, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Plus, ScrollText } from "lucide-react";
-import { db } from "@/lib/db";
-import { TradeTable } from "@/components/trades/trade-table";
+import { Suspense } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { TradeTable } from "@/components/trades/trade-table";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ portfolioId: string }>;
 
-export default function TradesPage({ params }: PageProps<"/portfolios/[portfolioId]/trades">) {
+export default function TradesPage({
+  params,
+}: PageProps<"/portfolios/[portfolioId]/trades">) {
   return (
     <Suspense fallback={<Skeleton className="h-64 w-full" />}>
       <TradesContent params={params} />
@@ -48,7 +50,8 @@ async function TradesContent({ params }: { params: Params }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">
-          {portfolio.trades.length} {portfolio.trades.length === 1 ? "trade" : "trades"}
+          {portfolio.trades.length}{" "}
+          {portfolio.trades.length === 1 ? "trade" : "trades"}
         </p>
         <Link
           href={`/portfolios/${portfolio.id}/trades/new`}

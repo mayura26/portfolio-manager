@@ -1,9 +1,9 @@
-import { Suspense } from "react";
 import Link from "next/link";
-import { db } from "@/lib/db";
+import { Suspense } from "react";
 import { createAlert } from "@/actions/alerts";
 import { AlertForm } from "@/components/alerts/alert-form";
 import { Skeleton } from "@/components/shared/skeleton";
+import { db } from "@/lib/db";
 
 export default function NewAlertPage() {
   return (
@@ -17,7 +17,8 @@ export default function NewAlertPage() {
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="display text-4xl text-foreground">New alert</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Choose a trigger type and a target. Triggered alerts create a pending review.
+          Choose a trigger type and a target. Triggered alerts create a pending
+          review.
         </p>
       </header>
 

@@ -11,7 +11,9 @@ export type SettingsActionState =
 const SINGLETON_ID = "singleton";
 
 export async function getSettings() {
-  const existing = await db.settings.findUnique({ where: { id: SINGLETON_ID } });
+  const existing = await db.settings.findUnique({
+    where: { id: SINGLETON_ID },
+  });
   if (existing) return existing;
 
   return db.settings.create({

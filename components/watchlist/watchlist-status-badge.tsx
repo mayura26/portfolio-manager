@@ -14,7 +14,9 @@ const LABELS: Record<Status, string> = {
 
 export function WatchlistStatusBadge({ status }: { status: Status }) {
   return (
-    <span className={`label inline-flex items-center border px-2 py-0.5 ${STYLES[status]}`}>
+    <span
+      className={`label inline-flex items-center border px-2 py-0.5 ${STYLES[status]}`}
+    >
       {LABELS[status]}
     </span>
   );

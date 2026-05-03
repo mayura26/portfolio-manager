@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
 import Link from "next/link";
-import { TickerSearch } from "@/components/trades/ticker-search";
+import { useActionState } from "react";
 import type { WatchlistActionState } from "@/actions/watchlist";
+import { TickerSearch } from "@/components/trades/ticker-search";
 
 type Props = {
   action: (
@@ -13,10 +13,10 @@ type Props = {
 };
 
 export function AddWatchlistForm({ action }: Props) {
-  const [state, formAction, pending] = useActionState<WatchlistActionState | undefined, FormData>(
-    action,
-    undefined,
-  );
+  const [state, formAction, pending] = useActionState<
+    WatchlistActionState | undefined,
+    FormData
+  >(action, undefined);
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
@@ -36,7 +36,12 @@ export function AddWatchlistForm({ action }: Props) {
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field id="buyRangeLow" label="Buy range low" hint="Optional" error={fieldErrors?.buyRangeLow?.[0]}>
+        <Field
+          id="buyRangeLow"
+          label="Buy range low"
+          hint="Optional"
+          error={fieldErrors?.buyRangeLow?.[0]}
+        >
           <input
             id="buyRangeLow"
             name="buyRangeLow"
@@ -68,7 +73,12 @@ export function AddWatchlistForm({ action }: Props) {
         </Field>
       </div>
 
-      <Field id="notes" label="Notes" hint="Optional" error={fieldErrors?.notes?.[0]}>
+      <Field
+        id="notes"
+        label="Notes"
+        hint="Optional"
+        error={fieldErrors?.notes?.[0]}
+      >
         <input
           id="notes"
           name="notes"
@@ -81,8 +91,8 @@ export function AddWatchlistForm({ action }: Props) {
       </Field>
 
       <p className="text-xs text-subtle">
-        You can leave the buy range empty and use the <strong>Analyse</strong> button on the
-        watchlist card to get an AI-suggested buy zone.
+        You can leave the buy range empty and use the <strong>Analyse</strong>{" "}
+        button on the watchlist card to get an AI-suggested buy zone.
       </p>
 
       <div className="flex items-center gap-3 pt-2">
@@ -93,7 +103,10 @@ export function AddWatchlistForm({ action }: Props) {
         >
           {pending ? "Adding…" : "Add to watchlist"}
         </button>
-        <Link href="/watchlist" className="px-4 py-2 text-sm text-muted hover:text-foreground">
+        <Link
+          href="/watchlist"
+          className="px-4 py-2 text-sm text-muted hover:text-foreground"
+        >
           Cancel
         </Link>
       </div>

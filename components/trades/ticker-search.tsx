@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { Search, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 type Hit = {
   yahooSymbol: string;
@@ -18,12 +18,21 @@ type Props = {
   onSelect?: (hit: Hit) => void;
 };
 
-export function TickerSearch({ name, defaultYahooSymbol, defaultDisplayLabel, onSelect }: Props) {
+export function TickerSearch({
+  name,
+  defaultYahooSymbol,
+  defaultDisplayLabel,
+  onSelect,
+}: Props) {
   const inputId = useId();
-  const [query, setQuery] = useState(defaultDisplayLabel ?? defaultYahooSymbol ?? "");
+  const [query, setQuery] = useState(
+    defaultDisplayLabel ?? defaultYahooSymbol ?? "",
+  );
   const [hits, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(defaultYahooSymbol ?? null);
+  const [selected, setSelected] = useState<string | null>(
+    defaultYahooSymbol ?? null,
+  );
   const [isSearching, startSearch] = useTransition();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -32,7 +41,10 @@ export function TickerSearch({ name, defaultYahooSymbol, defaultDisplayLabel, on
       setHits([]);
       return;
     }
-    if (selected && (defaultDisplayLabel === query || defaultYahooSymbol === query)) {
+    if (
+      selected &&
+      (defaultDisplayLabel === query || defaultYahooSymbol === query)
+    ) {
       return;
     }
 
@@ -40,9 +52,12 @@ export function TickerSearch({ name, defaultYahooSymbol, defaultDisplayLabel, on
     const t = setTimeout(() => {
       startSearch(async () => {
         try {
-          const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
-            signal: controller.signal,
-          });
+          const res = await fetch(
+            `/api/stocks/search?q=${encodeURIComponent(query)}`,
+            {
+              signal: controller.signal,
+            },
+          );
           if (!res.ok) return;
           const data = (await res.json()) as { results: Hit[] };
           setHits(data.results);
@@ -61,7 +76,10 @@ export function TickerSearch({ name, defaultYahooSymbol, defaultDisplayLabel, on
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }

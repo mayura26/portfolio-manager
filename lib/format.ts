@@ -83,13 +83,17 @@ export function formatDate(value: Date | string | null | undefined): string {
   return format(d, "d MMM yyyy");
 }
 
-export function formatDateTime(value: Date | string | null | undefined): string {
+export function formatDateTime(
+  value: Date | string | null | undefined,
+): string {
   if (!value) return "—";
   const d = value instanceof Date ? value : new Date(value);
   return format(d, "d MMM yyyy, HH:mm");
 }
 
-export function formatRelative(value: Date | string | null | undefined): string {
+export function formatRelative(
+  value: Date | string | null | undefined,
+): string {
   if (!value) return "—";
   const d = value instanceof Date ? value : new Date(value);
   return `${formatDistanceToNowStrict(d)} ago`;

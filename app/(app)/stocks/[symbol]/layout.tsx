@@ -1,13 +1,16 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
-import { StockTabs } from "@/components/stocks/stock-tabs";
+import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
+import { StockTabs } from "@/components/stocks/stock-tabs";
+import { db } from "@/lib/db";
 
 type Params = Promise<{ symbol: string }>;
 
-export default function StockLayout({ children, params }: LayoutProps<"/stocks/[symbol]">) {
+export default function StockLayout({
+  children,
+  params,
+}: LayoutProps<"/stocks/[symbol]">) {
   return (
     <div className="mx-auto max-w-6xl">
       <Suspense fallback={<HeaderSkeleton />}>

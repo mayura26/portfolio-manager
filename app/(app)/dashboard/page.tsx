@@ -1,10 +1,28 @@
 import { Suspense } from "react";
-import { AllocationChart, AllocationChartSkeleton } from "@/components/dashboard/allocation-chart";
-import { PortfolioSummaryList, PortfolioSummaryListSkeleton } from "@/components/dashboard/portfolio-summary-list";
-import { ReviewsSummary, ReviewsSummarySkeleton } from "@/components/dashboard/reviews-summary";
-import { SummaryCards, SummaryCardsSkeleton } from "@/components/dashboard/summary-cards";
-import { TopMovers, TopMoversSkeleton } from "@/components/dashboard/top-movers";
-import { ValueChart, ValueChartSkeleton } from "@/components/dashboard/value-chart";
+import {
+  AllocationChart,
+  AllocationChartSkeleton,
+} from "@/components/dashboard/allocation-chart";
+import {
+  PortfolioSummaryList,
+  PortfolioSummaryListSkeleton,
+} from "@/components/dashboard/portfolio-summary-list";
+import {
+  ReviewsSummary,
+  ReviewsSummarySkeleton,
+} from "@/components/dashboard/reviews-summary";
+import {
+  SummaryCards,
+  SummaryCardsSkeleton,
+} from "@/components/dashboard/summary-cards";
+import {
+  TopMovers,
+  TopMoversSkeleton,
+} from "@/components/dashboard/top-movers";
+import {
+  ValueChart,
+  ValueChartSkeleton,
+} from "@/components/dashboard/value-chart";
 
 export default function DashboardPage() {
   return (

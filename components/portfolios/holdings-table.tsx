@@ -1,6 +1,12 @@
 import Link from "next/link";
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  formatQuantity,
+  pnlClass,
+} from "@/lib/format";
 import type { PortfolioHoldings } from "@/lib/holdings";
-import { formatCurrency, formatNumber, formatPercent, formatQuantity, pnlClass } from "@/lib/format";
 
 type Props = {
   data: PortfolioHoldings;
@@ -25,7 +31,10 @@ export function HoldingsTable({ data }: Props) {
         </thead>
         <tbody>
           {holdings.map((h) => (
-            <tr key={h.instrumentId} className="border-b border-border last:border-b-0">
+            <tr
+              key={h.instrumentId}
+              className="border-b border-border last:border-b-0"
+            >
               <Td>
                 <Link
                   href={`/stocks/${h.yahooSymbol}`}
@@ -37,7 +46,9 @@ export function HoldingsTable({ data }: Props) {
                 <div className="label mt-0.5">{h.currency}</div>
               </Td>
               <Td align="right">
-                <span className="tabular">{formatQuantity(h.quantity.toString())}</span>
+                <span className="tabular">
+                  {formatQuantity(h.quantity.toString())}
+                </span>
               </Td>
               <Td align="right">
                 <span className="tabular text-muted">
@@ -60,13 +71,20 @@ export function HoldingsTable({ data }: Props) {
               </Td>
               <Td align="right">
                 {h.unrealizedPnL ? (
-                  <span className={`tabular ${pnlClass(h.unrealizedPnL.toString())}`}>
-                    {formatCurrency(h.unrealizedPnL.toString(), baseCurrency, { signed: true })}
+                  <span
+                    className={`tabular ${pnlClass(h.unrealizedPnL.toString())}`}
+                  >
+                    {formatCurrency(h.unrealizedPnL.toString(), baseCurrency, {
+                      signed: true,
+                    })}
                     {h.unrealizedPnLPercent ? (
                       <span className="ml-1 text-xs text-muted">
-                        {formatPercent(h.unrealizedPnLPercent.dividedBy(100).toString(), {
-                          signed: true,
-                        })}
+                        {formatPercent(
+                          h.unrealizedPnLPercent.dividedBy(100).toString(),
+                          {
+                            signed: true,
+                          },
+                        )}
                       </span>
                     ) : null}
                   </span>
@@ -89,7 +107,13 @@ export function HoldingsTable({ data }: Props) {
   );
 }
 
-function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+function Th({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
   return (
     <th
       className={`label px-3 py-3 ${align === "right" ? "text-right" : "text-left"}`}
@@ -108,7 +132,9 @@ function Td({
   align?: "left" | "right";
 }) {
   return (
-    <td className={`px-3 py-3 align-top ${align === "right" ? "text-right" : "text-left"}`}>
+    <td
+      className={`px-3 py-3 align-top ${align === "right" ? "text-right" : "text-left"}`}
+    >
       {children}
     </td>
   );
