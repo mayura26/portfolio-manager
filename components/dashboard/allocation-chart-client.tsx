@@ -12,6 +12,7 @@ type Slice = {
 type Props = {
   slices: Slice[];
   baseCurrency: string;
+  percentOnly?: boolean;
 };
 
 const PALETTE = [
@@ -25,7 +26,11 @@ const PALETTE = [
   "#3a4a5a",
 ];
 
-export function AllocationChartClient({ slices, baseCurrency }: Props) {
+export function AllocationChartClient({
+  slices,
+  baseCurrency,
+  percentOnly = false,
+}: Props) {
   if (slices.length === 0) {
     return (
       <div className="flex h-72 items-center justify-center text-sm text-muted">
@@ -58,14 +63,13 @@ export function AllocationChartClient({ slices, baseCurrency }: Props) {
                 const numeric =
                   typeof value === "number" ? value : Number(value);
                 const pct = item?.payload?.percent;
-                const formatted = new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: baseCurrency,
-                }).format(numeric);
-                return [
-                  formatted + (pct ? ` (${pct.toFixed(1)}%)` : ""),
-                  item?.payload?.label,
-                ];
+                const formatted = percentOnly
+                  ? `${numeric.toFixed(1)}%`
+                  : new Intl.NumberFormat("en-US", {
+                      style: "currency",
+                      currency: baseCurrency,
+                    }).format(numeric) + (pct ? ` (${pct.toFixed(1)}%)` : "");
+                return [formatted, item?.payload?.label];
               }}
               contentStyle={{
                 background: "var(--surface-elevated)",

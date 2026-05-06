@@ -1,3 +1,4 @@
+[ ] redirect on login fails
 [ ] make icon set including one for notifs
-[ ] Could haave watchlist stocks. things to buy if things look good
-[ ] Need to support cash as a position so we can balance portfolios etc
+[ ] Support imports from IB for positions
+[ ] for stocks lets have some charts, light charts perhaps with data in daily or 4h?

@@ -39,6 +39,14 @@ export default function WatchlistPage() {
   );
 }
 
+async function loadPortfolios() {
+  const portfolios = await db.portfolio.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  return portfolios;
+}
+
 async function WatchlistGrid() {
   const items = await db.watchlistItem.findMany({
     where: { status: "WATCHING" },
@@ -57,7 +65,10 @@ async function WatchlistGrid() {
     );
   }
 
-  const quotes = await fetchQuotes(items.map((i) => i.instrument.yahooSymbol));
+  const [quotes, portfolios] = await Promise.all([
+    fetchQuotes(items.map((i) => i.instrument.yahooSymbol)),
+    loadPortfolios(),
+  ]);
   const quoteMap = new Map(quotes.map((q) => [q.yahooSymbol, q]));
 
   return (
@@ -67,6 +78,7 @@ async function WatchlistGrid() {
           key={item.id}
           item={item}
           quote={quoteMap.get(item.instrument.yahooSymbol) ?? null}
+          portfolios={portfolios}
         />
       ))}
     </div>
@@ -83,9 +95,10 @@ async function ArchivedSection() {
 
   if (archived.length === 0) return null;
 
-  const quotes = await fetchQuotes(
-    archived.map((i) => i.instrument.yahooSymbol),
-  );
+  const [quotes, portfolios] = await Promise.all([
+    fetchQuotes(archived.map((i) => i.instrument.yahooSymbol)),
+    loadPortfolios(),
+  ]);
   const quoteMap = new Map(quotes.map((q) => [q.yahooSymbol, q]));
 
   return (
@@ -99,6 +112,7 @@ async function ArchivedSection() {
             key={item.id}
             item={item}
             quote={quoteMap.get(item.instrument.yahooSymbol) ?? null}
+            portfolios={portfolios}
           />
         ))}
       </div>

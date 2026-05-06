@@ -10,7 +10,9 @@ export type ActionState =
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
 function parseFormData(formData: FormData) {
+  const groupId = formData.get("groupId");
   return portfolioSchema.safeParse({
+    groupId: groupId ? groupId.toString() : undefined,
     name: formData.get("name"),
     description: formData.get("description"),
     baseCurrency: formData.get("baseCurrency"),

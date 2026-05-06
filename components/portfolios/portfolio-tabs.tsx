@@ -13,6 +13,8 @@ export function PortfolioTabs({ portfolioId }: Props) {
 
   const tabs = [
     { href: base, label: "Overview", exact: true },
+    { href: `${base}/targets`, label: "Targets" },
+    { href: `${base}/composition`, label: "Composition" },
     { href: `${base}/trades`, label: "Trades" },
     { href: `${base}/alerts`, label: "Alerts" },
     { href: `${base}/settings`, label: "Settings" },

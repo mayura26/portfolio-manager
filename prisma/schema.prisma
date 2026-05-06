@@ -30,17 +30,30 @@ model Settings {
 
 model Portfolio {
   id           String   @id @default(cuid())
+  groupId      String
   name         String
   description  String?
   baseCurrency String   @default("USD")
+
+  // Target weight of this portfolio inside its group (0-100). Group cash takes the remainder.
+  targetPercentInGroup Decimal @default(0) @db.Decimal(8, 4)
+
+  // AI composition analysis (latest snapshot, JSON shape produced by lib/composition-ai.ts).
+  aiCompositionAnalysis    Json?
+  aiCompositionGeneratedAt DateTime?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  trades  Trade[]
-  alerts  Alert[]
-  reviews Review[]
+  group          PortfolioGroup    @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  trades         Trade[]
+  alerts         Alert[]
+  reviews        Review[]
+  targets        PortfolioTarget[]
+  watchlistItems WatchlistItem[]
 
   @@index([createdAt])
+  @@index([groupId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -66,6 +79,8 @@ model Instrument {
   reviews        Review[]
   notes          StockNote[]
   watchlistItems WatchlistItem[]
+  forecasts      InstrumentForecast[]
+  targets        PortfolioTarget[]
 
   @@index([symbol, exchange])
   @@index([yahooSymbol])
@@ -149,6 +164,7 @@ enum AlertType {
   ALLOCATION_DRIFT
   DIVIDEND_EVENT
   EARNINGS_EVENT
+  FORECAST_DEVIATION
 }
 
 enum AlertStatus {
@@ -178,6 +194,10 @@ model Alert {
   // Allocation drift fields
   allocationThreshold Decimal? @db.Decimal(8, 4)
 
+  // Forecast-deviation fields
+  forecastId         String?
+  deviationThreshold Decimal? @db.Decimal(8, 4)
+
   // Snooze fields
   snoozedUntil DateTime?
 
@@ -186,8 +206,9 @@ model Alert {
   updatedAt   DateTime  @updatedAt
   triggeredAt DateTime?
 
-  portfolio     Portfolio?     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  instrument    Instrument?    @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  portfolio     Portfolio?          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument    Instrument?         @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  forecast      InstrumentForecast? @relation(fields: [forecastId], references: [id], onDelete: SetNull)
   reviews       Review[]
   notifications Notification[]
   watchlistItem WatchlistItem?
@@ -195,6 +216,7 @@ model Alert {
   @@index([status, type])
   @@index([instrumentId, status])
   @@index([portfolioId, status])
+  @@index([forecastId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -264,6 +286,7 @@ enum NotificationType {
   ALLOCATION_DRIFT
   DIVIDEND_EVENT
   EARNINGS_EVENT
+  FORECAST_DEVIATION
   SYSTEM
 }
 
@@ -297,6 +320,7 @@ enum WatchlistStatus {
 model WatchlistItem {
   id           String          @id @default(cuid())
   instrumentId String
+  portfolioId  String?
   status       WatchlistStatus @default(WATCHING)
 
   buyRangeLow  Decimal? @db.Decimal(18, 4)
@@ -309,8 +333,111 @@ model WatchlistItem {
   updatedAt DateTime @updatedAt
 
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  portfolio  Portfolio? @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
   alert      Alert?     @relation(fields: [alertId], references: [id], onDelete: SetNull)
 
   @@unique([instrumentId])
   @@index([status, createdAt(sort: Desc)])
+  @@index([portfolioId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Portfolio Group (top-level bucket: cash + portfolios)
+// ─────────────────────────────────────────────────────────────
+
+model PortfolioGroup {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  baseCurrency String   @default("USD")
+
+  // Target weight reserved for cash (0-100). Plus the target weights of all
+  // portfolios in this group must equal 100.
+  cashTargetPercent Decimal @default(0) @db.Decimal(8, 4)
+
+  aiCompositionAnalysis    Json?
+  aiCompositionGeneratedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  portfolios       Portfolio[]
+  cashTransactions CashTransaction[]
+
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Cash Transactions (group-level deposits / withdrawals / seedings)
+// ─────────────────────────────────────────────────────────────
+
+enum CashTransactionType {
+  SEED
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model CashTransaction {
+  id        String              @id @default(cuid())
+  groupId   String
+  type      CashTransactionType
+  amount    Decimal             @db.Decimal(18, 4)
+  currency  String
+  fxRate    Decimal?            @db.Decimal(18, 8)
+  date      DateTime
+  notes     String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  group PortfolioGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, date])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Portfolio Targets (per-instrument target weight inside a portfolio).
+// Source of truth for "I want N% of this portfolio in this stock" — works
+// for owned and not-yet-owned instruments alike.
+// ─────────────────────────────────────────────────────────────
+
+model PortfolioTarget {
+  id               String   @id @default(cuid())
+  portfolioId      String
+  instrumentId     String
+  targetPercent    Decimal  @db.Decimal(8, 4)
+  intendedBuyPrice Decimal? @db.Decimal(18, 4)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, instrumentId])
+  @@index([portfolioId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Instrument Forecasts (AI-generated price targets + scenarios).
+// One row per generated forecast — history is preserved so reviews can
+// see how the thesis has evolved.
+// ─────────────────────────────────────────────────────────────
+
+model InstrumentForecast {
+  id              String   @id @default(cuid())
+  instrumentId    String
+  targetPrice     Decimal  @db.Decimal(18, 4)
+  lowCase         Decimal? @db.Decimal(18, 4)
+  highCase        Decimal? @db.Decimal(18, 4)
+  expectedReturn  Decimal? @db.Decimal(8, 4)
+  horizonMonths   Int      @default(12)
+  rationale       String
+  model           String
+  reasoningEffort String
+  generatedAt     DateTime @default(now())
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  alerts     Alert[]
+
+  @@index([instrumentId, generatedAt(sort: Desc)])
 }

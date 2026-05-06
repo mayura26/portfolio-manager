@@ -27,6 +27,7 @@ const nonNegativeDecimal = decimalString.refine((v) => Number(v) >= 0, {
 // ─── Portfolio ────────────────────────────────────────────────
 
 export const portfolioSchema = z.object({
+  groupId: z.string().min(1).optional().default("default"),
   name: z.string().trim().min(1, "Name is required").max(100),
   description: z
     .string()
@@ -38,6 +39,116 @@ export const portfolioSchema = z.object({
 });
 
 export type PortfolioInput = z.infer<typeof portfolioSchema>;
+
+// ─── Portfolio Group ──────────────────────────────────────────
+
+export const portfolioGroupSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+  description: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+  baseCurrency: currencySchema,
+});
+
+export type PortfolioGroupInput = z.infer<typeof portfolioGroupSchema>;
+
+// ─── Group target weights (sum-to-100) ────────────────────────
+
+const percentString = decimalString.refine(
+  (v) => Number(v) >= 0 && Number(v) <= 100,
+  { message: "Must be between 0 and 100" },
+);
+
+export const groupTargetsSchema = z
+  .object({
+    cashTargetPercent: percentString,
+    portfolios: z
+      .array(
+        z.object({
+          portfolioId: z.string().min(1),
+          targetPercent: percentString,
+        }),
+      )
+      .min(0),
+  })
+  .refine(
+    (d) => {
+      const sum =
+        Number(d.cashTargetPercent) +
+        d.portfolios.reduce((acc, p) => acc + Number(p.targetPercent), 0);
+      return Math.abs(sum - 100) < 0.0001;
+    },
+    {
+      message: "Cash + portfolio targets must sum to 100%",
+      path: ["cashTargetPercent"],
+    },
+  );
+
+export type GroupTargetsInput = z.infer<typeof groupTargetsSchema>;
+
+// ─── Portfolio targets (sum-to-100 across instruments) ────────
+
+export const portfolioTargetsSchema = z
+  .object({
+    portfolioId: z.string().min(1),
+    targets: z
+      .array(
+        z.object({
+          instrumentId: z.string().min(1),
+          targetPercent: percentString,
+          intendedBuyPrice: positiveDecimal.optional().nullable(),
+          notes: z
+            .string()
+            .trim()
+            .max(500)
+            .optional()
+            .transform((v) => (v?.length ? v : null)),
+        }),
+      )
+      .min(0),
+  })
+  .refine(
+    (d) => {
+      if (d.targets.length === 0) return true;
+      const sum = d.targets.reduce(
+        (acc, t) => acc + Number(t.targetPercent),
+        0,
+      );
+      return Math.abs(sum - 100) < 0.0001;
+    },
+    {
+      message: "Holding targets must sum to 100%",
+      path: ["targets"],
+    },
+  );
+
+export type PortfolioTargetsInput = z.infer<typeof portfolioTargetsSchema>;
+
+// ─── Cash transaction ─────────────────────────────────────────
+
+export const cashTransactionTypeEnum = z.enum([
+  "SEED",
+  "DEPOSIT",
+  "WITHDRAWAL",
+]);
+
+export const cashTransactionSchema = z.object({
+  type: cashTransactionTypeEnum,
+  amount: positiveDecimal,
+  currency: currencySchema,
+  date: z.coerce.date(),
+  notes: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+});
+
+export type CashTransactionInput = z.infer<typeof cashTransactionSchema>;
 
 // ─── Trade ────────────────────────────────────────────────────
 
@@ -70,6 +181,7 @@ export const alertTypeEnum = z.enum([
   "ALLOCATION_DRIFT",
   "DIVIDEND_EVENT",
   "EARNINGS_EVENT",
+  "FORECAST_DEVIATION",
 ]);
 
 export const alertSchema = z
@@ -86,6 +198,8 @@ export const alertSchema = z
       .optional()
       .nullable(),
     allocationThreshold: decimalString.optional().nullable(),
+    forecastId: z.string().min(1).nullable().optional(),
+    deviationThreshold: decimalString.optional().nullable(),
     message: z
       .string()
       .trim()
@@ -105,6 +219,12 @@ export const alertSchema = z
           return !!data.reviewIntervalDays;
         case "ALLOCATION_DRIFT":
           return !!data.allocationThreshold && !!data.portfolioId;
+        case "FORECAST_DEVIATION":
+          return (
+            !!data.deviationThreshold &&
+            !!data.instrumentId &&
+            !!data.forecastId
+          );
         case "DIVIDEND_EVENT":
         case "EARNINGS_EVENT":
           return !!data.instrumentId;

@@ -3,6 +3,7 @@ import {
   Bookmark,
   Briefcase,
   ClipboardCheck,
+  Layers,
   LayoutDashboard,
   LineChart,
   Settings,
@@ -23,6 +24,11 @@ export const PRIMARY_NAV: NavItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: <LayoutDashboard className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
+  },
+  {
+    href: "/groups",
+    label: "Groups",
+    icon: <Layers className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
   },
   {
     href: "/portfolios",

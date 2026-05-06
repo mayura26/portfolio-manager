@@ -26,6 +26,7 @@ export async function evaluateAllAlerts(): Promise<EvaluationResult> {
     include: {
       instrument: true,
       portfolio: true,
+      forecast: true,
     },
   });
 
@@ -52,6 +53,7 @@ type AlertWithRelations = Awaited<
 >[number] & {
   instrument: Awaited<ReturnType<typeof db.instrument.findFirst>>;
   portfolio: Awaited<ReturnType<typeof db.portfolio.findFirst>>;
+  forecast: Awaited<ReturnType<typeof db.instrumentForecast.findFirst>>;
 };
 
 async function evaluateOne(
@@ -69,6 +71,8 @@ async function evaluateOne(
       return await evalReviewTimer(alert, now);
     case "ALLOCATION_DRIFT":
       return await evalAllocationDrift(alert);
+    case "FORECAST_DEVIATION":
+      return await evalForecastDeviation(alert);
     case "DIVIDEND_EVENT":
     case "EARNINGS_EVENT":
       // Event-based alerts require a calendar feed — out of scope for MVP.
@@ -139,6 +143,8 @@ function priorityFor(type: AlertWithRelations["type"]): number {
     case "PRICE_BELOW":
     case "PCT_CHANGE":
       return 2;
+    case "FORECAST_DEVIATION":
+      return 2;
     case "ALLOCATION_DRIFT":
       return 1;
     case "REVIEW_TIMER":
@@ -158,6 +164,8 @@ function notificationTypeFor(type: AlertWithRelations["type"]) {
       return "REVIEW_DUE" as const;
     case "ALLOCATION_DRIFT":
       return "ALLOCATION_DRIFT" as const;
+    case "FORECAST_DEVIATION":
+      return "FORECAST_DEVIATION" as const;
     case "DIVIDEND_EVENT":
       return "DIVIDEND_EVENT" as const;
     case "EARNINGS_EVENT":
@@ -180,6 +188,8 @@ function titleFor(alert: AlertWithRelations): string {
       return `Review due: ${sym}`;
     case "ALLOCATION_DRIFT":
       return `Allocation drift in ${sym}`;
+    case "FORECAST_DEVIATION":
+      return `${sym} drifted from forecast`;
     default:
       return `Alert: ${sym}`;
   }
@@ -255,6 +265,42 @@ async function evalReviewTimer(
   await db.alert.update({
     where: { id: alert.id },
     data: { lastReviewDate: now },
+  });
+  return true;
+}
+
+async function evalForecastDeviation(
+  alert: AlertWithRelations,
+): Promise<boolean> {
+  if (
+    !alert.instrumentId ||
+    !alert.deviationThreshold ||
+    !alert.forecastId ||
+    !alert.forecast
+  ) {
+    return false;
+  }
+  const price = await latestPrice(alert.instrumentId);
+  if (!price) return false;
+
+  const target = new Decimal(alert.forecast.targetPrice.toString());
+  if (target.lte(0)) return false;
+
+  const deviation = price.minus(target).dividedBy(target).times(100);
+  const threshold = new Decimal(alert.deviationThreshold.toString());
+  if (deviation.abs().lt(threshold)) return false;
+
+  const sym = alert.instrument?.symbol ?? "instrument";
+  const cur = alert.instrument?.currency ?? "USD";
+  const direction = deviation.gt(0) ? "above" : "below";
+  const message = `${sym} is at ${formatMoney(price, cur)}, ${deviation.abs().toFixed(1)}% ${direction} the AI forecast target of ${formatMoney(target, cur)} (threshold ±${threshold.toFixed(1)}%).`;
+
+  await fireAlert(alert, message, {
+    currentPrice: price.toString(),
+    targetPrice: target.toString(),
+    deviationPercent: deviation.toString(),
+    threshold: threshold.toString(),
+    forecastId: alert.forecastId,
   });
   return true;
 }

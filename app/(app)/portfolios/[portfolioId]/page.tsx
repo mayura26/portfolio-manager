@@ -1,13 +1,15 @@
-import { Briefcase, Plus } from "lucide-react";
+import { Briefcase, Plus, Target } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { HoldingsTable } from "@/components/portfolios/holdings-table";
+import { AllocationTable } from "@/components/portfolios/allocation-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { formatCurrency, pnlClass } from "@/lib/format";
 import { computeHoldings } from "@/lib/holdings";
+import { computePortfolioAllocation } from "@/lib/portfolio-allocation";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -25,17 +27,22 @@ async function PortfolioOverview({ params }: { params: Params }) {
   const { portfolioId } = await params;
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
+    include: { group: true },
   });
   if (!portfolio) notFound();
 
-  const data = await computeHoldings(portfolioId);
+  const [holdings, allocation, groupCash] = await Promise.all([
+    computeHoldings(portfolioId),
+    computePortfolioAllocation(portfolioId),
+    computeGroupCash(portfolio.groupId),
+  ]);
 
-  if (data.holdings.length === 0 && data.totalRealizedPnL.isZero()) {
+  if (allocation.rows.length === 0 && holdings.totalRealizedPnL.isZero()) {
     return (
       <EmptyState
         icon={Briefcase}
-        title="No holdings yet"
-        description="Record a trade to populate this portfolio. Holdings, cost basis, and P&L appear here automatically."
+        title="No holdings or targets yet"
+        description="Record a trade or set target weights to populate this portfolio."
         action={{
           href: `/portfolios/${portfolio.id}/trades/new`,
           label: "Record first trade",
@@ -44,51 +51,76 @@ async function PortfolioOverview({ params }: { params: Params }) {
     );
   }
 
+  const targetSumOk =
+    Math.abs(Number(allocation.targetSum.toString()) - 100) < 0.0001;
+
   return (
     <div className="flex flex-col gap-8">
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
           label="Market value"
           value={formatCurrency(
-            data.totalMarketValueBase.toString(),
-            data.baseCurrency,
+            holdings.totalMarketValueBase.toString(),
+            holdings.baseCurrency,
           )}
         />
         <Stat
           label="Unrealized P&L"
           value={formatCurrency(
-            data.totalUnrealizedPnL.toString(),
-            data.baseCurrency,
-            {
-              signed: true,
-            },
+            holdings.totalUnrealizedPnL.toString(),
+            holdings.baseCurrency,
+            { signed: true },
           )}
-          tone={pnlClass(data.totalUnrealizedPnL.toString())}
+          tone={pnlClass(holdings.totalUnrealizedPnL.toString())}
         />
         <Stat
-          label="Realized P&L"
+          label={`Group cash · ${groupCash.baseCurrency}`}
           value={formatCurrency(
-            data.totalRealizedPnL.toString(),
-            data.baseCurrency,
-            {
-              signed: true,
-            },
+            groupCash.currentCash.toString(),
+            groupCash.baseCurrency,
           )}
-          tone={pnlClass(data.totalRealizedPnL.toString())}
         />
       </div>
 
-      {data.hasMissingPrices ? (
+      <p className="text-xs text-muted">
+        Group:{" "}
+        <Link
+          href={`/groups/${portfolio.groupId}`}
+          className="hover:text-foreground"
+        >
+          {portfolio.group.name}
+        </Link>{" "}
+        · Target weight in group:{" "}
+        {Number(portfolio.targetPercentInGroup.toString()).toFixed(2)}%
+      </p>
+
+      {holdings.hasMissingPrices ? (
         <p className="text-xs text-warning">
           Some instruments are missing recent prices. Trigger the price cron or
           wait for it to run.
         </p>
       ) : null}
 
-      {data.holdings.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="display text-2xl text-foreground">Open positions</h2>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="display text-2xl text-foreground">
+            Allocation (target vs actual)
+          </h2>
+          <div className="flex items-center gap-3">
+            {!targetSumOk && allocation.rows.some((r) => r.hasTarget) ? (
+              <span className="text-xs text-warning">
+                Targets sum to{" "}
+                {Number(allocation.targetSum.toString()).toFixed(2)}% — fix on
+                the Targets tab
+              </span>
+            ) : null}
+            <Link
+              href={`/portfolios/${portfolio.id}/targets`}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-muted hover:text-foreground"
+            >
+              <Target className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+              Edit targets
+            </Link>
             <Link
               href={`/portfolios/${portfolio.id}/trades/new`}
               className="inline-flex items-center gap-2 bg-accent px-3 py-1.5 text-xs text-accent-foreground transition-colors hover:bg-accent-hover"
@@ -97,13 +129,21 @@ async function PortfolioOverview({ params }: { params: Params }) {
               Add trade
             </Link>
           </div>
-          <HoldingsTable data={data} />
         </div>
-      ) : (
-        <p className="text-sm text-muted">
-          No open positions. Realized P&L includes closed trades.
+        <AllocationTable
+          allocation={allocation}
+          groupCashBase={groupCash.currentCash.toString()}
+          groupBaseCurrency={groupCash.baseCurrency}
+        />
+        <p className="text-xs text-subtle">
+          Realized P&amp;L:{" "}
+          {formatCurrency(
+            holdings.totalRealizedPnL.toString(),
+            holdings.baseCurrency,
+            { signed: true },
+          )}
         </p>
-      )}
+      </div>
     </div>
   );
 }

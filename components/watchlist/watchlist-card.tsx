@@ -13,6 +13,7 @@ import {
 import type { WatchlistAiAnalysis } from "@/lib/watchlist-ai";
 import type { QuoteSnapshot } from "@/lib/yahoo";
 import { BuyRangeForm } from "./buy-range-form";
+import { PortfolioAssignmentSelect } from "./portfolio-assignment-select";
 import { WatchlistActions } from "./watchlist-actions";
 import { WatchlistStatusBadge } from "./watchlist-status-badge";
 
@@ -24,9 +25,10 @@ type WatchlistItemRow = WatchlistItem & {
 type Props = {
   item: WatchlistItemRow;
   quote: QuoteSnapshot | null;
+  portfolios: { id: string; name: string }[];
 };
 
-export function WatchlistCard({ item, quote }: Props) {
+export function WatchlistCard({ item, quote, portfolios }: Props) {
   const { instrument, alert } = item;
   const currency = instrument.currency;
 
@@ -166,6 +168,14 @@ export function WatchlistCard({ item, quote }: Props) {
 
       {item.notes ? (
         <p className="text-xs italic text-subtle">"{item.notes}"</p>
+      ) : null}
+
+      {item.status === "WATCHING" ? (
+        <PortfolioAssignmentSelect
+          itemId={item.id}
+          currentPortfolioId={item.portfolioId}
+          portfolios={portfolios}
+        />
       ) : null}
 
       <div className="border-t border-border pt-2 text-xs text-muted">

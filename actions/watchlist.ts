@@ -320,3 +320,15 @@ export async function deleteWatchlistItem(itemId: string): Promise<void> {
 
   revalidateAll();
 }
+
+export async function assignWatchlistToPortfolio(
+  itemId: string,
+  portfolioId: string | null,
+): Promise<void> {
+  await db.watchlistItem.update({
+    where: { id: itemId },
+    data: { portfolioId },
+  });
+  revalidateAll();
+  if (portfolioId) revalidatePath(`/portfolios/${portfolioId}`);
+}
