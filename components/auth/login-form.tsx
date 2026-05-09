@@ -9,10 +9,22 @@ type Props = {
   authEnabled: boolean;
 };
 
+function safeRedirectPath(value: string | null, origin: string) {
+  if (!value) return "/dashboard";
+
+  try {
+    const url = new URL(value, origin);
+    if (url.origin !== origin) return "/dashboard";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/dashboard";
+  }
+}
+
 export function LoginForm({ authEnabled }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -55,12 +67,13 @@ export function LoginForm({ authEnabled }: Props) {
     const formData = new FormData(form);
     const username = String(formData.get("username") ?? "");
     const password = String(formData.get("password") ?? "");
+    const redirectTo = safeRedirectPath(callbackUrl, window.location.origin);
 
     const result = await signIn("credentials", {
       username,
       password,
       redirect: false,
-      callbackUrl,
+      redirectTo,
     });
 
     setPending(false);
@@ -70,8 +83,8 @@ export function LoginForm({ authEnabled }: Props) {
       return;
     }
 
-    if (result?.ok && result.url) {
-      router.push(result.url);
+    if (result?.ok) {
+      router.replace(safeRedirectPath(result.url, window.location.origin));
       router.refresh();
       return;
     }
