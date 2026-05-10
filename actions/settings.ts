@@ -30,6 +30,9 @@ export async function updateSettings(
     pushEnabled: formData.get("pushEnabled") === "on",
     watchlistAiModel: formData.get("watchlistAiModel") ?? undefined,
     watchlistAiReasoning: formData.get("watchlistAiReasoning") ?? undefined,
+    ibkrFlexToken: formData.get("ibkrFlexToken") ?? undefined,
+    ibkrFlexQueryId: formData.get("ibkrFlexQueryId") ?? undefined,
+    ibkrPortfolioId: formData.get("ibkrPortfolioId") ?? undefined,
   });
 
   if (!parsed.success) {

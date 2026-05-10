@@ -154,6 +154,18 @@ export type DailyBar = {
   volume: number | null;
 };
 
+export const PRICE_CHART_RANGES = ["4h", "1m", "6m", "1y", "5y"] as const;
+export type PriceChartRange = (typeof PRICE_CHART_RANGES)[number];
+
+export type PriceChartBar = {
+  time: string | number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+};
+
 export async function fetchDailyHistory(
   yahooSymbol: string,
   from: Date,
@@ -190,6 +202,110 @@ export async function fetchDailyHistory(
       close: q.close,
       volume: typeof q.volume === "number" ? q.volume : null,
     }));
+}
+
+export async function fetchPriceChartHistory(
+  yahooSymbol: string,
+  range: PriceChartRange,
+): Promise<PriceChartBar[]> {
+  const to = new Date();
+  const from = getPriceChartStart(range, to);
+  const result = await yahoo.chart(yahooSymbol, {
+    period1: from,
+    period2: to,
+    interval: range === "4h" ? "1h" : "1d",
+    includePrePost: false,
+  });
+
+  const bars = (result.quotes ?? [])
+    .filter(
+      (
+        q,
+      ): q is typeof q & {
+        date: Date;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+      } =>
+        q.date instanceof Date &&
+        typeof q.open === "number" &&
+        typeof q.high === "number" &&
+        typeof q.low === "number" &&
+        typeof q.close === "number",
+    )
+    .map((q) => ({
+      date: q.date,
+      open: q.open,
+      high: q.high,
+      low: q.low,
+      close: q.close,
+      volume: typeof q.volume === "number" ? q.volume : null,
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  if (range === "4h") return aggregateFourHourBars(bars);
+
+  return bars.map((bar) => ({
+    time: bar.date.toISOString().slice(0, 10),
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+  }));
+}
+
+function getPriceChartStart(range: PriceChartRange, to: Date) {
+  const from = new Date(to);
+  switch (range) {
+    case "4h":
+      from.setUTCDate(from.getUTCDate() - 60);
+      break;
+    case "1m":
+      from.setUTCMonth(from.getUTCMonth() - 1);
+      break;
+    case "6m":
+      from.setUTCMonth(from.getUTCMonth() - 6);
+      break;
+    case "1y":
+      from.setUTCFullYear(from.getUTCFullYear() - 1);
+      break;
+    case "5y":
+      from.setUTCFullYear(from.getUTCFullYear() - 5);
+      break;
+  }
+  return from;
+}
+
+function aggregateFourHourBars(bars: DailyBar[]): PriceChartBar[] {
+  const grouped = new Map<string, DailyBar[]>();
+  for (const bar of bars) {
+    const bucketStartHour = Math.floor(bar.date.getUTCHours() / 4) * 4;
+    const key = `${bar.date.toISOString().slice(0, 10)}T${String(bucketStartHour).padStart(2, "0")}`;
+    const group = grouped.get(key);
+    if (group) {
+      group.push(bar);
+    } else {
+      grouped.set(key, [bar]);
+    }
+  }
+
+  return Array.from(grouped.values()).map((group) => {
+    const sorted = group.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    return {
+      time: Math.floor(first.date.getTime() / 1000),
+      open: first.open,
+      high: Math.max(...sorted.map((bar) => bar.high)),
+      low: Math.min(...sorted.map((bar) => bar.low)),
+      close: last.close,
+      volume: sorted.some((bar) => bar.volume !== null)
+        ? sorted.reduce((sum, bar) => sum + (bar.volume ?? 0), 0)
+        : null,
+    };
+  });
 }
 
 /**

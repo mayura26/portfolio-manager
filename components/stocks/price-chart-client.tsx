@@ -1,121 +1,168 @@
 "use client";
 
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
-type Point = {
-  date: string;
-  close: number;
-};
+  type CandlestickData,
+  CandlestickSeries,
+  ColorType,
+  createChart,
+  type UTCTimestamp,
+} from "lightweight-charts";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef } from "react";
+import type { PriceChartBar, PriceChartRange } from "@/lib/yahoo";
 
 type Props = {
-  points: Point[];
+  bars: PriceChartBar[];
   currency: string;
+  range: PriceChartRange;
 };
 
-export function PriceChartClient({ points, currency }: Props) {
-  if (points.length === 0) {
-    return (
-      <div className="flex h-72 items-center justify-center text-sm text-muted">
-        No price history
-      </div>
-    );
-  }
+const RANGE_OPTIONS: { label: string; value: PriceChartRange }[] = [
+  { label: "4H", value: "4h" },
+  { label: "1M", value: "1m" },
+  { label: "6M", value: "6m" },
+  { label: "1Y", value: "1y" },
+  { label: "5Y", value: "5y" },
+];
 
-  const min = Math.min(...points.map((p) => p.close));
-  const max = Math.max(...points.map((p) => p.close));
-  const pad = (max - min) * 0.05 || 1;
+export function PriceChartClient({ bars, currency, range }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const valueFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    notation: "compact",
-    maximumFractionDigits: 1,
-  });
-  const tooltipFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  });
+  const data = useMemo(
+    () =>
+      bars.map<CandlestickData>((bar) => ({
+        time:
+          typeof bar.time === "number" ? (bar.time as UTCTimestamp) : bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      })),
+    [bars],
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || data.length === 0) return;
+
+    const styles = getComputedStyle(document.documentElement);
+    const css = (name: string, fallback: string) =>
+      styles.getPropertyValue(name).trim() || fallback;
+    const formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    });
+
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: 288,
+      layout: {
+        background: {
+          type: ColorType.Solid,
+          color: css("--surface", "#ffffff"),
+        },
+        textColor: css("--muted", "#64748b"),
+      },
+      grid: {
+        vertLines: { color: "transparent" },
+        horzLines: { color: css("--border", "#e2e8f0") },
+      },
+      localization: {
+        priceFormatter: (price: number) => formatter.format(price),
+      },
+      rightPriceScale: {
+        borderColor: css("--border", "#e2e8f0"),
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+      },
+      timeScale: {
+        borderColor: css("--border", "#e2e8f0"),
+        timeVisible: range === "4h",
+        secondsVisible: false,
+      },
+    });
+
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: css("--success", "#16a34a"),
+      downColor: css("--danger", "#dc2626"),
+      borderVisible: false,
+      wickUpColor: css("--success", "#16a34a"),
+      wickDownColor: css("--danger", "#dc2626"),
+    });
+
+    series.setData(data);
+    chart.timeScale().fitContent();
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      chart.resize(Math.floor(entry.contentRect.width), 288);
+    });
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+      chart.remove();
+    };
+  }, [currency, data, range]);
+
+  const selectRange = (nextRange: PriceChartRange) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (nextRange === "6m") {
+      nextParams.delete("range");
+    } else {
+      nextParams.set("range", nextRange);
+    }
+    const query = nextParams.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+      scroll: false,
+    });
+  };
 
   return (
-    <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={points}
-          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+    <div className="hairline bg-surface p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex rounded-none border border-border">
+          {RANGE_OPTIONS.map((option, index) => {
+            const active = option.value === range;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => selectRange(option.value)}
+                className={[
+                  "h-8 min-w-10 border-border px-3 text-xs tabular transition-colors",
+                  index < RANGE_OPTIONS.length - 1 ? "border-r" : "",
+                  active
+                    ? "bg-foreground text-background"
+                    : "text-muted hover:bg-surface-elevated hover:text-foreground",
+                ].join(" ")}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <a
+          href="https://www.tradingview.com/lightweight-charts/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-subtle hover:text-muted"
         >
-          <defs>
-            <linearGradient id="priceArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            stroke="var(--border)"
-            strokeDasharray="3 3"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="date"
-            stroke="var(--subtle)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v: string) =>
-              new Date(v).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })
-            }
-          />
-          <YAxis
-            stroke="var(--subtle)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={false}
-            domain={[min - pad, max + pad]}
-            tickFormatter={(v: number) => valueFormatter.format(v)}
-            width={70}
-          />
-          <Tooltip
-            formatter={(value) => [
-              tooltipFormatter.format(
-                typeof value === "number" ? value : Number(value),
-              ),
-              "Close",
-            ]}
-            labelFormatter={(label) =>
-              new Date(String(label)).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })
-            }
-            contentStyle={{
-              background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
-              borderRadius: 0,
-              fontSize: 12,
-            }}
-            labelStyle={{ color: "var(--muted)" }}
-            itemStyle={{ color: "var(--foreground)" }}
-          />
-          <Area
-            type="monotone"
-            dataKey="close"
-            stroke="var(--accent)"
-            strokeWidth={2}
-            fill="url(#priceArea)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+          Lightweight Charts by TradingView
+        </a>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex h-72 items-center justify-center text-sm text-muted">
+          No price history
+        </div>
+      ) : (
+        <div ref={containerRef} className="h-72 w-full" />
+      )}
     </div>
   );
 }

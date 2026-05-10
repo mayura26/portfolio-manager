@@ -20,6 +20,9 @@ model Settings {
   pushSubscription    Json?
   watchlistAiModel    String   @default("gpt-5.4")
   watchlistAiReasoning String  @default("medium")
+  ibkrFlexToken       String?
+  ibkrFlexQueryId     String?
+  ibkrPortfolioId     String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -110,9 +113,12 @@ model Trade {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  externalRef  String?
+
   portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   instrument Instrument @relation(fields: [instrumentId], references: [id])
 
+  @@unique([portfolioId, externalRef])
   @@index([portfolioId, date])
   @@index([instrumentId, date])
   @@index([portfolioId, instrumentId])

@@ -34,7 +34,18 @@
       "Bash(Select-Object Name)",
       "PowerShell(ls \"D:\\\\VSCode Projects\\\\portfolio-manager\" | where { $_.PSIsContainer -eq $false } | select Name)",
       "Bash(npm uninstall *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(cd /d \"D:\\\\VSCode Projects\\\\portfolio-manager\")",
+      "Bash(Get-ChildItem -Path . -Directory)",
+      "Bash(npx tsx *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx biome *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\VSCode Projects\\\\portfolio-manager\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

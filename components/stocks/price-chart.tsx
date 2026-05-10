@@ -1,29 +1,29 @@
-import { fetchDailyHistory } from "@/lib/yahoo";
+import {
+  fetchPriceChartHistory,
+  PRICE_CHART_RANGES,
+  type PriceChartRange,
+} from "@/lib/yahoo";
 import { PriceChartClient } from "./price-chart-client";
 
 type Props = {
   yahooSymbol: string;
   currency: string;
-  days?: number;
+  range?: PriceChartRange;
 };
 
-export async function PriceChart({ yahooSymbol, currency, days = 180 }: Props) {
-  const from = new Date();
-  from.setUTCDate(from.getUTCDate() - days);
-
-  let bars: Awaited<ReturnType<typeof fetchDailyHistory>> = [];
+export async function PriceChart({
+  yahooSymbol,
+  currency,
+  range = "6m",
+}: Props) {
+  let bars: Awaited<ReturnType<typeof fetchPriceChartHistory>> = [];
   try {
-    bars = await fetchDailyHistory(yahooSymbol, from);
+    bars = await fetchPriceChartHistory(yahooSymbol, range);
   } catch {
-    // ignore — render empty state below
+    // Render the empty state below when Yahoo history is unavailable.
   }
 
-  return (
-    <PriceChartClient
-      currency={currency}
-      points={bars.map((b) => ({ date: b.date.toISOString(), close: b.close }))}
-    />
-  );
+  return <PriceChartClient bars={bars} currency={currency} range={range} />;
 }
 
 export function PriceChartSkeleton() {
@@ -32,4 +32,11 @@ export function PriceChartSkeleton() {
       <div className="h-72" />
     </div>
   );
+}
+
+export function parsePriceChartRange(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return PRICE_CHART_RANGES.includes(candidate as PriceChartRange)
+    ? (candidate as PriceChartRange)
+    : "6m";
 }

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LineChart,
   Settings,
+  Upload,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -54,6 +55,11 @@ export const PRIMARY_NAV: NavItem[] = [
     href: "/watchlist",
     label: "Watchlist",
     icon: <Bookmark className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
+  },
+  {
+    href: "/import",
+    label: "Import",
+    icon: <Upload className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
   },
 ];
 

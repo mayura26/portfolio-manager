@@ -5,6 +5,7 @@ import { PushToggle } from "@/components/settings/push-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { Skeleton } from "@/components/shared/skeleton";
 import { isAuthFullyConfigured } from "@/lib/auth-env";
+import { db } from "@/lib/db";
 
 export default function SettingsPage() {
   const authGate = isAuthFullyConfigured();
@@ -56,14 +57,24 @@ export default function SettingsPage() {
 }
 
 async function GeneralSettings() {
-  const settings = await getSettings();
+  const [settings, portfolios] = await Promise.all([
+    getSettings(),
+    db.portfolio.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   return (
     <SettingsForm
       defaults={{
         defaultBaseCurrency: settings.defaultBaseCurrency,
         watchlistAiModel: settings.watchlistAiModel,
         watchlistAiReasoning: settings.watchlistAiReasoning,
+        ibkrFlexToken: settings.ibkrFlexToken ?? "",
+        ibkrFlexQueryId: settings.ibkrFlexQueryId ?? "",
+        ibkrPortfolioId: settings.ibkrPortfolioId ?? "",
       }}
+      portfolios={portfolios}
     />
   );
 }

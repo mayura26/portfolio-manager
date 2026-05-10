@@ -11,14 +11,17 @@ import { NewsFeed, NewsFeedSkeleton } from "@/components/stocks/news-feed";
 import {
   PriceChart,
   PriceChartSkeleton,
+  parsePriceChartRange,
 } from "@/components/stocks/price-chart";
 import { RunForecastButton } from "@/components/stocks/run-forecast-button";
 import { db } from "@/lib/db";
 
 type Params = Promise<{ symbol: string }>;
+type SearchParams = Promise<{ range?: string | string[] }>;
 
 export default function StockOverviewPage({
   params,
+  searchParams,
 }: PageProps<"/stocks/[symbol]">) {
   return (
     <div className="grid gap-10 lg:grid-cols-3">
@@ -26,7 +29,7 @@ export default function StockOverviewPage({
         <section>
           <h2 className="display mb-4 text-2xl text-foreground">Price</h2>
           <Suspense fallback={<PriceChartSkeleton />}>
-            <PriceChartLoader params={params} />
+            <PriceChartLoader params={params} searchParams={searchParams} />
           </Suspense>
         </section>
 
@@ -91,8 +94,16 @@ async function ForecastLoader({ params }: { params: Params }) {
   );
 }
 
-async function PriceChartLoader({ params }: { params: Params }) {
+async function PriceChartLoader({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const { symbol } = await params;
+  const query = await searchParams;
+  const range = parsePriceChartRange(query.range);
   const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
@@ -100,7 +111,7 @@ async function PriceChartLoader({ params }: { params: Params }) {
     <PriceChart
       yahooSymbol={instrument.yahooSymbol}
       currency={instrument.currency}
-      days={180}
+      range={range}
     />
   );
 }
