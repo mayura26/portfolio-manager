@@ -10,21 +10,59 @@ export type ImportResult = {
   failed: { symbol: string; reason: string }[];
 };
 
-export async function importTrades(
+// ─── Group-based import (Flex sync) ──────────────────────────────────────────
+
+async function getOrCreateUnassignedPortfolio(
+  groupId: string,
+  baseCurrency: string,
+) {
+  const existing = await db.portfolio.findFirst({
+    where: { groupId, name: "Unassigned" },
+  });
+  if (existing) return existing;
+  return db.portfolio.create({
+    data: { groupId, name: "Unassigned", baseCurrency },
+  });
+}
+
+/**
+ * Import trades into a portfolio group, routing each symbol to whichever
+ * portfolio already owns it. New symbols go to an "Unassigned" portfolio.
+ */
+export async function importToGroup(
   trades: ParsedTrade[],
-  portfolioId: string,
+  groupId: string,
 ): Promise<ImportResult> {
   const failed: { symbol: string; reason: string }[] = [];
 
   if (trades.length === 0) return { inserted: 0, skipped: 0, failed: [] };
 
-  const portfolio = await db.portfolio.findUnique({
-    where: { id: portfolioId },
-    select: { id: true, baseCurrency: true },
+  const group = await db.portfolioGroup.findUnique({
+    where: { id: groupId },
+    select: {
+      baseCurrency: true,
+      portfolios: { select: { id: true, baseCurrency: true } },
+    },
   });
-  if (!portfolio) throw new Error("Portfolio not found");
+  if (!group) throw new Error("Portfolio group not found");
 
-  const { baseCurrency } = portfolio;
+  const portfolioIds = group.portfolios.map((p) => p.id);
+  const portfolioCurrencyMap = new Map(
+    group.portfolios.map((p) => [p.id, p.baseCurrency]),
+  );
+
+  // Build instrumentId → portfolioId ownership map from existing trades
+  const ownershipMap = new Map<string, string>();
+  if (portfolioIds.length > 0) {
+    const existing = await db.trade.findMany({
+      where: { portfolioId: { in: portfolioIds } },
+      select: { portfolioId: true, instrumentId: true },
+      distinct: ["portfolioId", "instrumentId"],
+    });
+    for (const row of existing) {
+      ownershipMap.set(row.instrumentId, row.portfolioId);
+    }
+  }
 
   // Pre-resolve all unique symbols
   const uniqueSymbols = [...new Set(trades.map((t) => t.symbol))];
@@ -42,30 +80,69 @@ export async function importTrades(
     }
   }
 
-  // Pre-fetch all unique FX rates (currency + date pairs)
+  // Determine target portfolio per trade and collect needed FX pairs
+  type ResolvedTrade = {
+    trade: ParsedTrade;
+    instrumentId: string;
+    portfolioId: string;
+    portfolioBaseCurrency: string;
+  };
+
+  let unassigned: { id: string; baseCurrency: string } | null = null;
+  const resolved: ResolvedTrade[] = [];
+
+  for (const trade of trades) {
+    const instrument = instrumentMap.get(trade.symbol);
+    if (!instrument) continue;
+
+    let portfolioId = ownershipMap.get(instrument.id);
+    let portfolioBaseCurrency: string;
+
+    if (portfolioId) {
+      portfolioBaseCurrency = portfolioCurrencyMap.get(portfolioId) ?? group.baseCurrency;
+    } else {
+      // New symbol — route to Unassigned portfolio (create once)
+      if (!unassigned) {
+        unassigned = await getOrCreateUnassignedPortfolio(groupId, group.baseCurrency);
+        // Add to ownership tracking so subsequent trades of same symbol also route here
+        portfolioCurrencyMap.set(unassigned.id, unassigned.baseCurrency);
+      }
+      portfolioId = unassigned.id;
+      portfolioBaseCurrency = unassigned.baseCurrency;
+      ownershipMap.set(instrument.id, portfolioId);
+    }
+
+    resolved.push({ trade, instrumentId: instrument.id, portfolioId, portfolioBaseCurrency });
+  }
+
+  // Pre-fetch FX rates for all unique (tradeCurrency, baseCurrency, date) triplets
   const fxCache = new Map<string, Decimal>();
-  const uniquePairs = [
+  const uniqueFxKeys = [
     ...new Set(
-      trades.map((t) => `${t.currency}|${t.date.toISOString().split("T")[0]}`),
+      resolved.map(
+        (r) =>
+          `${r.trade.currency}|${r.portfolioBaseCurrency}|${r.trade.date.toISOString().split("T")[0]}`,
+      ),
     ),
   ];
 
-  for (const pair of uniquePairs) {
-    const [currency, dateStr] = pair.split("|");
-    if (!currency || currency.toUpperCase() === baseCurrency.toUpperCase()) {
-      fxCache.set(pair, new Decimal(1));
+  for (const key of uniqueFxKeys) {
+    const [from, to, dateStr] = key.split("|");
+    if (!from || !to || !dateStr) continue;
+    if (from.toUpperCase() === to.toUpperCase()) {
+      fxCache.set(key, new Decimal(1));
       continue;
     }
     try {
-      const rate = await getFxRate(currency, baseCurrency, new Date(dateStr));
-      fxCache.set(pair, rate);
+      const rate = await getFxRate(from, to, new Date(dateStr));
+      fxCache.set(key, rate);
     } catch {
-      // Will use null rate — handled per-trade below
+      // Handled per-trade below
     }
   }
 
   // Build insertable rows
-  type TradeRow = {
+  const rows: {
     portfolioId: string;
     instrumentId: string;
     type: "BUY" | "SELL";
@@ -76,9 +153,116 @@ export async function importTrades(
     fees: string;
     date: Date;
     externalRef: string;
-  };
+  }[] = [];
 
-  const rows: TradeRow[] = [];
+  for (const { trade, instrumentId, portfolioId, portfolioBaseCurrency } of resolved) {
+    const fxKey = `${trade.currency}|${portfolioBaseCurrency}|${trade.date.toISOString().split("T")[0]}`;
+    const fxRate = fxCache.get(fxKey);
+    if (!fxRate) {
+      failed.push({
+        symbol: trade.symbol,
+        reason: `Could not resolve FX rate for ${trade.currency} → ${portfolioBaseCurrency} on ${fxKey.split("|")[2]}`,
+      });
+      continue;
+    }
+
+    rows.push({
+      portfolioId,
+      instrumentId,
+      type: trade.type,
+      quantity: trade.quantity,
+      price: trade.price,
+      currency: trade.currency,
+      fxRate: fxRate.toString(),
+      fees: trade.fees,
+      date: trade.date,
+      externalRef: trade.externalRef,
+    });
+  }
+
+  if (rows.length === 0) {
+    return { inserted: 0, skipped: trades.length - failed.length, failed };
+  }
+
+  const result = await db.trade.createMany({
+    data: rows,
+    skipDuplicates: true,
+  });
+
+  const skipped = trades.length - failed.length - result.count;
+  return { inserted: result.count, skipped, failed };
+}
+
+// ─── Portfolio-based import (CSV upload) ─────────────────────────────────────
+
+/**
+ * Import trades directly into a specific portfolio (used by CSV upload).
+ */
+export async function importTrades(
+  trades: ParsedTrade[],
+  portfolioId: string,
+): Promise<ImportResult> {
+  const failed: { symbol: string; reason: string }[] = [];
+
+  if (trades.length === 0) return { inserted: 0, skipped: 0, failed: [] };
+
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+    select: { id: true, baseCurrency: true },
+  });
+  if (!portfolio) throw new Error("Portfolio not found");
+
+  const { baseCurrency } = portfolio;
+
+  const uniqueSymbols = [...new Set(trades.map((t) => t.symbol))];
+  const instrumentMap = new Map<string, { id: string }>();
+
+  for (const symbol of uniqueSymbols) {
+    try {
+      const inst = await findOrCreateInstrument(symbol);
+      instrumentMap.set(symbol, inst);
+    } catch (err) {
+      failed.push({
+        symbol,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const fxCache = new Map<string, Decimal>();
+  const uniquePairs = [
+    ...new Set(
+      trades.map((t) => `${t.currency}|${t.date.toISOString().split("T")[0]}`),
+    ),
+  ];
+
+  for (const pair of uniquePairs) {
+    const [currency, dateStr] = pair.split("|");
+    if (!currency || !dateStr) continue;
+    if (currency.toUpperCase() === baseCurrency.toUpperCase()) {
+      fxCache.set(pair, new Decimal(1));
+      continue;
+    }
+    try {
+      const rate = await getFxRate(currency, baseCurrency, new Date(dateStr));
+      fxCache.set(pair, rate);
+    } catch {
+      // Handled per-trade below
+    }
+  }
+
+  const rows: {
+    portfolioId: string;
+    instrumentId: string;
+    type: "BUY" | "SELL";
+    quantity: string;
+    price: string;
+    currency: string;
+    fxRate: string;
+    fees: string;
+    date: Date;
+    externalRef: string;
+  }[] = [];
 
   for (const trade of trades) {
     const instrument = instrumentMap.get(trade.symbol);
@@ -118,6 +302,5 @@ export async function importTrades(
   });
 
   const skipped = trades.length - failed.length - result.count;
-
   return { inserted: result.count, skipped, failed };
 }

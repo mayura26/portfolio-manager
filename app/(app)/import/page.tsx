@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { getSettings } from "@/actions/settings";
 import { CsvImportSection } from "@/components/import/csv-import-section";
 import { FlexSyncSection } from "@/components/import/flex-sync-section";
 import { Skeleton } from "@/components/shared/skeleton";
@@ -36,13 +35,11 @@ export default function ImportPage() {
             Flex API sync
           </h2>
           <p className="mb-6 max-w-prose text-sm text-muted">
-            Fetch trades directly from IBKR using the Flex Web Service. Requires
-            a Flex Token and Query ID configured in{" "}
-            <a href="/settings" className="underline">
-              Settings
-            </a>
-            . The query must be set to XML format and include the Trades
-            section.
+            Fetch trades directly from IBKR using the Flex Web Service. Select a
+            portfolio group — trades are routed to whichever portfolio already
+            holds the stock, or placed in an &ldquo;Unassigned&rdquo; portfolio
+            for new positions. Configure Flex credentials per group in Group
+            Settings.
           </p>
           <Suspense fallback={<Skeleton className="h-32 w-full max-w-xl" />}>
             <FlexSection />
@@ -62,21 +59,17 @@ async function CsvSection() {
 }
 
 async function FlexSection() {
-  const [settings, portfolios] = await Promise.all([
-    getSettings(),
-    db.portfolio.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
-  const hasCredentials = !!(
-    settings.ibkrFlexToken && settings.ibkrFlexQueryId
-  );
+  const groups = await db.portfolioGroup.findMany({
+    select: { id: true, name: true, ibkrFlexToken: true, ibkrFlexQueryId: true },
+    orderBy: { name: "asc" },
+  });
   return (
     <FlexSyncSection
-      portfolios={portfolios}
-      defaultPortfolioId={settings.ibkrPortfolioId}
-      hasCredentials={hasCredentials}
+      groups={groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        hasCredentials: !!(g.ibkrFlexToken && g.ibkrFlexQueryId),
+      }))}
     />
   );
 }

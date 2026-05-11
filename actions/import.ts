@@ -1,33 +1,35 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSettings } from "@/actions/settings";
+import { db } from "@/lib/db";
 import { fetchFlexTrades } from "@/lib/import/ibkr-flex";
-import { importTrades, type ImportResult } from "@/lib/import/ibkr-engine";
+import { importToGroup, type ImportResult } from "@/lib/import/ibkr-engine";
 
 export type ImportActionState =
   | ({ ok: true } & ImportResult)
   | { ok: false; error: string };
 
 export async function triggerFlexSync(
-  portfolioId: string,
+  groupId: string,
 ): Promise<ImportActionState> {
-  const settings = await getSettings();
+  const group = await db.portfolioGroup.findUnique({
+    where: { id: groupId },
+    select: { ibkrFlexToken: true, ibkrFlexQueryId: true },
+  });
 
-  if (!settings.ibkrFlexToken || !settings.ibkrFlexQueryId) {
+  if (!group) return { ok: false, error: "Portfolio group not found." };
+
+  if (!group.ibkrFlexToken || !group.ibkrFlexQueryId) {
     return {
       ok: false,
       error:
-        "IBKR Flex Token and Query ID must be configured in Settings before syncing.",
+        "IBKR Flex Token and Query ID must be configured on this group before syncing.",
     };
   }
 
   let trades;
   try {
-    trades = await fetchFlexTrades(
-      settings.ibkrFlexToken,
-      settings.ibkrFlexQueryId,
-    );
+    trades = await fetchFlexTrades(group.ibkrFlexToken, group.ibkrFlexQueryId);
   } catch (err) {
     return {
       ok: false,
@@ -36,9 +38,8 @@ export async function triggerFlexSync(
   }
 
   try {
-    const result = await importTrades(trades, portfolioId);
-    revalidatePath(`/portfolios/${portfolioId}/trades`);
-    revalidatePath(`/portfolios/${portfolioId}`);
+    const result = await importToGroup(trades, groupId);
+    revalidatePath(`/groups/${groupId}`);
     return { ok: true, ...result };
   } catch (err) {
     return {

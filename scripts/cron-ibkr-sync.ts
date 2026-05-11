@@ -1,49 +1,66 @@
 /**
- * IBKR Flex sync — fetches trades via the Flex Web Service and upserts
- * into the configured portfolio. Requires ibkrFlexToken, ibkrFlexQueryId,
- * and ibkrPortfolioId to be set in Settings. Run via:
- *   npm run cron:ibkr-sync
+ * IBKR Flex sync — fetches trades for every portfolio group that has Flex
+ * credentials configured, routing each symbol to the correct portfolio.
+ * Run via: npm run cron:ibkr-sync
  */
 import "dotenv/config";
 import { db } from "@/lib/db";
-import { getSettings } from "@/actions/settings";
 import { fetchFlexTrades } from "@/lib/import/ibkr-flex";
-import { importTrades } from "@/lib/import/ibkr-engine";
+import { importToGroup } from "@/lib/import/ibkr-engine";
 
 async function run() {
-  const settings = await getSettings();
+  const groups = await db.portfolioGroup.findMany({
+    where: {
+      ibkrFlexToken: { not: null },
+      ibkrFlexQueryId: { not: null },
+    },
+    select: {
+      id: true,
+      name: true,
+      ibkrFlexToken: true,
+      ibkrFlexQueryId: true,
+    },
+  });
 
-  if (!settings.ibkrFlexToken) {
-    console.error("[cron-ibkr-sync] ibkrFlexToken not configured in Settings");
-    process.exit(1);
-  }
-  if (!settings.ibkrFlexQueryId) {
-    console.error(
-      "[cron-ibkr-sync] ibkrFlexQueryId not configured in Settings",
+  if (groups.length === 0) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        message: "No groups have IBKR credentials configured",
+      }),
     );
-    process.exit(1);
-  }
-  if (!settings.ibkrPortfolioId) {
-    console.error(
-      "[cron-ibkr-sync] ibkrPortfolioId not configured in Settings",
-    );
-    process.exit(1);
+    return [];
   }
 
-  const trades = await fetchFlexTrades(
-    settings.ibkrFlexToken,
-    settings.ibkrFlexQueryId,
-  );
+  const results = [];
 
-  const result = await importTrades(trades, settings.ibkrPortfolioId);
+  for (const group of groups) {
+    try {
+      const trades = await fetchFlexTrades(
+        group.ibkrFlexToken!,
+        group.ibkrFlexQueryId!,
+      );
+      const result = await importToGroup(trades, group.id);
+      results.push({ group: group.name, ok: true, ...result });
+    } catch (err) {
+      results.push({
+        group: group.name,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
-  return result;
+  return results;
 }
 
 run()
-  .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
-    process.exit(result.failed.length > 0 ? 1 : 0);
+  .then((results) => {
+    console.log(JSON.stringify(results, null, 2));
+    const anyFailed = results.some(
+      (r) => !r.ok || ("failed" in r && r.failed.length > 0),
+    );
+    process.exit(anyFailed ? 1 : 0);
   })
   .catch((err) => {
     console.error("[cron-ibkr-sync] fatal", err);

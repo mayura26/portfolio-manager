@@ -5,30 +5,26 @@ import { useRouter } from "next/navigation";
 import { triggerFlexSync, type ImportActionState } from "@/actions/import";
 import { ImportResultDisplay } from "./import-result";
 
-type Portfolio = { id: string; name: string };
+type Group = { id: string; name: string; hasCredentials: boolean };
 
 type Props = {
-  portfolios: Portfolio[];
-  defaultPortfolioId?: string | null;
-  hasCredentials: boolean;
+  groups: Group[];
 };
 
-export function FlexSyncSection({
-  portfolios,
-  defaultPortfolioId,
-  hasCredentials,
-}: Props) {
+export function FlexSyncSection({ groups }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<ImportActionState | null>(null);
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState(
-    defaultPortfolioId ?? "",
+  const [selectedGroupId, setSelectedGroupId] = useState(
+    groups.find((g) => g.hasCredentials)?.id ?? "",
   );
   const [elapsed, setElapsed] = useState<number | null>(null);
 
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+
   function handleSync() {
-    if (!selectedPortfolioId) {
-      setResult({ ok: false, error: "Please select a portfolio." });
+    if (!selectedGroupId) {
+      setResult({ ok: false, error: "Please select a group." });
       return;
     }
     setResult(null);
@@ -36,21 +32,21 @@ export function FlexSyncSection({
     const start = Date.now();
 
     startTransition(async () => {
-      const res = await triggerFlexSync(selectedPortfolioId);
+      const res = await triggerFlexSync(selectedGroupId);
       setElapsed(Math.round((Date.now() - start) / 1000));
       setResult(res);
       if (res.ok) router.refresh();
     });
   }
 
-  if (!hasCredentials) {
+  if (groups.length === 0) {
     return (
       <p className="text-sm text-muted">
-        Configure your IBKR Flex Token and Query ID in{" "}
-        <a href="/settings" className="underline">
-          Settings
+        No portfolio groups exist yet.{" "}
+        <a href="/groups/new" className="underline">
+          Create one
         </a>{" "}
-        to enable automated sync.
+        first.
       </p>
     );
   }
@@ -58,29 +54,44 @@ export function FlexSyncSection({
   return (
     <div className="flex max-w-xl flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <label htmlFor="flex-portfolioId" className="label">
-          Portfolio
+        <label htmlFor="flex-groupId" className="label">
+          Portfolio group
         </label>
         <select
-          id="flex-portfolioId"
-          value={selectedPortfolioId}
-          onChange={(e) => setSelectedPortfolioId(e.target.value)}
+          id="flex-groupId"
+          value={selectedGroupId}
+          onChange={(e) => {
+            setSelectedGroupId(e.target.value);
+            setResult(null);
+          }}
           className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
         >
-          <option value="">— select a portfolio —</option>
-          {portfolios.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
+          <option value="">— select a group —</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+              {g.hasCredentials ? "" : " (no IBKR credentials)"}
             </option>
           ))}
         </select>
+        {selectedGroup && !selectedGroup.hasCredentials ? (
+          <p className="text-xs text-loss">
+            This group has no IBKR credentials.{" "}
+            <a
+              href={`/groups/${selectedGroup.id}/settings`}
+              className="underline"
+            >
+              Configure them in group settings.
+            </a>
+          </p>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={handleSync}
-          disabled={isPending}
+          disabled={isPending || !selectedGroupId || (selectedGroup ? !selectedGroup.hasCredentials : false)}
           className="bg-accent px-4 py-2 text-sm text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {isPending ? "Fetching from IBKR…" : "Sync from IBKR"}

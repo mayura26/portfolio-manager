@@ -278,24 +278,6 @@ export const settingsSchema = z.object({
   pushEnabled: z.boolean().optional().default(false),
   watchlistAiModel: watchlistAiModelEnum.optional().default("gpt-5.4"),
   watchlistAiReasoning: watchlistAiReasoningEnum.optional().default("medium"),
-  ibkrFlexToken: z
-    .string()
-    .trim()
-    .optional()
-    .nullable()
-    .transform((v) => (v?.length ? v : null)),
-  ibkrFlexQueryId: z
-    .string()
-    .trim()
-    .optional()
-    .nullable()
-    .transform((v) => (v?.length ? v : null)),
-  ibkrPortfolioId: z
-    .string()
-    .trim()
-    .optional()
-    .nullable()
-    .transform((v) => (v?.length ? v : null)),
 });
 
 export type SettingsInput = z.infer<typeof settingsSchema>;

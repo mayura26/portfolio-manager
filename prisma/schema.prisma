@@ -20,9 +20,6 @@ model Settings {
   pushSubscription    Json?
   watchlistAiModel    String   @default("gpt-5.4")
   watchlistAiReasoning String  @default("medium")
-  ibkrFlexToken       String?
-  ibkrFlexQueryId     String?
-  ibkrPortfolioId     String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -360,6 +357,9 @@ model PortfolioGroup {
   // Target weight reserved for cash (0-100). Plus the target weights of all
   // portfolios in this group must equal 100.
   cashTargetPercent Decimal @default(0) @db.Decimal(8, 4)
+
+  ibkrFlexToken   String?
+  ibkrFlexQueryId String?
 
   aiCompositionAnalysis    Json?
   aiCompositionGeneratedAt DateTime?

@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { setGroupTargets, updateGroup } from "@/actions/groups";
 import { GroupForm } from "@/components/groups/group-form";
 import { GroupTargetsEditor } from "@/components/groups/group-targets-editor";
+import { IbkrGroupForm } from "@/components/groups/ibkr-group-form";
 import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 
@@ -67,7 +68,7 @@ async function GroupSettings({ params }: { params: Params }) {
         />
       </section>
 
-      <section>
+      <section className="mb-12">
         <h2 className="display mb-4 text-2xl text-foreground">Targets</h2>
         <GroupTargetsEditor
           groupId={groupId}
@@ -78,6 +79,24 @@ async function GroupSettings({ params }: { params: Params }) {
             targetPercentInGroup: p.targetPercentInGroup.toString(),
           }))}
           action={setGroupTargets}
+        />
+      </section>
+
+      <section>
+        <h2 className="display mb-2 text-2xl text-foreground">
+          Interactive Brokers
+        </h2>
+        <p className="mb-4 max-w-prose text-sm text-muted">
+          Link this group to an IBKR account. Trades synced via Flex API will be
+          routed to whichever portfolio in this group already holds the stock, or
+          placed in an &ldquo;Unassigned&rdquo; portfolio for you to sort later.
+        </p>
+        <IbkrGroupForm
+          groupId={groupId}
+          defaults={{
+            ibkrFlexToken: group.ibkrFlexToken,
+            ibkrFlexQueryId: group.ibkrFlexQueryId,
+          }}
         />
       </section>
     </div>

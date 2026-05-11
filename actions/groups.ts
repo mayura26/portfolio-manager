@@ -69,6 +69,28 @@ export async function deleteGroup(groupId: string): Promise<void> {
   redirect("/groups");
 }
 
+export async function updateGroupIbkr(
+  groupId: string,
+  _prev: GroupActionState | undefined,
+  formData: FormData,
+): Promise<GroupActionState> {
+  const token = formData.get("ibkrFlexToken");
+  const queryId = formData.get("ibkrFlexQueryId");
+
+  await db.portfolioGroup.update({
+    where: { id: groupId },
+    data: {
+      ibkrFlexToken:
+        typeof token === "string" && token.trim() ? token.trim() : null,
+      ibkrFlexQueryId:
+        typeof queryId === "string" && queryId.trim() ? queryId.trim() : null,
+    },
+  });
+
+  revalidatePath(`/groups/${groupId}/settings`);
+  return { ok: true };
+}
+
 /**
  * Bulk-set the target weights for every portfolio in a group plus the cash slot.
  * Validates that they sum to exactly 100%.
