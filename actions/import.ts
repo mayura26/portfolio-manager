@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { fetchFlexTrades } from "@/lib/import/ibkr-flex";
+import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
 import { importToGroup, type ImportResult } from "@/lib/import/ibkr-engine";
 
 export type ImportActionState =
@@ -27,9 +27,9 @@ export async function triggerFlexSync(
     };
   }
 
-  let trades;
+  let statement;
   try {
-    trades = await fetchFlexTrades(group.ibkrFlexToken, group.ibkrFlexQueryId);
+    statement = await fetchFlexStatement(group.ibkrFlexToken, group.ibkrFlexQueryId);
   } catch (err) {
     return {
       ok: false,
@@ -38,7 +38,7 @@ export async function triggerFlexSync(
   }
 
   try {
-    const result = await importToGroup(trades, groupId);
+    const result = await importToGroup(statement.trades, groupId, statement.cashTxs);
     revalidatePath(`/groups/${groupId}`);
     return { ok: true, ...result };
   } catch (err) {

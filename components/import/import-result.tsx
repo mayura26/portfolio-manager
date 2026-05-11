@@ -5,15 +5,29 @@ type Props = {
 };
 
 export function ImportResultDisplay({ result }: Props) {
+  const hasCash = result.cashInserted > 0 || result.cashSkipped > 0;
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-6 text-sm">
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <span className="text-gain">
-          <strong>{result.inserted}</strong> imported
+          <strong>{result.inserted}</strong> trade{result.inserted !== 1 ? "s" : ""} imported
         </span>
-        <span className="text-muted">
-          <strong>{result.skipped}</strong> skipped (duplicates)
-        </span>
+        {result.skipped > 0 ? (
+          <span className="text-muted">
+            <strong>{result.skipped}</strong> skipped (duplicates)
+          </span>
+        ) : null}
+        {hasCash ? (
+          <span className="text-gain">
+            <strong>{result.cashInserted}</strong> cash tx imported
+          </span>
+        ) : null}
+        {result.cashSkipped > 0 ? (
+          <span className="text-muted">
+            <strong>{result.cashSkipped}</strong> cash tx skipped
+          </span>
+        ) : null}
         {result.failed.length > 0 ? (
           <span className="text-loss">
             <strong>{result.failed.length}</strong> failed
@@ -24,7 +38,7 @@ export function ImportResultDisplay({ result }: Props) {
       {result.failed.length > 0 ? (
         <details className="hairline border-loss/30 bg-loss-soft">
           <summary className="cursor-pointer px-4 py-2 text-sm text-loss">
-            {result.failed.length} trade
+            {result.failed.length} item
             {result.failed.length !== 1 ? "s" : ""} could not be imported
           </summary>
           <ul className="flex flex-col divide-y divide-border px-4 pb-3 text-xs text-muted">

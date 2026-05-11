@@ -5,7 +5,7 @@
  */
 import "dotenv/config";
 import { db } from "@/lib/db";
-import { fetchFlexTrades } from "@/lib/import/ibkr-flex";
+import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
 import { importToGroup } from "@/lib/import/ibkr-engine";
 
 async function run() {
@@ -36,11 +36,11 @@ async function run() {
 
   for (const group of groups) {
     try {
-      const trades = await fetchFlexTrades(
+      const statement = await fetchFlexStatement(
         group.ibkrFlexToken!,
         group.ibkrFlexQueryId!,
       );
-      const result = await importToGroup(trades, group.id);
+      const result = await importToGroup(statement.trades, group.id, statement.cashTxs);
       results.push({ group: group.name, ok: true, ...result });
     } catch (err) {
       results.push({

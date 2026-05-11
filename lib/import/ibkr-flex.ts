@@ -1,4 +1,4 @@
-import type { ParsedTrade } from "./ibkr-csv";
+import type { ParsedCashTx, ParsedStatement, ParsedTrade } from "./ibkr-csv";
 
 const FLEX_BASE =
   "https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService";
@@ -31,10 +31,10 @@ async function fetchXml(url: string): Promise<string> {
   return res.text();
 }
 
-export async function fetchFlexTrades(
+export async function fetchFlexStatement(
   token: string,
   queryId: string,
-): Promise<ParsedTrade[]> {
+): Promise<ParsedStatement> {
   // Step 1: send the request and get a reference code
   const initUrl = `${FLEX_BASE}.SendRequest?t=${encodeURIComponent(token)}&q=${encodeURIComponent(queryId)}&v=3`;
   const initXml = await fetchXml(initUrl);
@@ -76,9 +76,9 @@ export async function fetchFlexTrades(
   if (!reportXml) throw new Error("IBKR Flex: report timed out after 30s");
 
   // Step 3: parse <Trade .../> elements
+  const trades: ParsedTrade[] = [];
   const tradeElements = reportXml.match(/<Trade [^/]+\/>/g) ?? [];
 
-  const trades: ParsedTrade[] = [];
   for (const el of tradeElements) {
     if (extractAttr(el, "assetCategory") !== "STK") continue;
 
@@ -102,7 +102,10 @@ export async function fetchFlexTrades(
       const date = parseFlexDate(rawDate);
       const type: "BUY" | "SELL" = qty > 0 ? "BUY" : "SELL";
       const quantity = Math.abs(qty).toString();
-      const fees = Math.max(0, Math.abs(Number.parseFloat(rawFee) || 0)).toString();
+      const fees = Math.max(
+        0,
+        Math.abs(Number.parseFloat(rawFee) || 0),
+      ).toString();
 
       trades.push({
         symbol,
@@ -119,5 +122,59 @@ export async function fetchFlexTrades(
     }
   }
 
+  // Step 4: parse <CashTransaction .../> elements
+  const cashTxs: ParsedCashTx[] = [];
+  const cashElements = reportXml.match(/<CashTransaction [^/]+\/>/g) ?? [];
+
+  for (const el of cashElements) {
+    const txType = extractAttr(el, "type");
+
+    let mappedType: ParsedCashTx["type"] | null = null;
+    if (txType === "Deposits/Withdrawals") {
+      mappedType = null; // determined by amount sign below
+    } else if (txType === "Dividends") {
+      mappedType = "DIVIDEND";
+    } else {
+      continue; // skip Interest, Withholding Tax, Fees, etc.
+    }
+
+    try {
+      const currency = extractAttr(el, "currency");
+      const rawDate = extractAttr(el, "dateTime");
+      const rawAmount = extractAttr(el, "amount");
+      const description = extractAttr(el, "description");
+      const transactionId = extractAttr(el, "transactionID");
+
+      if (!currency || !rawDate || !rawAmount) continue;
+
+      const amount = Number.parseFloat(rawAmount);
+      if (Number.isNaN(amount) || amount === 0) continue;
+
+      const date = parseFlexDate(rawDate);
+      const finalType: ParsedCashTx["type"] =
+        mappedType ?? (amount > 0 ? "DEPOSIT" : "WITHDRAWAL");
+
+      cashTxs.push({
+        currency,
+        date,
+        amount: amount.toString(),
+        type: finalType,
+        description,
+        externalRef: transactionId,
+      });
+    } catch {
+      // Skip unparseable elements
+    }
+  }
+
+  return { trades, cashTxs };
+}
+
+// Kept for backwards compatibility with any existing callers
+export async function fetchFlexTrades(
+  token: string,
+  queryId: string,
+): Promise<ParsedTrade[]> {
+  const { trades } = await fetchFlexStatement(token, queryId);
   return trades;
 }

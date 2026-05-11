@@ -381,6 +381,7 @@ enum CashTransactionType {
   SEED
   DEPOSIT
   WITHDRAWAL
+  DIVIDEND
 }
 
 model CashTransaction {
@@ -395,8 +396,11 @@ model CashTransaction {
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
+  externalRef String?
+
   group PortfolioGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
+  @@unique([groupId, externalRef])
   @@index([groupId, date])
 }
 

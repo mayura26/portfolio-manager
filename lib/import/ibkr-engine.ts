@@ -2,11 +2,13 @@ import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { findOrCreateInstrument } from "@/lib/instruments";
-import type { ParsedTrade } from "./ibkr-csv";
+import type { ParsedCashTx, ParsedTrade } from "./ibkr-csv";
 
 export type ImportResult = {
   inserted: number;
   skipped: number;
+  cashInserted: number;
+  cashSkipped: number;
   failed: { symbol: string; reason: string }[];
 };
 
@@ -32,10 +34,13 @@ async function getOrCreateUnassignedPortfolio(
 export async function importToGroup(
   trades: ParsedTrade[],
   groupId: string,
+  cashTxs: ParsedCashTx[] = [],
 ): Promise<ImportResult> {
   const failed: { symbol: string; reason: string }[] = [];
 
-  if (trades.length === 0) return { inserted: 0, skipped: 0, failed: [] };
+  if (trades.length === 0 && cashTxs.length === 0) {
+    return { inserted: 0, skipped: 0, cashInserted: 0, cashSkipped: 0, failed: [] };
+  }
 
   const group = await db.portfolioGroup.findUnique({
     where: { id: groupId },
@@ -180,17 +185,27 @@ export async function importToGroup(
     });
   }
 
-  if (rows.length === 0) {
-    return { inserted: 0, skipped: trades.length - failed.length, failed };
+  let inserted = 0;
+  let skipped = 0;
+
+  if (rows.length > 0) {
+    const result = await db.trade.createMany({
+      data: rows,
+      skipDuplicates: true,
+    });
+    inserted = result.count;
+    skipped = trades.length - failed.length - result.count;
+  } else {
+    skipped = trades.length - failed.length;
   }
 
-  const result = await db.trade.createMany({
-    data: rows,
-    skipDuplicates: true,
-  });
+  const { cashInserted, cashSkipped } = await importCashTransactions(
+    cashTxs,
+    groupId,
+    group.baseCurrency,
+  );
 
-  const skipped = trades.length - failed.length - result.count;
-  return { inserted: result.count, skipped, failed };
+  return { inserted, skipped, cashInserted, cashSkipped, failed };
 }
 
 // ─── Portfolio-based import (CSV upload) ─────────────────────────────────────
@@ -204,7 +219,7 @@ export async function importTrades(
 ): Promise<ImportResult> {
   const failed: { symbol: string; reason: string }[] = [];
 
-  if (trades.length === 0) return { inserted: 0, skipped: 0, failed: [] };
+  if (trades.length === 0) return { inserted: 0, skipped: 0, cashInserted: 0, cashSkipped: 0, failed: [] };
 
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
@@ -293,7 +308,7 @@ export async function importTrades(
   }
 
   if (rows.length === 0) {
-    return { inserted: 0, skipped: trades.length - failed.length, failed };
+    return { inserted: 0, skipped: trades.length - failed.length, cashInserted: 0, cashSkipped: 0, failed };
   }
 
   const result = await db.trade.createMany({
@@ -302,5 +317,78 @@ export async function importTrades(
   });
 
   const skipped = trades.length - failed.length - result.count;
-  return { inserted: result.count, skipped, failed };
+  return { inserted: result.count, skipped, cashInserted: 0, cashSkipped: 0, failed };
+}
+
+// ─── Cash transaction import ──────────────────────────────────────────────────
+
+export async function importCashToGroup(
+  cashTxs: ParsedCashTx[],
+  groupId: string,
+): Promise<{ cashInserted: number; cashSkipped: number }> {
+  const group = await db.portfolioGroup.findUnique({
+    where: { id: groupId },
+    select: { baseCurrency: true },
+  });
+  if (!group) throw new Error("Portfolio group not found");
+  return importCashTransactions(cashTxs, groupId, group.baseCurrency);
+}
+
+async function importCashTransactions(
+  cashTxs: ParsedCashTx[],
+  groupId: string,
+  groupBaseCurrency: string,
+): Promise<{ cashInserted: number; cashSkipped: number }> {
+  if (cashTxs.length === 0) return { cashInserted: 0, cashSkipped: 0 };
+
+  // Pre-fetch FX rates for all unique (currency, date) pairs
+  const fxCache = new Map<string, Decimal>();
+  const uniquePairs = [
+    ...new Set(
+      cashTxs.map(
+        (t) => `${t.currency}|${t.date.toISOString().split("T")[0]}`,
+      ),
+    ),
+  ];
+
+  for (const pair of uniquePairs) {
+    const [currency, dateStr] = pair.split("|");
+    if (!currency || !dateStr) continue;
+    if (currency.toUpperCase() === groupBaseCurrency.toUpperCase()) {
+      fxCache.set(pair, new Decimal(1));
+      continue;
+    }
+    try {
+      const rate = await getFxRate(currency, groupBaseCurrency, new Date(dateStr));
+      fxCache.set(pair, rate);
+    } catch {
+      // Use 1 as fallback rather than skipping cash transactions
+      fxCache.set(pair, new Decimal(1));
+    }
+  }
+
+  const rows = cashTxs.map((tx) => {
+    const dateKey = `${tx.currency}|${tx.date.toISOString().split("T")[0]}`;
+    const fxRate = fxCache.get(dateKey) ?? new Decimal(1);
+    return {
+      groupId,
+      type: tx.type as "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND",
+      amount: tx.amount,
+      currency: tx.currency,
+      fxRate: fxRate.toString(),
+      date: tx.date,
+      notes: tx.description || null,
+      externalRef: tx.externalRef,
+    };
+  });
+
+  const result = await db.cashTransaction.createMany({
+    data: rows,
+    skipDuplicates: true,
+  });
+
+  return {
+    cashInserted: result.count,
+    cashSkipped: cashTxs.length - result.count,
+  };
 }
