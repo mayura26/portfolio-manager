@@ -1,7 +1,32 @@
 import type { ParsedCashTx, ParsedStatement, ParsedTrade } from "./ibkr-csv";
 
+// Flex Web Service v3 endpoints.
+// Docs: https://www.interactivebrokers.com/campus/ibkr-api-page/flex-web-service/
 const FLEX_BASE =
-  "https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService";
+  "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService";
+
+// User-Agent is required by the Flex Web Service.
+const USER_AGENT = "portfolio-manager/0.1 (Java)";
+
+// Transient server-side error codes that should be retried with backoff.
+// 1001/1004-1009/1021 can come back from either SendRequest or GetStatement;
+// 1019 ("generation in progress") is the normal polling-loop signal.
+const TRANSIENT_ERROR_CODES = new Set([
+  "1001",
+  "1004",
+  "1005",
+  "1006",
+  "1007",
+  "1008",
+  "1009",
+  "1019",
+  "1021",
+]);
+
+// IBKR pacing: max 1 request/second, 10 requests/minute per token (error 1018).
+const MIN_REQUEST_GAP_MS = 1100;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function extractTag(xml: string, tag: string): string | null {
   const match = xml.match(new RegExp(`<${tag}>([^<]+)</${tag}>`));
@@ -26,54 +51,103 @@ function parseFlexDate(raw: string): Date {
 }
 
 async function fetchXml(url: string): Promise<string> {
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT, Accept: "application/xml" },
+  });
   if (!res.ok) throw new Error(`Flex request failed: ${res.status}`);
   return res.text();
+}
+
+type FlexError = { code: string; message: string };
+
+function readFlexError(xml: string): FlexError | null {
+  const code = extractTag(xml, "ErrorCode");
+  if (!code || code === "0") return null;
+  return {
+    code,
+    message: extractTag(xml, "ErrorMessage") ?? "Unknown error",
+  };
 }
 
 export async function fetchFlexStatement(
   token: string,
   queryId: string,
 ): Promise<ParsedStatement> {
-  // Step 1: send the request and get a reference code
-  const initUrl = `${FLEX_BASE}.SendRequest?t=${encodeURIComponent(token)}&q=${encodeURIComponent(queryId)}&v=3`;
-  const initXml = await fetchXml(initUrl);
+  // Step 1: SendRequest — retry on transient errors (1001, 1004-1009, 1021).
+  const sendUrl = `${FLEX_BASE}/SendRequest?t=${encodeURIComponent(token)}&q=${encodeURIComponent(queryId)}&v=3`;
 
-  const errorCode = extractTag(initXml, "ErrorCode");
-  if (errorCode && errorCode !== "0") {
-    const errorMsg = extractTag(initXml, "ErrorMessage") ?? "Unknown error";
-    throw new Error(`IBKR Flex error ${errorCode}: ${errorMsg}`);
-  }
+  let referenceCode: string | null = null;
+  let lastSendError: FlexError | null = null;
+  const sendMaxAttempts = 5;
 
-  const referenceCode = extractTag(initXml, "ReferenceCode");
-  const reportUrl = extractTag(initXml, "Url");
-  if (!referenceCode || !reportUrl) {
-    throw new Error("IBKR Flex: missing ReferenceCode or Url in response");
-  }
-
-  // Step 2: poll until the report is ready
-  const pollUrl = `${reportUrl}?t=${encodeURIComponent(token)}&q=${encodeURIComponent(referenceCode)}&v=3`;
-  let reportXml = "";
-
-  for (let attempt = 0; attempt < 10; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
-
-    const xml = await fetchXml(pollUrl);
-    const statusCode = extractTag(xml, "ErrorCode");
-
-    // 1019 = "Statement generation in progress"
-    if (statusCode === "1019") continue;
-
-    if (statusCode && statusCode !== "0") {
-      const msg = extractTag(xml, "ErrorMessage") ?? "Unknown error";
-      throw new Error(`IBKR Flex poll error ${statusCode}: ${msg}`);
+  for (let attempt = 0; attempt < sendMaxAttempts; attempt++) {
+    if (attempt > 0) {
+      // Exponential-ish backoff, respecting the 1 req/sec rule.
+      await sleep(Math.max(MIN_REQUEST_GAP_MS, 5000 * 2 ** (attempt - 1)));
     }
 
-    reportXml = xml;
-    break;
+    const xml = await fetchXml(sendUrl);
+    const err = readFlexError(xml);
+
+    if (!err) {
+      referenceCode = extractTag(xml, "ReferenceCode");
+      if (!referenceCode) {
+        throw new Error("IBKR Flex: missing ReferenceCode in response");
+      }
+      break;
+    }
+
+    lastSendError = err;
+    if (!TRANSIENT_ERROR_CODES.has(err.code)) {
+      throw new Error(`IBKR Flex error ${err.code}: ${err.message}`);
+    }
   }
 
-  if (!reportXml) throw new Error("IBKR Flex: report timed out after 30s");
+  if (!referenceCode) {
+    const msg = lastSendError
+      ? `${lastSendError.code}: ${lastSendError.message}`
+      : "unknown";
+    throw new Error(
+      `IBKR Flex: SendRequest failed after ${sendMaxAttempts} attempts (last error ${msg})`,
+    );
+  }
+
+  // Step 2: GetStatement — poll until ready. The <url> field returned by
+  // SendRequest is documented as a legacy value to be ignored; we build the
+  // GetStatement URL ourselves against the v3 endpoint.
+  const getUrl = `${FLEX_BASE}/GetStatement?t=${encodeURIComponent(token)}&q=${encodeURIComponent(referenceCode)}&v=3`;
+
+  // Per IBKR docs, large statements may take a while; give the backend a head
+  // start before the first poll.
+  await sleep(5000);
+
+  let reportXml = "";
+  const pollMaxAttempts = 20;
+  let lastPollError: FlexError | null = null;
+
+  for (let attempt = 0; attempt < pollMaxAttempts; attempt++) {
+    if (attempt > 0) await sleep(5000);
+
+    const xml = await fetchXml(getUrl);
+    const err = readFlexError(xml);
+
+    if (!err) {
+      reportXml = xml;
+      break;
+    }
+
+    lastPollError = err;
+    if (!TRANSIENT_ERROR_CODES.has(err.code)) {
+      throw new Error(`IBKR Flex poll error ${err.code}: ${err.message}`);
+    }
+  }
+
+  if (!reportXml) {
+    const msg = lastPollError
+      ? `${lastPollError.code}: ${lastPollError.message}`
+      : "no response";
+    throw new Error(`IBKR Flex: report not ready after polling (last: ${msg})`);
+  }
 
   // Step 3: parse <Trade .../> elements
   const trades: ParsedTrade[] = [];
