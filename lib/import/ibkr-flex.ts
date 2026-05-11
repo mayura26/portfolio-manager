@@ -77,7 +77,7 @@ export async function fetchFlexStatement(
 
   // Step 3: parse <Trade .../> elements
   const trades: ParsedTrade[] = [];
-  const tradeElements = reportXml.match(/<Trade [^/]+\/>/g) ?? [];
+  const tradeElements = reportXml.match(/<Trade\s[^>]*\/>/g) ?? [];
 
   for (const el of tradeElements) {
     if (extractAttr(el, "assetCategory") !== "STK") continue;
@@ -124,7 +124,7 @@ export async function fetchFlexStatement(
 
   // Step 4: parse <CashTransaction .../> elements
   const cashTxs: ParsedCashTx[] = [];
-  const cashElements = reportXml.match(/<CashTransaction [^/]+\/>/g) ?? [];
+  const cashElements = reportXml.match(/<CashTransaction\s[^>]*\/>/g) ?? [];
 
   for (const el of cashElements) {
     const txType = extractAttr(el, "type");
