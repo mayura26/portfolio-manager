@@ -187,3 +187,185 @@ export async function deleteTrade(tradeId: string): Promise<void> {
   revalidatePortfolio(trade.portfolioId);
   redirect(`/portfolios/${trade.portfolioId}/trades`);
 }
+
+// ── Trade reassignment ──────────────────────────────────────────────────────
+
+export type MoveTradesResult =
+  | { ok: true; moved: number }
+  | { ok: false; error: string };
+
+function revalidateAfterMove(portfolioIds: string[], groupIds: string[]) {
+  for (const pid of new Set(portfolioIds)) {
+    revalidatePath(`/portfolios/${pid}`);
+    revalidatePath(`/portfolios/${pid}/trades`);
+  }
+  for (const gid of new Set(groupIds)) {
+    revalidatePath(`/groups/${gid}`);
+    revalidatePath(`/groups/${gid}/cash`);
+  }
+  revalidatePath("/portfolios");
+  revalidatePath("/groups");
+  revalidatePath("/dashboard");
+  revalidatePath("/stocks");
+}
+
+/**
+ * Move a set of trades to `targetPortfolioId`. FX rates are recomputed against
+ * the target portfolio's base currency. If any trade with an `externalRef`
+ * would collide with an existing one in the target (the @@unique constraint),
+ * the entire move is rejected so the caller can decide how to resolve it.
+ */
+export async function moveTrades(
+  tradeIds: string[],
+  targetPortfolioId: string,
+): Promise<MoveTradesResult> {
+  if (tradeIds.length === 0) {
+    return { ok: false, error: "Select at least one trade to move." };
+  }
+
+  const target = await db.portfolio.findUnique({
+    where: { id: targetPortfolioId },
+    select: { id: true, groupId: true, baseCurrency: true },
+  });
+  if (!target) return { ok: false, error: "Target portfolio not found." };
+
+  const trades = await db.trade.findMany({
+    where: { id: { in: tradeIds } },
+    select: {
+      id: true,
+      currency: true,
+      date: true,
+      externalRef: true,
+      portfolioId: true,
+      portfolio: { select: { groupId: true } },
+    },
+  });
+
+  if (trades.length === 0) {
+    return { ok: false, error: "No matching trades found." };
+  }
+
+  const toMove = trades.filter((t) => t.portfolioId !== target.id);
+
+  if (toMove.length === 0) {
+    return {
+      ok: false,
+      error: "All selected trades already live in the target portfolio.",
+    };
+  }
+
+  // Pre-check externalRef conflicts so we fail cleanly instead of mid-transaction.
+  const refsToMove = toMove
+    .map((t) => t.externalRef)
+    .filter((r): r is string => Boolean(r));
+  if (refsToMove.length > 0) {
+    const conflicting = await db.trade.findMany({
+      where: {
+        portfolioId: target.id,
+        externalRef: { in: refsToMove },
+        id: { notIn: toMove.map((t) => t.id) },
+      },
+      select: { externalRef: true },
+    });
+    if (conflicting.length > 0) {
+      const refs = conflicting
+        .map((c) => c.externalRef)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ");
+      return {
+        ok: false,
+        error: `Target portfolio already has matching imported trades (${refs}${conflicting.length > 3 ? "…" : ""}). Move would create duplicates.`,
+      };
+    }
+  }
+
+  // Resolve all required FX rates up-front to keep the transaction tight.
+  const fxKey = (currency: string, date: Date) =>
+    `${currency.toUpperCase()}|${date.toISOString().split("T")[0]}`;
+  const neededRates = new Map<
+    string,
+    { currency: string; date: Date; rate: string | null }
+  >();
+  for (const t of toMove) {
+    const key = fxKey(t.currency, t.date);
+    if (neededRates.has(key)) continue;
+    if (t.currency.toUpperCase() === target.baseCurrency.toUpperCase()) {
+      neededRates.set(key, { currency: t.currency, date: t.date, rate: null });
+      continue;
+    }
+    try {
+      const rate = await getFxRate(t.currency, target.baseCurrency, t.date);
+      neededRates.set(key, {
+        currency: t.currency,
+        date: t.date,
+        rate: rate.toString(),
+      });
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          err instanceof Error
+            ? `FX lookup failed for ${t.currency} → ${target.baseCurrency}: ${err.message}`
+            : "FX lookup failed",
+      };
+    }
+  }
+
+  const sourcePortfolioIds = [...new Set(toMove.map((t) => t.portfolioId))];
+  const sourceGroupIds = [...new Set(toMove.map((t) => t.portfolio.groupId))];
+
+  await db.$transaction(
+    toMove.map((t) =>
+      db.trade.update({
+        where: { id: t.id },
+        data: {
+          portfolioId: target.id,
+          fxRate: neededRates.get(fxKey(t.currency, t.date))?.rate ?? null,
+        },
+      }),
+    ),
+  );
+
+  revalidateAfterMove(
+    [...sourcePortfolioIds, target.id],
+    [...sourceGroupIds, target.groupId],
+  );
+
+  return { ok: true, moved: toMove.length };
+}
+
+/**
+ * Move every trade in `sourcePortfolioId` whose instrument matches `instrumentId`
+ * to `targetPortfolioId`. Convenience wrapper around `moveTrades` for the
+ * "move all of $SYMBOL" UX.
+ */
+export async function moveTradesBySymbol(
+  sourcePortfolioId: string,
+  instrumentId: string,
+  targetPortfolioId: string,
+): Promise<MoveTradesResult> {
+  if (sourcePortfolioId === targetPortfolioId) {
+    return {
+      ok: false,
+      error: "Source and target portfolios are the same.",
+    };
+  }
+
+  const trades = await db.trade.findMany({
+    where: { portfolioId: sourcePortfolioId, instrumentId },
+    select: { id: true },
+  });
+
+  if (trades.length === 0) {
+    return {
+      ok: false,
+      error: "No trades found for that symbol in this portfolio.",
+    };
+  }
+
+  return moveTrades(
+    trades.map((t) => t.id),
+    targetPortfolioId,
+  );
+}

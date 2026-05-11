@@ -21,16 +21,36 @@ export default function TradesPage({
 
 async function TradesContent({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({
-    where: { id: portfolioId },
-    include: {
-      trades: {
-        orderBy: { date: "desc" },
-        include: { instrument: true },
+  const [portfolio, allPortfolios] = await Promise.all([
+    db.portfolio.findUnique({
+      where: { id: portfolioId },
+      include: {
+        trades: {
+          orderBy: { date: "desc" },
+          include: { instrument: true },
+        },
       },
-    },
-  });
+    }),
+    db.portfolio.findMany({
+      orderBy: [{ group: { name: "asc" } }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        baseCurrency: true,
+        group: { select: { id: true, name: true } },
+      },
+    }),
+  ]);
   if (!portfolio) notFound();
+
+  const moveTargets = allPortfolios
+    .filter((p) => p.id !== portfolio.id)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      groupName: p.group.name,
+      baseCurrency: p.baseCurrency,
+    }));
 
   if (portfolio.trades.length === 0) {
     return (
@@ -61,7 +81,11 @@ async function TradesContent({ params }: { params: Params }) {
           Add trade
         </Link>
       </div>
-      <TradeTable portfolioId={portfolio.id} trades={portfolio.trades} />
+      <TradeTable
+        portfolioId={portfolio.id}
+        trades={portfolio.trades}
+        moveTargets={moveTargets}
+      />
     </div>
   );
 }
