@@ -3,8 +3,6 @@ import { db } from "@/lib/db";
 import { extractForecastFromText } from "@/lib/forecasts-extract";
 import { fetchQuotes } from "@/lib/yahoo";
 
-export const runtime = "nodejs";
-
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME = new Set([
   "application/pdf",
@@ -150,8 +148,11 @@ function guessMimeFromName(name: string): string {
 async function extractPdfText(file: File): Promise<string> {
   // Avoid pdf-parse's debug-mode auto-test-file load by importing the internal lib.
   const mod = await import("pdf-parse/lib/pdf-parse.js");
-  const pdfParse = (mod as unknown as { default?: typeof mod } & typeof mod)
-    .default ?? mod;
+  type PdfParseFn = (
+    dataBuffer: Buffer,
+  ) => Promise<{ text?: string | undefined }>;
+  const pdfParse = ((mod as { default?: PdfParseFn }).default ??
+    mod) as PdfParseFn;
   const buf = Buffer.from(await file.arrayBuffer());
   const parsed = await pdfParse(buf);
   return parsed.text ?? "";
