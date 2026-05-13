@@ -105,6 +105,8 @@ function rowFromAllocation(r: {
   currency: string;
   targetPercent: { toString(): string };
   intendedBuyPrice: { toString(): string } | null;
+  intendedSellPrice: { toString(): string } | null;
+  trimAtGainPercent: { toString(): string } | null;
   notes: string | null;
   isHeld: boolean;
   hasTarget: boolean;
@@ -116,6 +118,12 @@ function rowFromAllocation(r: {
     currency: r.currency,
     targetPercent: r.hasTarget ? r.targetPercent.toString() : "0",
     intendedBuyPrice: r.intendedBuyPrice ? r.intendedBuyPrice.toString() : "",
+    intendedSellPrice: r.intendedSellPrice
+      ? r.intendedSellPrice.toString()
+      : "",
+    trimAtGainPercent: r.trimAtGainPercent
+      ? r.trimAtGainPercent.toString()
+      : "",
     notes: r.notes ?? "",
     isHeld: r.isHeld,
   };

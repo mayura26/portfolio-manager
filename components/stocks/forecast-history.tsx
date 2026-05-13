@@ -2,6 +2,8 @@ import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 
 type Forecast = {
   id: string;
+  source: "AI" | "USER";
+  isPinned: boolean;
   targetPrice: { toString(): string };
   lowCase: { toString(): string } | null;
   highCase: { toString(): string } | null;
@@ -29,6 +31,7 @@ export function ForecastHistory({ forecasts, currency }: Props) {
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="label px-3 py-3">Generated</th>
+              <th className="label px-3 py-3">Source</th>
               <th className="label px-3 py-3 text-right">Target</th>
               <th className="label px-3 py-3 text-right">Low</th>
               <th className="label px-3 py-3 text-right">High</th>
@@ -41,6 +44,10 @@ export function ForecastHistory({ forecasts, currency }: Props) {
               <tr key={f.id} className="border-b border-border last:border-b-0">
                 <td className="px-3 py-3 tabular text-muted">
                   {formatDate(f.generatedAt)}
+                </td>
+                <td className="px-3 py-3 text-xs">
+                  {f.source === "USER" ? "Yours" : "AI"}
+                  {f.isPinned ? " · pinned" : ""}
                 </td>
                 <td className="px-3 py-3 text-right tabular">
                   {formatCurrency(f.targetPrice.toString(), currency)}

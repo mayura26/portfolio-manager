@@ -11,7 +11,8 @@ export function ImportResultDisplay({ result }: Props) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <span className="text-gain">
-          <strong>{result.inserted}</strong> trade{result.inserted !== 1 ? "s" : ""} imported
+          <strong>{result.inserted}</strong> trade
+          {result.inserted !== 1 ? "s" : ""} imported
         </span>
         {result.skipped > 0 ? (
           <span className="text-muted">

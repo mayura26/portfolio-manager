@@ -100,6 +100,8 @@ export const portfolioTargetsSchema = z
           instrumentId: z.string().min(1),
           targetPercent: percentString,
           intendedBuyPrice: positiveDecimal.optional().nullable(),
+          intendedSellPrice: positiveDecimal.optional().nullable(),
+          trimAtGainPercent: nonNegativeDecimal.optional().nullable(),
           notes: z
             .string()
             .trim()

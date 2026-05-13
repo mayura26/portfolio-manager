@@ -5,6 +5,7 @@
  *   npm run cron:forecasts
  */
 import "dotenv/config";
+import { ensureTargetHitAlert } from "@/actions/forecasts";
 import { db } from "@/lib/db";
 import { analyzeStockForecast } from "@/lib/forecasts";
 import {
@@ -89,9 +90,10 @@ async function run() {
         horizonMonths: 12,
       });
 
-      await db.instrumentForecast.create({
+      const forecast = await db.instrumentForecast.create({
         data: {
           instrumentId: inst.id,
+          source: "AI",
           targetPrice: analysis.targetPrice.toString(),
           lowCase: analysis.lowCase.toString(),
           highCase: analysis.highCase.toString(),
@@ -100,8 +102,19 @@ async function run() {
           rationale: analysis.rationale,
           model,
           reasoningEffort,
+          streetTargetMean: financials.targetMeanPrice?.toString() ?? null,
+          streetTargetHigh: financials.targetHighPrice?.toString() ?? null,
+          streetTargetLow: financials.targetLowPrice?.toString() ?? null,
+          streetRecommendation: financials.recommendationKey ?? null,
+          streetNumberOfAnalysts: financials.numberOfAnalystOpinions ?? null,
         },
       });
+      await ensureTargetHitAlert(
+        forecast.id,
+        inst.id,
+        inst.symbol,
+        analysis.targetPrice,
+      );
       generated++;
     } catch (err) {
       failures.push({

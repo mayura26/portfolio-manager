@@ -1,6 +1,10 @@
 import { formatCurrency, formatPercent, formatRelative } from "@/lib/format";
+import { PinForecastButton } from "./pin-forecast-button";
 
 type Forecast = {
+  id: string;
+  source: "AI" | "USER";
+  isPinned: boolean;
   targetPrice: { toString(): string };
   lowCase: { toString(): string } | null;
   highCase: { toString(): string } | null;
@@ -9,6 +13,7 @@ type Forecast = {
   rationale: string;
   generatedAt: Date;
   model: string;
+  streetTargetMean?: { toString(): string } | null;
 };
 
 type Props = {
@@ -28,6 +33,14 @@ export function ForecastCard({ forecast, currency, emptyText }: Props) {
 
   return (
     <div className="hairline flex flex-col gap-4 bg-surface px-5 py-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <SourceBadge source={forecast.source} isPinned={forecast.isPinned} />
+        <PinForecastButton
+          forecastId={forecast.id}
+          isPinned={forecast.isPinned}
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-4">
         <Stat
           label={`Target (${forecast.horizonMonths}m)`}
@@ -64,6 +77,15 @@ export function ForecastCard({ forecast, currency, emptyText }: Props) {
         />
       </div>
 
+      {forecast.streetTargetMean ? (
+        <p className="text-xs text-subtle">
+          Street consensus:&nbsp;
+          <span className="tabular text-foreground">
+            {formatCurrency(forecast.streetTargetMean.toString(), currency)}
+          </span>
+        </p>
+      ) : null}
+
       <p className="text-sm text-foreground">{forecast.rationale}</p>
 
       <p className="text-xs text-subtle">
@@ -71,6 +93,24 @@ export function ForecastCard({ forecast, currency, emptyText }: Props) {
         {forecast.model}
       </p>
     </div>
+  );
+}
+
+function SourceBadge({
+  source,
+  isPinned,
+}: {
+  source: "AI" | "USER";
+  isPinned: boolean;
+}) {
+  const label =
+    source === "USER" ? (isPinned ? "Yours (pinned)" : "Yours") : "AI";
+  const tone =
+    source === "USER"
+      ? "bg-accent text-accent-foreground"
+      : "bg-surface-elevated text-muted";
+  return (
+    <span className={`hairline px-2 py-0.5 text-xs ${tone}`}>{label}</span>
   );
 }
 

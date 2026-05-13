@@ -45,7 +45,8 @@
       "Bash(Get-ChildItem -Path \"D:\\\\VSCode Projects\\\\portfolio-manager\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(grep -E \"lib\\\\\\\\\\\\\\\\signals|forecasts|forecast-upload|forecast-card|forecast-history|pin-forecast|signals-card|signals-panel|price-chart|portfolio-allocation|portfolio-targets|alerts.ts|holding-targets-editor|validators|yahoo.ts|cron-forecasts|stocks.\\\\[symbol\\\\]|dashboard.page|forecasts-extract|analysis.upload\")"
     ]
   }
 }

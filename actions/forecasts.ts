@@ -67,9 +67,10 @@ export async function generateStockForecast(
     };
   }
 
-  await db.instrumentForecast.create({
+  const forecast = await db.instrumentForecast.create({
     data: {
       instrumentId: instrument.id,
+      source: "AI",
       targetPrice: analysis.targetPrice.toString(),
       lowCase: analysis.lowCase.toString(),
       highCase: analysis.highCase.toString(),
@@ -78,9 +79,168 @@ export async function generateStockForecast(
       rationale: analysis.rationale,
       model,
       reasoningEffort,
+      streetTargetMean: financials.targetMeanPrice?.toString() ?? null,
+      streetTargetHigh: financials.targetHighPrice?.toString() ?? null,
+      streetTargetLow: financials.targetLowPrice?.toString() ?? null,
+      streetRecommendation: financials.recommendationKey ?? null,
+      streetNumberOfAnalysts: financials.numberOfAnalystOpinions ?? null,
     },
   });
 
+  await ensureTargetHitAlert(
+    forecast.id,
+    instrument.id,
+    instrument.symbol,
+    analysis.targetPrice,
+  );
+
   revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  return { ok: true };
+}
+
+// Creates a TARGET_HIT alert for the given forecast and dismisses any
+// previously active TARGET_HIT alerts on the same instrument so weekly cron
+// regeneration doesn't accumulate stale alerts.
+export async function ensureTargetHitAlert(
+  forecastId: string,
+  instrumentId: string,
+  symbol: string,
+  targetPrice: number,
+) {
+  const existing = await db.alert.findFirst({
+    where: { forecastId, type: "TARGET_HIT", status: "ACTIVE" },
+  });
+  if (existing) return existing.id;
+
+  await db.alert.updateMany({
+    where: {
+      instrumentId,
+      type: "TARGET_HIT",
+      status: "ACTIVE",
+      forecastId: { not: forecastId },
+    },
+    data: { status: "DISMISSED" },
+  });
+
+  const alert = await db.alert.create({
+    data: {
+      type: "TARGET_HIT",
+      priceDirection: "above",
+      instrumentId,
+      forecastId,
+      priceTarget: targetPrice.toString(),
+      message: `${symbol}: price reached forecast target`,
+    },
+  });
+  return alert.id;
+}
+
+export type UserForecastInput = {
+  instrumentId: string;
+  targetPrice: number;
+  lowCase: number | null;
+  highCase: number | null;
+  expectedReturn: number | null;
+  horizonMonths: number;
+  rationale: string;
+  documentId: string | null;
+};
+
+export async function saveUserForecast(
+  input: UserForecastInput,
+): Promise<ForecastActionState> {
+  const instrument = await db.instrument.findUnique({
+    where: { id: input.instrumentId },
+  });
+  if (!instrument) return { ok: false, error: "Instrument not found" };
+
+  if (!Number.isFinite(input.targetPrice) || input.targetPrice <= 0) {
+    return { ok: false, error: "Target price must be positive" };
+  }
+  if (input.lowCase != null && input.lowCase >= input.targetPrice) {
+    return { ok: false, error: "Bear case must be below target" };
+  }
+  if (input.highCase != null && input.highCase <= input.targetPrice) {
+    return { ok: false, error: "Bull case must be above target" };
+  }
+
+  const settings = await db.settings.findUnique({ where: { id: "singleton" } });
+  const pin = settings?.pinUserForecastsByDefault ?? true;
+
+  // Pinning is one-at-a-time. If the user wants this pinned, clear any existing pin first.
+  if (pin) {
+    await db.instrumentForecast.updateMany({
+      where: { instrumentId: instrument.id, isPinned: true },
+      data: { isPinned: false },
+    });
+  }
+
+  const forecast = await db.instrumentForecast.create({
+    data: {
+      instrumentId: instrument.id,
+      source: "USER",
+      isPinned: pin,
+      documentId: input.documentId,
+      targetPrice: input.targetPrice.toString(),
+      lowCase: input.lowCase?.toString() ?? null,
+      highCase: input.highCase?.toString() ?? null,
+      expectedReturn: input.expectedReturn?.toString() ?? null,
+      horizonMonths: input.horizonMonths,
+      rationale: input.rationale,
+      model: "user",
+      reasoningEffort: "manual",
+    },
+  });
+
+  await ensureTargetHitAlert(
+    forecast.id,
+    instrument.id,
+    instrument.symbol,
+    input.targetPrice,
+  );
+
+  revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  return { ok: true };
+}
+
+export async function pinForecast(
+  forecastId: string,
+): Promise<ForecastActionState> {
+  const forecast = await db.instrumentForecast.findUnique({
+    where: { id: forecastId },
+    include: { instrument: true },
+  });
+  if (!forecast) return { ok: false, error: "Forecast not found" };
+
+  await db.$transaction([
+    db.instrumentForecast.updateMany({
+      where: { instrumentId: forecast.instrumentId, isPinned: true },
+      data: { isPinned: false },
+    }),
+    db.instrumentForecast.update({
+      where: { id: forecastId },
+      data: { isPinned: true },
+    }),
+  ]);
+
+  revalidatePath(`/stocks/${forecast.instrument.yahooSymbol}`);
+  return { ok: true };
+}
+
+export async function unpinForecast(
+  forecastId: string,
+): Promise<ForecastActionState> {
+  const forecast = await db.instrumentForecast.findUnique({
+    where: { id: forecastId },
+    include: { instrument: true },
+  });
+  if (!forecast) return { ok: false, error: "Forecast not found" };
+
+  await db.instrumentForecast.update({
+    where: { id: forecastId },
+    data: { isPinned: false },
+  });
+
+  revalidatePath(`/stocks/${forecast.instrument.yahooSymbol}`);
   return { ok: true };
 }

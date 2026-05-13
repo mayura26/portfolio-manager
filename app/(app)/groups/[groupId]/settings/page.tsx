@@ -88,8 +88,9 @@ async function GroupSettings({ params }: { params: Params }) {
         </h2>
         <p className="mb-4 max-w-prose text-sm text-muted">
           Link this group to an IBKR account. Trades synced via Flex API will be
-          routed to whichever portfolio in this group already holds the stock, or
-          placed in an &ldquo;Unassigned&rdquo; portfolio for you to sort later.
+          routed to whichever portfolio in this group already holds the stock,
+          or placed in an &ldquo;Unassigned&rdquo; portfolio for you to sort
+          later.
         </p>
         <IbkrGroupForm
           groupId={groupId}

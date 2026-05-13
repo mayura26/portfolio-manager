@@ -24,11 +24,19 @@ export async function setPortfolioTargets(
   const buyPrices = formData
     .getAll("intendedBuyPrice")
     .map((v) => v.toString());
+  const sellPrices = formData
+    .getAll("intendedSellPrice")
+    .map((v) => v.toString());
+  const trimGains = formData
+    .getAll("trimAtGainPercent")
+    .map((v) => v.toString());
   const notes = formData.getAll("notes").map((v) => v.toString());
 
   if (
     instrumentIds.length !== targets.length ||
     instrumentIds.length !== buyPrices.length ||
+    instrumentIds.length !== sellPrices.length ||
+    instrumentIds.length !== trimGains.length ||
     instrumentIds.length !== notes.length
   ) {
     return { ok: false, error: "Mismatched target inputs" };
@@ -38,6 +46,8 @@ export async function setPortfolioTargets(
     instrumentId: id,
     targetPercent: targets[i],
     intendedBuyPrice: buyPrices[i].length > 0 ? buyPrices[i] : null,
+    intendedSellPrice: sellPrices[i].length > 0 ? sellPrices[i] : null,
+    trimAtGainPercent: trimGains[i].length > 0 ? trimGains[i] : null,
     notes: notes[i].length > 0 ? notes[i] : undefined,
   }));
 
@@ -84,11 +94,15 @@ export async function setPortfolioTargets(
           instrumentId: row.instrumentId,
           targetPercent: row.targetPercent,
           intendedBuyPrice: row.intendedBuyPrice ?? null,
+          intendedSellPrice: row.intendedSellPrice ?? null,
+          trimAtGainPercent: row.trimAtGainPercent ?? null,
           notes: row.notes ?? null,
         },
         update: {
           targetPercent: row.targetPercent,
           intendedBuyPrice: row.intendedBuyPrice ?? null,
+          intendedSellPrice: row.intendedSellPrice ?? null,
+          trimAtGainPercent: row.trimAtGainPercent ?? null,
           notes: row.notes ?? null,
         },
       });

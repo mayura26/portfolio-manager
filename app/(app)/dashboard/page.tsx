@@ -11,6 +11,7 @@ import {
   ReviewsSummary,
   ReviewsSummarySkeleton,
 } from "@/components/dashboard/reviews-summary";
+import { SignalsPanel } from "@/components/dashboard/signals-panel";
 import {
   SummaryCards,
   SummaryCardsSkeleton,
@@ -23,6 +24,7 @@ import {
   ValueChart,
   ValueChartSkeleton,
 } from "@/components/dashboard/value-chart";
+import { Skeleton } from "@/components/shared/skeleton";
 
 export default function DashboardPage() {
   return (
@@ -61,6 +63,13 @@ export default function DashboardPage() {
           </Suspense>
         </section>
       </div>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">Signals</h2>
+        <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+          <SignalsPanel />
+        </Suspense>
+      </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="flex flex-col gap-3">

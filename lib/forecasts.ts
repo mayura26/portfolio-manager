@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { db } from "./db";
 import type { DailyBar, FinancialSummary } from "./yahoo";
 
 export type ForecastResult = {
@@ -32,7 +33,8 @@ Rules:
 - expectedReturn: percentage return implied by targetPrice vs currentPrice (positive or negative number).
 - horizonMonths: integer months for which the targetPrice applies. Echo back whatever was requested.
 - rationale: 3–5 plain-English sentences. Cover the central case, the key bull/bear drivers, and what would falsify your view. No markdown, no JSON inside it.
-- Ground the forecast in the supplied fundamentals and recent price action. Be deliberate about valuation, growth, and macro sensitivity.`;
+- Ground the forecast in the supplied fundamentals and recent price action. Be deliberate about valuation, growth, and macro sensitivity.
+- Street consensus (if provided) is one input among many — explicitly agree, diverge, or argue why; do not anchor blindly.`;
 
 function buildUserMessage(input: ForecastInput): string {
   const { symbol, name, currency, currentPrice, financials, recentBars } =
@@ -59,6 +61,14 @@ function buildUserMessage(input: ForecastInput): string {
     profitMargin: financials.profitMargin,
     returnOnEquity: financials.returnOnEquity,
     priceToBook: financials.priceToBook,
+    streetConsensus: {
+      targetMean: financials.targetMeanPrice,
+      targetHigh: financials.targetHighPrice,
+      targetLow: financials.targetLowPrice,
+      recommendationMean: financials.recommendationMean,
+      recommendationKey: financials.recommendationKey,
+      numberOfAnalysts: financials.numberOfAnalystOpinions,
+    },
     last20DailyCloses: `[${last20}]`,
   };
 
@@ -163,4 +173,25 @@ export async function analyzeStockForecast(
     rationale: result.rationale,
     generatedAt: new Date().toISOString(),
   };
+}
+
+// Picks the forecast that should be shown to the user and used by signals.
+// Priority: explicitly pinned > latest USER-source > latest AI-source.
+export async function resolveActiveForecast(instrumentId: string) {
+  const pinned = await db.instrumentForecast.findFirst({
+    where: { instrumentId, isPinned: true },
+    orderBy: { generatedAt: "desc" },
+  });
+  if (pinned) return pinned;
+
+  const user = await db.instrumentForecast.findFirst({
+    where: { instrumentId, source: "USER" },
+    orderBy: { generatedAt: "desc" },
+  });
+  if (user) return user;
+
+  return db.instrumentForecast.findFirst({
+    where: { instrumentId, source: "AI" },
+    orderBy: { generatedAt: "desc" },
+  });
 }

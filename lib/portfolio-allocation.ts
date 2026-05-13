@@ -18,6 +18,8 @@ export type AllocationRow = {
   targetPercent: Decimal;
   driftPercent: Decimal;
   intendedBuyPrice: Decimal | null;
+  intendedSellPrice: Decimal | null;
+  trimAtGainPercent: Decimal | null;
   notes: string | null;
   hasTarget: boolean;
   isHeld: boolean;
@@ -75,6 +77,12 @@ export async function computePortfolioAllocation(
       intendedBuyPrice: target?.intendedBuyPrice
         ? new Decimal(target.intendedBuyPrice.toString())
         : null,
+      intendedSellPrice: target?.intendedSellPrice
+        ? new Decimal(target.intendedSellPrice.toString())
+        : null,
+      trimAtGainPercent: target?.trimAtGainPercent
+        ? new Decimal(target.trimAtGainPercent.toString())
+        : null,
       notes: target?.notes ?? null,
       hasTarget: !!target,
       isHeld: true,
@@ -99,6 +107,12 @@ export async function computePortfolioAllocation(
       driftPercent: targetPct.negated(),
       intendedBuyPrice: t.intendedBuyPrice
         ? new Decimal(t.intendedBuyPrice.toString())
+        : null,
+      intendedSellPrice: t.intendedSellPrice
+        ? new Decimal(t.intendedSellPrice.toString())
+        : null,
+      trimAtGainPercent: t.trimAtGainPercent
+        ? new Decimal(t.trimAtGainPercent.toString())
         : null,
       notes: t.notes,
       hasTarget: true,

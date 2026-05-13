@@ -60,7 +60,12 @@ async function CsvSection() {
 
 async function FlexSection() {
   const groups = await db.portfolioGroup.findMany({
-    select: { id: true, name: true, ibkrFlexToken: true, ibkrFlexQueryId: true },
+    select: {
+      id: true,
+      name: true,
+      ibkrFlexToken: true,
+      ibkrFlexQueryId: true,
+    },
     orderBy: { name: "asc" },
   });
   return (

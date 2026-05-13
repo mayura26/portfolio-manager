@@ -352,6 +352,12 @@ export type FinancialSummary = {
   totalRevenue: number | null;
   freeCashflow: number | null;
   longBusinessSummary: string | null;
+  targetMeanPrice: number | null;
+  targetHighPrice: number | null;
+  targetLowPrice: number | null;
+  recommendationMean: number | null;
+  recommendationKey: string | null;
+  numberOfAnalystOpinions: number | null;
 };
 
 export async function fetchFinancialSummary(
@@ -396,6 +402,12 @@ export async function fetchFinancialSummary(
       totalRevenue: fin?.totalRevenue ?? null,
       freeCashflow: fin?.freeCashflow ?? null,
       longBusinessSummary: profile?.longBusinessSummary ?? null,
+      targetMeanPrice: fin?.targetMeanPrice ?? null,
+      targetHighPrice: fin?.targetHighPrice ?? null,
+      targetLowPrice: fin?.targetLowPrice ?? null,
+      recommendationMean: fin?.recommendationMean ?? null,
+      recommendationKey: fin?.recommendationKey ?? null,
+      numberOfAnalystOpinions: fin?.numberOfAnalystOpinions ?? null,
     };
   } catch {
     return null;

@@ -29,7 +29,10 @@ export async function triggerFlexSync(
 
   let statement;
   try {
-    statement = await fetchFlexStatement(group.ibkrFlexToken, group.ibkrFlexQueryId);
+    statement = await fetchFlexStatement(
+      group.ibkrFlexToken,
+      group.ibkrFlexQueryId,
+    );
   } catch (err) {
     return {
       ok: false,
@@ -38,7 +41,11 @@ export async function triggerFlexSync(
   }
 
   try {
-    const result = await importToGroup(statement.trades, groupId, statement.cashTxs);
+    const result = await importToGroup(
+      statement.trades,
+      groupId,
+      statement.cashTxs,
+    );
     revalidatePath(`/groups/${groupId}`);
     return { ok: true, ...result };
   } catch (err) {

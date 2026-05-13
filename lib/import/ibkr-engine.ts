@@ -39,7 +39,13 @@ export async function importToGroup(
   const failed: { symbol: string; reason: string }[] = [];
 
   if (trades.length === 0 && cashTxs.length === 0) {
-    return { inserted: 0, skipped: 0, cashInserted: 0, cashSkipped: 0, failed: [] };
+    return {
+      inserted: 0,
+      skipped: 0,
+      cashInserted: 0,
+      cashSkipped: 0,
+      failed: [],
+    };
   }
 
   const group = await db.portfolioGroup.findUnique({
@@ -104,11 +110,15 @@ export async function importToGroup(
     let portfolioBaseCurrency: string;
 
     if (portfolioId) {
-      portfolioBaseCurrency = portfolioCurrencyMap.get(portfolioId) ?? group.baseCurrency;
+      portfolioBaseCurrency =
+        portfolioCurrencyMap.get(portfolioId) ?? group.baseCurrency;
     } else {
       // New symbol — route to Unassigned portfolio (create once)
       if (!unassigned) {
-        unassigned = await getOrCreateUnassignedPortfolio(groupId, group.baseCurrency);
+        unassigned = await getOrCreateUnassignedPortfolio(
+          groupId,
+          group.baseCurrency,
+        );
         // Add to ownership tracking so subsequent trades of same symbol also route here
         portfolioCurrencyMap.set(unassigned.id, unassigned.baseCurrency);
       }
@@ -117,7 +127,12 @@ export async function importToGroup(
       ownershipMap.set(instrument.id, portfolioId);
     }
 
-    resolved.push({ trade, instrumentId: instrument.id, portfolioId, portfolioBaseCurrency });
+    resolved.push({
+      trade,
+      instrumentId: instrument.id,
+      portfolioId,
+      portfolioBaseCurrency,
+    });
   }
 
   // Pre-fetch FX rates for all unique (tradeCurrency, baseCurrency, date) triplets
@@ -160,7 +175,12 @@ export async function importToGroup(
     externalRef: string;
   }[] = [];
 
-  for (const { trade, instrumentId, portfolioId, portfolioBaseCurrency } of resolved) {
+  for (const {
+    trade,
+    instrumentId,
+    portfolioId,
+    portfolioBaseCurrency,
+  } of resolved) {
     const fxKey = `${trade.currency}|${portfolioBaseCurrency}|${trade.date.toISOString().split("T")[0]}`;
     const fxRate = fxCache.get(fxKey);
     if (!fxRate) {
@@ -219,7 +239,14 @@ export async function importTrades(
 ): Promise<ImportResult> {
   const failed: { symbol: string; reason: string }[] = [];
 
-  if (trades.length === 0) return { inserted: 0, skipped: 0, cashInserted: 0, cashSkipped: 0, failed: [] };
+  if (trades.length === 0)
+    return {
+      inserted: 0,
+      skipped: 0,
+      cashInserted: 0,
+      cashSkipped: 0,
+      failed: [],
+    };
 
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
@@ -308,7 +335,13 @@ export async function importTrades(
   }
 
   if (rows.length === 0) {
-    return { inserted: 0, skipped: trades.length - failed.length, cashInserted: 0, cashSkipped: 0, failed };
+    return {
+      inserted: 0,
+      skipped: trades.length - failed.length,
+      cashInserted: 0,
+      cashSkipped: 0,
+      failed,
+    };
   }
 
   const result = await db.trade.createMany({
@@ -317,7 +350,13 @@ export async function importTrades(
   });
 
   const skipped = trades.length - failed.length - result.count;
-  return { inserted: result.count, skipped, cashInserted: 0, cashSkipped: 0, failed };
+  return {
+    inserted: result.count,
+    skipped,
+    cashInserted: 0,
+    cashSkipped: 0,
+    failed,
+  };
 }
 
 // ─── Cash transaction import ──────────────────────────────────────────────────
@@ -345,9 +384,7 @@ async function importCashTransactions(
   const fxCache = new Map<string, Decimal>();
   const uniquePairs = [
     ...new Set(
-      cashTxs.map(
-        (t) => `${t.currency}|${t.date.toISOString().split("T")[0]}`,
-      ),
+      cashTxs.map((t) => `${t.currency}|${t.date.toISOString().split("T")[0]}`),
     ),
   ];
 
@@ -359,7 +396,11 @@ async function importCashTransactions(
       continue;
     }
     try {
-      const rate = await getFxRate(currency, groupBaseCurrency, new Date(dateStr));
+      const rate = await getFxRate(
+        currency,
+        groupBaseCurrency,
+        new Date(dateStr),
+      );
       fxCache.set(pair, rate);
     } catch {
       // Use 1 as fallback rather than skipping cash transactions

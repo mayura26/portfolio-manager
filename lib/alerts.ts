@@ -62,6 +62,7 @@ async function evaluateOne(
 ): Promise<boolean> {
   switch (alert.type) {
     case "PRICE_ABOVE":
+    case "TARGET_HIT":
       return await evalPriceCross(alert, "above");
     case "PRICE_BELOW":
       return await evalPriceCross(alert, "below");
@@ -143,6 +144,8 @@ function priorityFor(type: AlertWithRelations["type"]): number {
     case "PRICE_BELOW":
     case "PCT_CHANGE":
       return 2;
+    case "TARGET_HIT":
+      return 3;
     case "FORECAST_DEVIATION":
       return 2;
     case "ALLOCATION_DRIFT":
@@ -159,6 +162,7 @@ function notificationTypeFor(type: AlertWithRelations["type"]) {
     case "PRICE_ABOVE":
     case "PRICE_BELOW":
     case "PCT_CHANGE":
+    case "TARGET_HIT":
       return "PRICE_ALERT" as const;
     case "REVIEW_TIMER":
       return "REVIEW_DUE" as const;
@@ -184,6 +188,8 @@ function titleFor(alert: AlertWithRelations): string {
       return `${sym} fell below target`;
     case "PCT_CHANGE":
       return `${sym} moved beyond threshold`;
+    case "TARGET_HIT":
+      return `${sym} reached forecast target`;
     case "REVIEW_TIMER":
       return `Review due: ${sym}`;
     case "ALLOCATION_DRIFT":

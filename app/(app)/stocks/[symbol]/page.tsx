@@ -7,6 +7,7 @@ import {
 } from "@/components/stocks/financials-panel";
 import { ForecastCard } from "@/components/stocks/forecast-card";
 import { ForecastHistory } from "@/components/stocks/forecast-history";
+import { ForecastUpload } from "@/components/stocks/forecast-upload";
 import { NewsFeed, NewsFeedSkeleton } from "@/components/stocks/news-feed";
 import {
   PriceChart,
@@ -14,7 +15,9 @@ import {
   parsePriceChartRange,
 } from "@/components/stocks/price-chart";
 import { RunForecastButton } from "@/components/stocks/run-forecast-button";
+import { SignalsCard } from "@/components/stocks/signals-card";
 import { db } from "@/lib/db";
+import { resolveActiveForecast } from "@/lib/forecasts";
 
 type Params = Promise<{ symbol: string }>;
 type SearchParams = Promise<{ range?: string | string[] }>;
@@ -34,6 +37,12 @@ export default function StockOverviewPage({
         </section>
 
         <section>
+          <Suspense fallback={null}>
+            <SignalsLoader params={params} />
+          </Suspense>
+        </section>
+
+        <section>
           <div className="mb-4 flex items-end justify-between">
             <h2 className="display text-2xl text-foreground">AI forecast</h2>
             <Suspense fallback={null}>
@@ -42,6 +51,9 @@ export default function StockOverviewPage({
           </div>
           <Suspense fallback={<Skeleton className="h-32 w-full" />}>
             <ForecastLoader params={params} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <ForecastUploadLoader params={params} />
           </Suspense>
         </section>
 
@@ -71,6 +83,22 @@ async function ForecastButtonLoader({ params }: { params: Params }) {
   return <RunForecastButton instrumentId={instrument.id} />;
 }
 
+async function SignalsLoader({ params }: { params: Params }) {
+  const { symbol } = await params;
+  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  if (!instrument) return null;
+  return <SignalsCard instrumentId={instrument.id} />;
+}
+
+async function ForecastUploadLoader({ params }: { params: Params }) {
+  const { symbol } = await params;
+  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  if (!instrument) return null;
+  return <ForecastUpload instrumentId={instrument.id} />;
+}
+
 async function ForecastLoader({ params }: { params: Params }) {
   const { symbol } = await params;
   const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
@@ -82,14 +110,13 @@ async function ForecastLoader({ params }: { params: Params }) {
   });
   if (!instrument) notFound();
 
-  const latest = instrument.forecasts[0] ?? null;
+  const active = await resolveActiveForecast(instrument.id);
+  const history = instrument.forecasts.filter((f) => f.id !== active?.id);
+
   return (
     <div className="flex flex-col gap-3">
-      <ForecastCard forecast={latest} currency={instrument.currency} />
-      <ForecastHistory
-        forecasts={instrument.forecasts.slice(1)}
-        currency={instrument.currency}
-      />
+      <ForecastCard forecast={active} currency={instrument.currency} />
+      <ForecastHistory forecasts={history} currency={instrument.currency} />
     </div>
   );
 }
@@ -109,6 +136,7 @@ async function PriceChartLoader({
   if (!instrument) notFound();
   return (
     <PriceChart
+      instrumentId={instrument.id}
       yahooSymbol={instrument.yahooSymbol}
       currency={instrument.currency}
       range={range}

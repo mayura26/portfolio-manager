@@ -16,6 +16,8 @@ type Row = {
   currency: string;
   targetPercent: string;
   intendedBuyPrice: string;
+  intendedSellPrice: string;
+  trimAtGainPercent: string;
   notes: string;
   isHeld: boolean;
 };
@@ -77,6 +79,8 @@ export function HoldingTargetsEditor({
         currency: found.currency,
         targetPercent: "0",
         intendedBuyPrice: watchlistBuyPrices[found.id] ?? "",
+        intendedSellPrice: "",
+        trimAtGainPercent: "",
         notes: "",
         isHeld: false,
       },
@@ -105,7 +109,9 @@ export function HoldingTargetsEditor({
             <tr className="border-b border-border text-left text-muted">
               <th className="label px-3 py-3">Instrument</th>
               <th className="label px-3 py-3 text-right">Target %</th>
-              <th className="label px-3 py-3 text-right">Intended buy price</th>
+              <th className="label px-3 py-3 text-right">Buy price</th>
+              <th className="label px-3 py-3 text-right">Sell price</th>
+              <th className="label px-3 py-3 text-right">Trim at %</th>
               <th className="label px-3 py-3">Notes</th>
               <th className="label px-3 py-3" />
             </tr>
@@ -114,7 +120,7 @@ export function HoldingTargetsEditor({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={7}
                   className="px-3 py-8 text-center text-sm text-muted"
                 >
                   No targets yet. Add an instrument below to start.
@@ -169,7 +175,39 @@ export function HoldingTargetsEditor({
                           intendedBuyPrice: e.target.value,
                         })
                       }
-                      className="hairline tabular w-32 bg-surface px-2 py-1 text-right text-sm"
+                      className="hairline tabular w-28 bg-surface px-2 py-1 text-right text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      name="intendedSellPrice"
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      placeholder="—"
+                      value={r.intendedSellPrice}
+                      onChange={(e) =>
+                        updateRow(r.instrumentId, {
+                          intendedSellPrice: e.target.value,
+                        })
+                      }
+                      className="hairline tabular w-28 bg-surface px-2 py-1 text-right text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      name="trimAtGainPercent"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="—"
+                      value={r.trimAtGainPercent}
+                      onChange={(e) =>
+                        updateRow(r.instrumentId, {
+                          trimAtGainPercent: e.target.value,
+                        })
+                      }
+                      className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
                     />
                   </td>
                   <td className="px-3 py-3">

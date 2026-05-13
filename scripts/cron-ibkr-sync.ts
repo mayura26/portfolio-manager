@@ -40,7 +40,11 @@ async function run() {
         group.ibkrFlexToken!,
         group.ibkrFlexQueryId!,
       );
-      const result = await importToGroup(statement.trades, group.id, statement.cashTxs);
+      const result = await importToGroup(
+        statement.trades,
+        group.id,
+        statement.cashTxs,
+      );
       results.push({ group: group.name, ok: true, ...result });
     } catch (err) {
       results.push({

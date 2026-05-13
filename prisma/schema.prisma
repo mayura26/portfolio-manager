@@ -14,14 +14,16 @@ datasource db {
 // ─────────────────────────────────────────────────────────────
 
 model Settings {
-  id                  String   @id @default("singleton")
-  defaultBaseCurrency String   @default("USD")
-  pushEnabled         Boolean  @default(false)
-  pushSubscription    Json?
-  watchlistAiModel    String   @default("gpt-5.4")
-  watchlistAiReasoning String  @default("medium")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                        String   @id @default("singleton")
+  defaultBaseCurrency       String   @default("USD")
+  pushEnabled               Boolean  @default(false)
+  pushSubscription          Json?
+  watchlistAiModel          String   @default("gpt-5.4")
+  watchlistAiReasoning      String   @default("medium")
+  sellSignalGainPercent     Decimal  @default(25) @db.Decimal(8, 4)
+  pinUserForecastsByDefault Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -168,6 +170,7 @@ enum AlertType {
   DIVIDEND_EVENT
   EARNINGS_EVENT
   FORECAST_DEVIATION
+  TARGET_HIT
 }
 
 enum AlertStatus {
@@ -411,14 +414,16 @@ model CashTransaction {
 // ─────────────────────────────────────────────────────────────
 
 model PortfolioTarget {
-  id               String   @id @default(cuid())
-  portfolioId      String
-  instrumentId     String
-  targetPercent    Decimal  @db.Decimal(8, 4)
-  intendedBuyPrice Decimal? @db.Decimal(18, 4)
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  portfolioId        String
+  instrumentId       String
+  targetPercent      Decimal  @db.Decimal(8, 4)
+  intendedBuyPrice   Decimal? @db.Decimal(18, 4)
+  intendedSellPrice  Decimal? @db.Decimal(18, 4)
+  trimAtGainPercent  Decimal? @db.Decimal(8, 4)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
@@ -433,21 +438,59 @@ model PortfolioTarget {
 // see how the thesis has evolved.
 // ─────────────────────────────────────────────────────────────
 
+enum ForecastSource {
+  AI
+  USER
+}
+
 model InstrumentForecast {
-  id              String   @id @default(cuid())
+  id              String         @id @default(cuid())
   instrumentId    String
-  targetPrice     Decimal  @db.Decimal(18, 4)
-  lowCase         Decimal? @db.Decimal(18, 4)
-  highCase        Decimal? @db.Decimal(18, 4)
-  expectedReturn  Decimal? @db.Decimal(8, 4)
-  horizonMonths   Int      @default(12)
+  source          ForecastSource @default(AI)
+  isPinned        Boolean        @default(false)
+  documentId      String?
+  targetPrice     Decimal        @db.Decimal(18, 4)
+  lowCase         Decimal?       @db.Decimal(18, 4)
+  highCase        Decimal?       @db.Decimal(18, 4)
+  expectedReturn  Decimal?       @db.Decimal(8, 4)
+  horizonMonths   Int            @default(12)
   rationale       String
   model           String
   reasoningEffort String
-  generatedAt     DateTime @default(now())
 
-  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  // Snapshot of Yahoo street consensus at generation time (AI rows only).
+  streetTargetMean       Decimal? @db.Decimal(18, 4)
+  streetTargetHigh       Decimal? @db.Decimal(18, 4)
+  streetTargetLow        Decimal? @db.Decimal(18, 4)
+  streetRecommendation   String?
+  streetNumberOfAnalysts Int?
+
+  generatedAt DateTime @default(now())
+
+  instrument Instrument                   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  document   InstrumentForecastDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
   alerts     Alert[]
 
   @@index([instrumentId, generatedAt(sort: Desc)])
+  @@index([instrumentId, source, generatedAt(sort: Desc)])
+  @@index([instrumentId, isPinned])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Instrument Forecast Documents
+// User-uploaded analysis docs (PDF/MD/TXT). We store extracted text only.
+// ─────────────────────────────────────────────────────────────
+
+model InstrumentForecastDocument {
+  id             String   @id @default(cuid())
+  instrumentId   String
+  filename       String
+  mimeType       String
+  byteSize       Int
+  extractedText  String
+  createdAt      DateTime @default(now())
+
+  forecasts InstrumentForecast[]
+
+  @@index([instrumentId, createdAt(sort: Desc)])
 }

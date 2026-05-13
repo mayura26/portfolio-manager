@@ -91,7 +91,11 @@ export function FlexSyncSection({ groups }: Props) {
         <button
           type="button"
           onClick={handleSync}
-          disabled={isPending || !selectedGroupId || (selectedGroup ? !selectedGroup.hasCredentials : false)}
+          disabled={
+            isPending ||
+            !selectedGroupId ||
+            (selectedGroup ? !selectedGroup.hasCredentials : false)
+          }
           className="bg-accent px-4 py-2 text-sm text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {isPending ? "Fetching from IBKR…" : "Sync from IBKR"}

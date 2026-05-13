@@ -138,7 +138,12 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
           type,
           price: price.toString(),
           fees,
-          externalRef: fingerprint(symbol, date.toISOString(), quantity, rawPrice),
+          externalRef: fingerprint(
+            symbol,
+            date.toISOString(),
+            quantity,
+            rawPrice,
+          ),
         });
       } catch {
         // Skip unparseable rows
