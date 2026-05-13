@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import type { ParsedStatement } from "@/lib/import/ibkr-csv";
+import { type ImportResult, importToGroup } from "@/lib/import/ibkr-engine";
 import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
-import { importToGroup, type ImportResult } from "@/lib/import/ibkr-engine";
 
 export type ImportActionState =
   | ({ ok: true } & ImportResult)
@@ -27,7 +28,7 @@ export async function triggerFlexSync(
     };
   }
 
-  let statement;
+  let statement: ParsedStatement;
   try {
     statement = await fetchFlexStatement(
       group.ibkrFlexToken,

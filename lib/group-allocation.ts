@@ -48,7 +48,12 @@ export async function computeGroupAllocation(
 ): Promise<GroupAllocation> {
   const group = await db.portfolioGroup.findUnique({
     where: { id: groupId },
-    include: { portfolios: { orderBy: { name: "asc" } } },
+    include: {
+      portfolios: {
+        orderBy: { name: "asc" },
+        include: { _count: { select: { trades: true } } },
+      },
+    },
   });
   if (!group) throw new Error(`PortfolioGroup ${groupId} not found`);
 
@@ -80,6 +85,13 @@ export async function computeGroupAllocation(
   const rows: GroupRow[] = [];
   for (const { portfolio, valueInGroupBase } of portfolioValues) {
     const targetPct = new Decimal(portfolio.targetPercentInGroup.toString());
+    if (
+      portfolio.name === "Unassigned" &&
+      portfolio._count.trades === 0 &&
+      targetPct.abs().lt(new Decimal("0.0001"))
+    ) {
+      continue;
+    }
     const actualPct = totalValueBase.gt(0)
       ? valueInGroupBase.dividedBy(totalValueBase).times(100)
       : ZERO;

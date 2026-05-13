@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { parseIbkrCsv } from "@/lib/import/ibkr-csv";
+import { type ParsedStatement, parseIbkrCsv } from "@/lib/import/ibkr-csv";
 import { importCashToGroup, importTrades } from "@/lib/import/ibkr-engine";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  let statement;
+  let statement: ParsedStatement;
   try {
     statement = parseIbkrCsv(csvText);
   } catch (err) {

@@ -18,6 +18,7 @@ import { RunForecastButton } from "@/components/stocks/run-forecast-button";
 import { SignalsCard } from "@/components/stocks/signals-card";
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
+import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
 
 type Params = Promise<{ symbol: string }>;
 type SearchParams = Promise<{ range?: string | string[] }>;
@@ -77,7 +78,8 @@ export default function StockOverviewPage({
 
 async function ForecastButtonLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) return null;
   return <RunForecastButton instrumentId={instrument.id} />;
@@ -85,7 +87,8 @@ async function ForecastButtonLoader({ params }: { params: Params }) {
 
 async function SignalsLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) return null;
   return <SignalsCard instrumentId={instrument.id} />;
@@ -93,7 +96,8 @@ async function SignalsLoader({ params }: { params: Params }) {
 
 async function ForecastUploadLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) return null;
   return <ForecastUpload instrumentId={instrument.id} />;
@@ -101,7 +105,8 @@ async function ForecastUploadLoader({ params }: { params: Params }) {
 
 async function ForecastLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({
     where: { yahooSymbol },
     include: {
@@ -131,7 +136,8 @@ async function PriceChartLoader({
   const { symbol } = await params;
   const query = await searchParams;
   const range = parsePriceChartRange(query.range);
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
   return (
@@ -146,7 +152,8 @@ async function PriceChartLoader({
 
 async function FinancialsLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
   return (
@@ -159,7 +166,8 @@ async function FinancialsLoader({ params }: { params: Params }) {
 
 async function NewsLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
   return <NewsFeed yahooSymbol={instrument.yahooSymbol} />;

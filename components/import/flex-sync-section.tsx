@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { triggerFlexSync, type ImportActionState } from "@/actions/import";
+import { useState, useTransition } from "react";
+import { type ImportActionState, triggerFlexSync } from "@/actions/import";
 import { ImportResultDisplay } from "./import-result";
 
 type Group = { id: string; name: string; hasCredentials: boolean };

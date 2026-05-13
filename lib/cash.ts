@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { Prisma } from "@/app/generated/prisma/client";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
 
@@ -26,41 +27,37 @@ export type GroupCash = {
   ledger: CashLedgerEntry[];
 };
 
-/**
- * Compute the current cash balance for a portfolio group.
- *
- * Cash flows in via SEED + DEPOSIT cash transactions and via SELL trade proceeds
- * across every portfolio in the group. Cash flows out via WITHDRAWAL transactions
- * and BUY trade costs (qty * price + fees). All amounts are converted to the
- * group's base currency using the rate on the transaction/trade date.
- */
-export async function computeGroupCash(groupId: string): Promise<GroupCash> {
+const groupCashInclude = {
+  cashTransactions: { orderBy: { date: "asc" as const } },
+  portfolios: {
+    include: { trades: { orderBy: { date: "asc" as const } } },
+  },
+} satisfies Prisma.PortfolioGroupInclude;
+
+type GroupWithCashRelations = Prisma.PortfolioGroupGetPayload<{
+  include: typeof groupCashInclude;
+}>;
+
+async function loadGroupForCash(
+  groupId: string,
+): Promise<GroupWithCashRelations> {
   const group = await db.portfolioGroup.findUnique({
     where: { id: groupId },
-    include: {
-      cashTransactions: { orderBy: { date: "asc" } },
-      portfolios: {
-        include: { trades: { orderBy: { date: "asc" } } },
-      },
-    },
+    include: groupCashInclude,
   });
   if (!group) throw new Error(`PortfolioGroup ${groupId} not found`);
+  return group;
+}
 
+async function materializeLedgerForGroup(
+  group: GroupWithCashRelations,
+): Promise<CashLedgerEntry[]> {
   const baseCurrency = group.baseCurrency;
-  let seededAndDeposits = ZERO;
-  let withdrawals = ZERO;
-  let tradeOutflows = ZERO;
-  let tradeInflows = ZERO;
   const ledger: CashLedgerEntry[] = [];
 
   for (const ct of group.cashTransactions) {
     const amount = new Decimal(ct.amount.toString());
     const inBase = await toBase(amount, ct.currency, baseCurrency, ct.date);
-    if (ct.type === "WITHDRAWAL") {
-      withdrawals = withdrawals.plus(inBase);
-    } else {
-      seededAndDeposits = seededAndDeposits.plus(inBase);
-    }
     ledger.push({
       id: ct.id,
       kind: "transaction",
@@ -93,7 +90,6 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
       );
       if (trade.type === "BUY") {
         const cost = grossBase.plus(feesBase);
-        tradeOutflows = tradeOutflows.plus(cost);
         ledger.push({
           id: trade.id,
           kind: "trade",
@@ -106,7 +102,6 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
         });
       } else {
         const proceeds = grossBase.minus(feesBase);
-        tradeInflows = tradeInflows.plus(proceeds);
         ledger.push({
           id: trade.id,
           kind: "trade",
@@ -122,22 +117,98 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
   }
 
   ledger.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return ledger;
+}
 
-  const currentCash = seededAndDeposits
-    .minus(withdrawals)
-    .plus(tradeInflows)
-    .minus(tradeOutflows);
+function aggregatesFromLedger(ledger: CashLedgerEntry[]): {
+  seededAndDeposits: Decimal;
+  withdrawals: Decimal;
+  tradeOutflows: Decimal;
+  tradeInflows: Decimal;
+  currentCash: Decimal;
+} {
+  let seededAndDeposits = ZERO;
+  let withdrawals = ZERO;
+  let tradeOutflows = ZERO;
+  let tradeInflows = ZERO;
+  let currentCash = ZERO;
+
+  for (const e of ledger) {
+    currentCash = currentCash.plus(e.amountBase);
+    if (e.kind === "transaction") {
+      if (e.type === "WITHDRAWAL") {
+        withdrawals = withdrawals.plus(e.amountBase.abs());
+      } else {
+        seededAndDeposits = seededAndDeposits.plus(e.amountBase);
+      }
+    } else if (e.type === "BUY") {
+      tradeOutflows = tradeOutflows.plus(e.amountBase.abs());
+    } else {
+      tradeInflows = tradeInflows.plus(e.amountBase);
+    }
+  }
 
   return {
-    groupId,
-    baseCurrency,
-    currentCash,
     seededAndDeposits,
     withdrawals,
     tradeOutflows,
     tradeInflows,
+    currentCash,
+  };
+}
+
+/**
+ * Sorted cash ledger for a group (group base currency), for history charts and computeGroupCash.
+ */
+export async function getGroupCashLedger(
+  groupId: string,
+): Promise<{ baseCurrency: string; ledger: CashLedgerEntry[] }> {
+  const group = await loadGroupForCash(groupId);
+  const ledger = await materializeLedgerForGroup(group);
+  return { baseCurrency: group.baseCurrency, ledger };
+}
+
+/**
+ * Compute the current cash balance for a portfolio group.
+ *
+ * Cash flows in via SEED + DEPOSIT cash transactions and via SELL trade proceeds
+ * across every portfolio in the group. Cash flows out via WITHDRAWAL transactions
+ * and BUY trade costs (qty * price + fees). All amounts are converted to the
+ * group's base currency using the rate on the transaction/trade date.
+ */
+export async function computeGroupCash(groupId: string): Promise<GroupCash> {
+  const group = await loadGroupForCash(groupId);
+  const ledger = await materializeLedgerForGroup(group);
+  const agg = aggregatesFromLedger(ledger);
+
+  return {
+    groupId,
+    baseCurrency: group.baseCurrency,
+    currentCash: agg.currentCash,
+    seededAndDeposits: agg.seededAndDeposits,
+    withdrawals: agg.withdrawals,
+    tradeOutflows: agg.tradeOutflows,
+    tradeInflows: agg.tradeInflows,
     ledger,
   };
+}
+
+export function cashBalanceInGroupBaseThroughUtcDay(
+  ledger: CashLedgerEntry[],
+  throughDay: Date,
+): Decimal {
+  const through = utcDayKey(throughDay);
+  let sum = ZERO;
+  for (const e of ledger) {
+    if (utcDayKey(e.date) <= through) {
+      sum = sum.plus(e.amountBase);
+    }
+  }
+  return sum;
+}
+
+export function utcDayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 async function toBase(

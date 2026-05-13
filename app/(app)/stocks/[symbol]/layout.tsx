@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
 import { StockTabs } from "@/components/stocks/stock-tabs";
 import { db } from "@/lib/db";
+import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
 
 type Params = Promise<{ symbol: string }>;
 
@@ -28,7 +29,8 @@ export default function StockLayout({
 
 async function StockHeader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) notFound();
 
@@ -57,13 +59,9 @@ async function StockHeader({ params }: { params: Params }) {
 
 async function StockTabsLoader({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
-  const instrument = await db.instrument.findUnique({
-    where: { yahooSymbol },
-    select: { yahooSymbol: true },
-  });
-  if (!instrument) return null;
-  return <StockTabs yahooSymbol={instrument.yahooSymbol} />;
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
+  return <StockTabs yahooSymbol={yahooSymbol} />;
 }
 
 function HeaderSkeleton() {

@@ -11,9 +11,11 @@ export async function ValueChart({ days = 90 }: Props) {
   return (
     <ValueChartClient
       baseCurrency={data.baseCurrency}
+      stackedCash
       points={data.points.map((p) => ({
         date: p.date.toISOString(),
-        value: p.value,
+        equities: p.equities,
+        cash: p.cash,
       }))}
     />
   );

@@ -5,6 +5,7 @@ import { PortfolioCard } from "@/components/portfolios/portfolio-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
+import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 
 export default function PortfoliosPage() {
   return (
@@ -36,6 +37,7 @@ export default function PortfoliosPage() {
 
 async function PortfolioList() {
   const portfolios = await db.portfolio.findMany({
+    where: excludeEmptyUnassignedWhere,
     orderBy: { createdAt: "desc" },
   });
 

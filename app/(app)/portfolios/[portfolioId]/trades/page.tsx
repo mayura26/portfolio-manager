@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
 import { TradeTable } from "@/components/trades/trade-table";
 import { db } from "@/lib/db";
+import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -32,6 +33,7 @@ async function TradesContent({ params }: { params: Params }) {
       },
     }),
     db.portfolio.findMany({
+      where: excludeEmptyUnassignedWhere,
       orderBy: [{ group: { name: "asc" } }, { name: "asc" }],
       select: {
         id: true,

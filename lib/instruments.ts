@@ -3,6 +3,58 @@ import { fetchDailyHistory, lookupInstrument } from "@/lib/yahoo";
 
 const BACKFILL_DAYS = 30;
 
+/** Normalize `[symbol]` route param (decode + trim + upper-case). */
+export function normalizeStockUrlSymbol(raw: string): string {
+  return decodeURIComponent(raw).trim().toUpperCase();
+}
+
+/**
+ * Yahoo symbols to try for `/stocks/[symbol]` when the path omits the
+ * exchange suffix (e.g. `000660` → `000660.KS` on Yahoo / in our DB).
+ */
+export function yahooSymbolCandidatesForUrlPath(key: string): string[] {
+  const out: string[] = [key];
+  if (!key.includes(".")) {
+    if (/^\d{6}$/.test(key)) {
+      out.push(`${key}.KS`, `${key}.KQ`);
+    }
+    if (/^\d{4}$/.test(key)) {
+      out.push(`${key}.T`);
+    }
+    if (/^\d{5}$/.test(key)) {
+      out.push(`${key}.HK`);
+    }
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Map a `/stocks/[symbol]` path segment to the canonical `Instrument.yahooSymbol`
+ * stored in the DB (e.g. `000660` → `000660.KS`). Returns null if unknown.
+ */
+export async function resolveInstrumentYahooSymbolFromUrlPath(
+  rawSegment: string,
+): Promise<string | null> {
+  const key = normalizeStockUrlSymbol(rawSegment);
+  if (!key) return null;
+
+  for (const yahooSymbol of yahooSymbolCandidatesForUrlPath(key)) {
+    const row = await db.instrument.findUnique({
+      where: { yahooSymbol },
+      select: { yahooSymbol: true },
+    });
+    if (row) return row.yahooSymbol;
+  }
+
+  const byLocalSymbol = await db.instrument.findMany({
+    where: { symbol: key },
+    select: { yahooSymbol: true },
+    take: 2,
+  });
+  if (byLocalSymbol.length === 1) return byLocalSymbol[0].yahooSymbol;
+  return null;
+}
+
 /**
  * Resolve an instrument by its Yahoo symbol. If we haven't seen it before,
  * fetch metadata from Yahoo, persist it, and seed a short price history

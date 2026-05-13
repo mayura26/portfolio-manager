@@ -5,8 +5,8 @@
  */
 import "dotenv/config";
 import { db } from "@/lib/db";
-import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
 import { importToGroup } from "@/lib/import/ibkr-engine";
+import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
 
 async function run() {
   const groups = await db.portfolioGroup.findMany({
@@ -35,11 +35,12 @@ async function run() {
   const results = [];
 
   for (const group of groups) {
+    const token = group.ibkrFlexToken;
+    const queryId = group.ibkrFlexQueryId;
+    if (!token || !queryId) continue;
+
     try {
-      const statement = await fetchFlexStatement(
-        group.ibkrFlexToken!,
-        group.ibkrFlexQueryId!,
-      );
+      const statement = await fetchFlexStatement(token, queryId);
       const result = await importToGroup(
         statement.trades,
         group.id,

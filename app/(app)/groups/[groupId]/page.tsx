@@ -6,6 +6,10 @@ import { CompositionPanel } from "@/components/composition/composition-panel";
 import { RunCompositionButton } from "@/components/composition/run-composition-button";
 import { AllocationChartClient } from "@/components/dashboard/allocation-chart-client";
 import { GroupAllocationTable } from "@/components/groups/group-allocation-table";
+import {
+  GroupValueChart,
+  GroupValueChartSkeleton,
+} from "@/components/groups/group-value-chart";
 import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/format";
@@ -107,7 +111,10 @@ async function GroupDetail({ params }: { params: Params }) {
             allocation.baseCurrency,
           )}
         />
-        <Stat label="Portfolios" value={`${allocation.rows.length - 1}`} />
+        <Stat
+          label="Portfolios"
+          value={`${allocation.rows.filter((r) => r.kind === "portfolio").length}`}
+        />
       </div>
 
       {allocation.hasMissingPrices ? (
@@ -116,6 +123,15 @@ async function GroupDetail({ params }: { params: Params }) {
           wait for it to run.
         </p>
       ) : null}
+
+      <section className="mt-8 flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">Value over time</h2>
+        <div className="hairline bg-surface px-5 py-5">
+          <Suspense fallback={<GroupValueChartSkeleton />}>
+            <GroupValueChart groupId={group.id} days={90} />
+          </Suspense>
+        </div>
+      </section>
 
       {groupSlices.length > 0 ? (
         <div className="hairline mt-8 bg-surface px-5 py-5">

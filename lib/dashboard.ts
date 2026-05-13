@@ -1,8 +1,19 @@
 import Decimal from "decimal.js";
 import { getSettings } from "@/actions/settings";
+import {
+  cashBalanceInGroupBaseThroughUtcDay,
+  computeGroupCash,
+  getGroupCashLedger,
+} from "@/lib/cash";
 import { db } from "@/lib/db";
-import { getFxRate } from "@/lib/fx";
-import { computeHoldings, type Holding } from "@/lib/holdings";
+import { convert, getFxRate } from "@/lib/fx";
+import {
+  computeFifoOpenCostBasis,
+  computeHoldings,
+  type FifoCostTradeInput,
+  type Holding,
+} from "@/lib/holdings";
+import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -13,6 +24,7 @@ export type DashboardSummary = {
   holdingCount: number;
   totalCostBase: Decimal;
   totalMarketValueBase: Decimal;
+  totalCashBase: Decimal;
   totalUnrealizedPnL: Decimal;
   totalRealizedPnL: Decimal;
   totalDailyChange: Decimal;
@@ -38,10 +50,15 @@ export type TopMover = {
   changeAmount: Decimal;
 };
 
-export type ValueHistoryPoint = {
+export type ValueHistoryStackedPoint = {
   date: Date;
-  value: number;
+  equities: number;
+  cash: number;
+  /** Portfolio charts: FIFO cost of open lots (portfolio base currency). */
+  costBasis?: number;
 };
+
+export type GroupValueHistorySeries = { key: string; label: string };
 
 type EnrichedHolding = Holding & {
   portfolioId: string;
@@ -67,6 +84,7 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
   const [settings, portfolios] = await Promise.all([
     getSettings(),
     db.portfolio.findMany({
+      where: excludeEmptyUnassignedWhere,
       select: { id: true, name: true, baseCurrency: true },
     }),
   ]);
@@ -179,12 +197,24 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       ? totalDailyChange.dividedBy(previousValue).times(100)
       : null;
 
+  const groups = await db.portfolioGroup.findMany({ select: { id: true } });
+  const now = new Date();
+  let totalCashBase = ZERO;
+  for (const g of groups) {
+    const cash = await computeGroupCash(g.id);
+    if (cash.currentCash.isZero()) continue;
+    totalCashBase = totalCashBase.plus(
+      await convert(cash.currentCash, cash.baseCurrency, ws.baseCurrency, now),
+    );
+  }
+
   return {
     baseCurrency: ws.baseCurrency,
     portfolioCount: ws.portfolios.length,
     holdingCount: ws.enriched.length,
     totalCostBase,
     totalMarketValueBase,
+    totalCashBase,
     totalUnrealizedPnL,
     totalRealizedPnL: ws.totalRealizedGlobal,
     totalDailyChange: canComputeDaily ? totalDailyChange : ZERO,
@@ -280,7 +310,7 @@ export async function getTopMovers(limit = 5): Promise<{
 
 export async function getValueHistory(days = 30): Promise<{
   baseCurrency: string;
-  points: ValueHistoryPoint[];
+  points: ValueHistoryStackedPoint[];
 }> {
   const settings = await getSettings();
   const baseCurrency = settings.defaultBaseCurrency;
@@ -293,7 +323,51 @@ export async function getValueHistory(days = 30): Promise<{
     },
   });
 
-  if (trades.length === 0) return { baseCurrency, points: [] };
+  const curve = await buildEquityHistoryCurve(trades, days, baseCurrency);
+  if (!curve) return { baseCurrency, points: [] };
+
+  const groups = await db.portfolioGroup.findMany({ select: { id: true } });
+  const ledgers = await Promise.all(
+    groups.map(async (g) => getGroupCashLedger(g.id)),
+  );
+
+  const points: ValueHistoryStackedPoint[] = [];
+  for (let i = 0; i < curve.dates.length; i++) {
+    const day = curve.dates[i];
+    let cashGlobal = ZERO;
+    for (const gl of ledgers) {
+      const bal = cashBalanceInGroupBaseThroughUtcDay(gl.ledger, day);
+      if (!bal.isZero()) {
+        cashGlobal = cashGlobal.plus(
+          await convert(bal, gl.baseCurrency, baseCurrency, day),
+        );
+      }
+    }
+    points.push({
+      date: day,
+      equities: Number(curve.equities[i].toFixed(2)),
+      cash: Number(cashGlobal.toFixed(2)),
+    });
+  }
+
+  return { baseCurrency, points };
+}
+
+type TradeForEquityCurve = {
+  date: Date;
+  instrumentId: string;
+  portfolioId: string;
+  type: "BUY" | "SELL";
+  quantity: { toString(): string };
+  instrument: { currency: string };
+};
+
+async function buildEquityHistoryCurve(
+  trades: TradeForEquityCurve[],
+  days: number,
+  targetBaseCurrency: string,
+): Promise<{ dates: Date[]; equities: Decimal[] } | null> {
+  if (trades.length === 0) return null;
 
   const earliestTrade = trades[0].date;
   const since = new Date();
@@ -307,7 +381,6 @@ export async function getValueHistory(days = 30): Promise<{
     orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
   });
 
-  // Build per-instrument latest-close-up-to-date lookup
   const pricesByInstrument = new Map<
     string,
     { date: Date; close: Decimal }[]
@@ -325,20 +398,20 @@ export async function getValueHistory(days = 30): Promise<{
     prices.map((p) => p.date),
     startDate,
   );
-  if (dates.length === 0) return { baseCurrency, points: [] };
+  if (dates.length === 0) return null;
 
   const fxCache = new Map<string, Decimal>();
-  async function fxOn(from: string, to: string): Promise<Decimal> {
+  async function fxOn(from: string, to: string, asOf: Date): Promise<Decimal> {
     if (from === to) return ONE;
-    const key = `${from}-${to}`;
+    const key = `${from}-${to}-${asOf.toISOString().slice(0, 10)}`;
     const cached = fxCache.get(key);
     if (cached) return cached;
-    const rate = await getFxRate(from, to);
+    const rate = await getFxRate(from, to, asOf);
     fxCache.set(key, rate);
     return rate;
   }
 
-  const points: ValueHistoryPoint[] = [];
+  const equities: Decimal[] = [];
   for (const day of dates) {
     let dayValue = ZERO;
     for (const instrumentId of instrumentIds) {
@@ -348,13 +421,208 @@ export async function getValueHistory(days = 30): Promise<{
       if (!close) continue;
       const trade = trades.find((t) => t.instrumentId === instrumentId);
       if (!trade) continue;
-      const fx = await fxOn(trade.instrument.currency, baseCurrency);
+      const fx = await fxOn(trade.instrument.currency, targetBaseCurrency, day);
       dayValue = dayValue.plus(qty.times(close).times(fx));
     }
-    points.push({ date: day, value: Number(dayValue.toFixed(2)) });
+    equities.push(dayValue);
   }
 
-  return { baseCurrency, points };
+  return { dates, equities };
+}
+
+export async function getPortfolioValueHistory(
+  portfolioId: string,
+  days = 90,
+): Promise<{
+  baseCurrency: string;
+  points: ValueHistoryStackedPoint[];
+}> {
+  const portfolio = await db.portfolio.findUnique({
+    where: { id: portfolioId },
+    select: { baseCurrency: true },
+  });
+  if (!portfolio) return { baseCurrency: "USD", points: [] };
+
+  const trades = await db.trade.findMany({
+    where: { portfolioId },
+    orderBy: { date: "asc" },
+    include: {
+      instrument: true,
+      portfolio: { select: { baseCurrency: true } },
+    },
+  });
+
+  const mapped: TradeForEquityCurve[] = trades.map((t) => ({
+    date: t.date,
+    instrumentId: t.instrumentId,
+    portfolioId: t.portfolioId,
+    type: t.type,
+    quantity: t.quantity,
+    instrument: t.instrument,
+  }));
+
+  const curve = await buildEquityHistoryCurve(
+    mapped,
+    days,
+    portfolio.baseCurrency,
+  );
+  if (!curve) return { baseCurrency: portfolio.baseCurrency, points: [] };
+
+  const baseCurrency = portfolio.baseCurrency;
+  const points: ValueHistoryStackedPoint[] = curve.dates.map((date, i) => {
+    const prefix: FifoCostTradeInput[] = [];
+    for (const t of trades) {
+      if (t.date.getTime() > date.getTime()) break;
+      prefix.push({
+        instrumentId: t.instrumentId,
+        type: t.type,
+        quantity: t.quantity,
+        price: t.price,
+        fees: t.fees,
+        currency: t.currency,
+        fxRate: t.fxRate,
+      });
+    }
+    const cost = computeFifoOpenCostBasis(prefix, baseCurrency);
+    return {
+      date,
+      equities: Number(curve.equities[i].toFixed(2)),
+      cash: 0,
+      costBasis: Number(cost.toFixed(2)),
+    };
+  });
+
+  return { baseCurrency: portfolio.baseCurrency, points };
+}
+
+export async function getGroupValueHistory(
+  groupId: string,
+  days = 90,
+): Promise<{
+  baseCurrency: string;
+  series: GroupValueHistorySeries[];
+  points: Array<{ date: Date } & Record<string, number>>;
+}> {
+  const group = await db.portfolioGroup.findUnique({
+    where: { id: groupId },
+    include: {
+      portfolios: { select: { id: true, name: true, baseCurrency: true } },
+    },
+  });
+  if (!group) {
+    return { baseCurrency: "USD", series: [], points: [] };
+  }
+
+  const groupBase = group.baseCurrency;
+  const portfolioMeta = group.portfolios;
+
+  const trades = await db.trade.findMany({
+    where: { portfolio: { groupId } },
+    orderBy: { date: "asc" },
+    include: {
+      instrument: true,
+      portfolio: { select: { id: true, baseCurrency: true } },
+    },
+  });
+
+  const mapped: TradeForEquityCurve[] = trades.map((t) => ({
+    date: t.date,
+    instrumentId: t.instrumentId,
+    portfolioId: t.portfolioId,
+    type: t.type,
+    quantity: t.quantity,
+    instrument: t.instrument,
+  }));
+
+  const curve = await buildEquityHistoryCurve(mapped, days, groupBase);
+  const { ledger } = await getGroupCashLedger(groupId);
+
+  if (!curve) {
+    const series: GroupValueHistorySeries[] = [
+      ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
+      { key: "cash", label: "Cash" },
+    ];
+    return {
+      baseCurrency: groupBase,
+      series,
+      points: [],
+    };
+  }
+
+  const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
+  const earliestTrade = trades[0]?.date ?? new Date();
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+  since.setUTCHours(0, 0, 0, 0);
+  const startDate = earliestTrade > since ? earliestTrade : since;
+
+  const prices = await db.priceHistory.findMany({
+    where: { instrumentId: { in: instrumentIds }, date: { gte: startDate } },
+    orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
+  });
+  const pricesByInstrument = new Map<
+    string,
+    { date: Date; close: Decimal }[]
+  >();
+  for (const p of prices) {
+    let arr = pricesByInstrument.get(p.instrumentId);
+    if (!arr) {
+      arr = [];
+      pricesByInstrument.set(p.instrumentId, arr);
+    }
+    arr.push({ date: p.date, close: new Decimal(p.close.toString()) });
+  }
+
+  const fxCache = new Map<string, Decimal>();
+  async function fxOn(from: string, to: string, asOf: Date): Promise<Decimal> {
+    if (from === to) return ONE;
+    const key = `${from}-${to}-${asOf.toISOString().slice(0, 10)}`;
+    const cached = fxCache.get(key);
+    if (cached) return cached;
+    const rate = await getFxRate(from, to, asOf);
+    fxCache.set(key, rate);
+    return rate;
+  }
+
+  const series: GroupValueHistorySeries[] = [
+    ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
+    { key: "cash", label: "Cash" },
+  ];
+
+  const points: Array<{ date: Date } & Record<string, number>> = [];
+
+  for (let i = 0; i < curve.dates.length; i++) {
+    const day = curve.dates[i];
+    const row = { date: day } as { date: Date } & Record<string, number>;
+
+    for (const p of portfolioMeta) {
+      const pt = mapped.filter((t) => t.portfolioId === p.id);
+      const instSet = Array.from(new Set(pt.map((t) => t.instrumentId)));
+      let dayValue = ZERO;
+      for (const instrumentId of instSet) {
+        const qty = quantityHeldOnForPortfolio(pt, instrumentId, day);
+        if (qty.isZero()) continue;
+        const close = priceOn(pricesByInstrument.get(instrumentId), day);
+        if (!close) continue;
+        const tr = pt.find((t) => t.instrumentId === instrumentId);
+        if (!tr) continue;
+        const fx = await fxOn(tr.instrument.currency, p.baseCurrency, day);
+        dayValue = dayValue.plus(qty.times(close).times(fx));
+      }
+      const inGroupBase =
+        p.baseCurrency.toUpperCase() === groupBase.toUpperCase()
+          ? dayValue
+          : await convert(dayValue, p.baseCurrency, groupBase, day);
+      row[`p_${p.id}`] = Number(inGroupBase.toFixed(2));
+    }
+
+    const cashB = cashBalanceInGroupBaseThroughUtcDay(ledger, day);
+    row.cash = Number(cashB.toFixed(2));
+
+    points.push(row);
+  }
+
+  return { baseCurrency: groupBase, series, points };
 }
 
 function uniqueSortedDates(dates: Date[], from: Date): Date[] {
@@ -390,6 +658,23 @@ function quantityHeldOn(
   return qty;
 }
 
+function quantityHeldOnForPortfolio(
+  trades: TradeForEquityCurve[],
+  instrumentId: string,
+  asOf: Date,
+): Decimal {
+  const subset = trades
+    .filter((t) => t.instrumentId === instrumentId)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  let qty = ZERO;
+  for (const t of subset) {
+    if (t.date.getTime() > asOf.getTime()) break;
+    const q = new Decimal(t.quantity.toString());
+    qty = t.type === "BUY" ? qty.plus(q) : qty.minus(q);
+  }
+  return qty;
+}
+
 function priceOn(
   series: { date: Date; close: Decimal }[] | undefined,
   asOf: Date,
@@ -415,6 +700,7 @@ export type PortfolioSummary = {
 
 export async function getPortfolioSummaries(): Promise<PortfolioSummary[]> {
   const portfolios = await db.portfolio.findMany({
+    where: excludeEmptyUnassignedWhere,
     select: { id: true, name: true, baseCurrency: true },
     orderBy: { createdAt: "desc" },
   });

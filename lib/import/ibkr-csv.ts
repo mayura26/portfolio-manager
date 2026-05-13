@@ -107,10 +107,10 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
       if (assetCategory !== "Stocks") continue;
 
       try {
-        const symbol = fields[colIndex["Symbol"] ?? -1] ?? "";
-        const currency = fields[colIndex["Currency"] ?? -1] ?? "";
+        const symbol = fields[colIndex.Symbol ?? -1] ?? "";
+        const currency = fields[colIndex.Currency ?? -1] ?? "";
         const rawDate = fields[colIndex["Date/Time"] ?? -1] ?? "";
-        const rawQty = fields[colIndex["Quantity"] ?? -1] ?? "";
+        const rawQty = fields[colIndex.Quantity ?? -1] ?? "";
         const rawPrice = fields[colIndex["T. Price"] ?? -1] ?? "";
         const rawFee = fields[colIndex["Comm/Fee"] ?? -1] ?? "0";
 
@@ -154,10 +154,10 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
     // ── Deposits & Withdrawals ─────────────────────────────────────────────────
     if (section === "Deposits & Withdrawals") {
       try {
-        const currency = fields[colIndex["Currency"] ?? -1] ?? "";
+        const currency = fields[colIndex.Currency ?? -1] ?? "";
         const rawDate = fields[colIndex["Settle Date"] ?? -1] ?? "";
-        const description = fields[colIndex["Description"] ?? -1] ?? "";
-        const rawAmount = fields[colIndex["Amount"] ?? -1] ?? "";
+        const description = fields[colIndex.Description ?? -1] ?? "";
+        const rawAmount = fields[colIndex.Amount ?? -1] ?? "";
 
         if (!currency || !rawDate || !rawAmount) continue;
 
@@ -190,10 +190,10 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
     // ── Dividends ──────────────────────────────────────────────────────────────
     if (section === "Dividends") {
       try {
-        const currency = fields[colIndex["Currency"] ?? -1] ?? "";
-        const rawDate = fields[colIndex["Date"] ?? -1] ?? "";
-        const description = fields[colIndex["Description"] ?? -1] ?? "";
-        const rawAmount = fields[colIndex["Amount"] ?? -1] ?? "";
+        const currency = fields[colIndex.Currency ?? -1] ?? "";
+        const rawDate = fields[colIndex.Date ?? -1] ?? "";
+        const description = fields[colIndex.Description ?? -1] ?? "";
+        const rawAmount = fields[colIndex.Amount ?? -1] ?? "";
 
         if (!currency || !rawDate || !rawAmount) continue;
 

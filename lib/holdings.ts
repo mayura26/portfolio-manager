@@ -231,6 +231,73 @@ export async function computeHoldings(
   };
 }
 
+export type FifoCostTradeInput = {
+  instrumentId: string;
+  type: "BUY" | "SELL";
+  quantity: { toString(): string };
+  price: { toString(): string };
+  fees: { toString(): string };
+  currency: string;
+  fxRate: { toString(): string } | null | undefined;
+};
+
+/**
+ * Total FIFO book cost of open lots after applying trades in chronological order.
+ * Matches lot accounting in {@link computeHoldings}.
+ */
+export function computeFifoOpenCostBasis(
+  tradesChronological: FifoCostTradeInput[],
+  baseCurrency: string,
+): Decimal {
+  const byInstrument = new Map<string, Lot[]>();
+
+  for (const trade of tradesChronological) {
+    const instrumentId = trade.instrumentId;
+    let lots = byInstrument.get(instrumentId);
+    if (!lots) {
+      lots = [];
+      byInstrument.set(instrumentId, lots);
+    }
+
+    const tradeFx =
+      trade.currency === baseCurrency
+        ? ONE
+        : trade.fxRate != null && trade.fxRate !== undefined
+          ? toDec(trade.fxRate)
+          : ONE;
+    const qty = toDec(trade.quantity);
+    const priceBase = toDec(trade.price).times(tradeFx);
+    const feesBase = toDec(trade.fees).times(tradeFx);
+
+    if (trade.type === "BUY") {
+      const totalCost = priceBase.times(qty).plus(feesBase);
+      const unitCostBase = qty.isZero() ? ZERO : totalCost.dividedBy(qty);
+      lots.push({ quantity: qty, unitCostBase });
+      continue;
+    }
+
+    let remainingToSell = qty;
+    while (remainingToSell.gt(0) && lots.length > 0) {
+      const lot = lots[0];
+      if (lot.quantity.lte(remainingToSell)) {
+        remainingToSell = remainingToSell.minus(lot.quantity);
+        lots.shift();
+      } else {
+        lot.quantity = lot.quantity.minus(remainingToSell);
+        remainingToSell = ZERO;
+      }
+    }
+  }
+
+  let total = ZERO;
+  for (const lots of byInstrument.values()) {
+    for (const lot of lots) {
+      total = total.plus(lot.quantity.times(lot.unitCostBase));
+    }
+  }
+  return total;
+}
+
 async function loadLatestPrices(
   instrumentIds: string[],
 ): Promise<Map<string, { close: Decimal; date: Date }>> {

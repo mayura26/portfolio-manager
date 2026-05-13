@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { updateGroupIbkr, type GroupActionState } from "@/actions/groups";
+import { type GroupActionState, updateGroupIbkr } from "@/actions/groups";
 
 type Props = {
   groupId: string;

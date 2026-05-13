@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
 import { StockNotesEditor } from "@/components/stocks/stock-notes-editor";
 import { db } from "@/lib/db";
+import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
 
 type Params = Promise<{ symbol: string }>;
 
@@ -18,7 +19,8 @@ export default function StockNotesPage({
 
 async function StockNotesContent({ params }: { params: Params }) {
   const { symbol } = await params;
-  const yahooSymbol = decodeURIComponent(symbol).toUpperCase();
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) notFound();
   const instrument = await db.instrument.findUnique({
     where: { yahooSymbol },
     include: {

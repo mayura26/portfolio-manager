@@ -3,6 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AllocationTable } from "@/components/portfolios/allocation-table";
+import {
+  PortfolioValueChart,
+  PortfolioValueChartSkeleton,
+} from "@/components/portfolios/portfolio-value-chart";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
 import { computeGroupCash } from "@/lib/cash";
@@ -100,6 +104,17 @@ async function PortfolioOverview({ params }: { params: Params }) {
           wait for it to run.
         </p>
       ) : null}
+
+      <section className="flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">
+          Market value and cost basis
+        </h2>
+        <div className="hairline bg-surface px-5 py-5">
+          <Suspense fallback={<PortfolioValueChartSkeleton />}>
+            <PortfolioValueChart portfolioId={portfolio.id} days={90} />
+          </Suspense>
+        </div>
+      </section>
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
