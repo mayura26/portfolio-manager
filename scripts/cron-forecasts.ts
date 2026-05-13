@@ -5,7 +5,7 @@
  *   npm run cron:forecasts
  */
 import "dotenv/config";
-import { ensureTargetHitAlert } from "@/actions/forecasts";
+import { ensureTargetHitAlert } from "@/lib/forecast-alerts";
 import { db } from "@/lib/db";
 import { analyzeStockForecast } from "@/lib/forecasts";
 import {
