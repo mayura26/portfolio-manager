@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { setGroupTargets, updateGroup } from "@/actions/groups";
+import { deleteGroup, setGroupTargets, updateGroup } from "@/actions/groups";
+import { DeleteGroupButton } from "@/components/groups/delete-group-button";
 import { GroupForm } from "@/components/groups/group-form";
 import { GroupTargetsEditor } from "@/components/groups/group-targets-editor";
 import { IbkrGroupForm } from "@/components/groups/ibkr-group-form";
@@ -29,6 +30,7 @@ async function GroupSettings({ params }: { params: Params }) {
   if (!group) notFound();
 
   const updateAction = updateGroup.bind(null, groupId);
+  const deleteAction = deleteGroup.bind(null, groupId);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -99,6 +101,16 @@ async function GroupSettings({ params }: { params: Params }) {
             ibkrFlexQueryId: group.ibkrFlexQueryId,
           }}
         />
+      </section>
+
+      <section className="mt-12">
+        <h2 className="display mb-2 text-2xl text-loss">Danger zone</h2>
+        <p className="mb-4 max-w-prose text-sm text-muted">
+          Deleting this group removes it and all portfolios in it, including
+          trades, alerts, and this group&apos;s cash history. This cannot be
+          undone.
+        </p>
+        <DeleteGroupButton action={deleteAction} groupName={group.name} />
       </section>
     </div>
   );

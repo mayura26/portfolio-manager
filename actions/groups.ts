@@ -64,8 +64,17 @@ export async function updateGroup(
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
-  await db.portfolioGroup.delete({ where: { id: groupId } });
+  await db.$transaction(async (tx) => {
+    await tx.portfolio.deleteMany({ where: { groupId } });
+    await tx.portfolioGroup.delete({ where: { id: groupId } });
+  });
+
   revalidatePath("/groups");
+  revalidatePath("/dashboard");
+  revalidatePath("/portfolios");
+  revalidatePath("/import");
+  revalidatePath(`/groups/${groupId}`);
+  revalidatePath(`/groups/${groupId}/settings`);
   redirect("/groups");
 }
 
