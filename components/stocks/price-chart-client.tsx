@@ -30,6 +30,12 @@ export type ChartTradeMarker = {
   quantity: number;
 };
 
+export type ChartPriceTarget = {
+  id: string;
+  kind: "buy" | "sell";
+  price: number;
+};
+
 type Props = {
   bars: PriceChartBar[];
   currency: string;
@@ -38,6 +44,7 @@ type Props = {
   userBuyPrice: number | null;
   userSellPrice: number | null;
   trades: ChartTradeMarker[];
+  priceTargets: ChartPriceTarget[];
 };
 
 const RANGE_OPTIONS: { label: string; value: PriceChartRange }[] = [
@@ -48,7 +55,7 @@ const RANGE_OPTIONS: { label: string; value: PriceChartRange }[] = [
   { label: "5Y", value: "5y" },
 ];
 
-type Overlay = "targets" | "street" | "trades" | "userTargets";
+type Overlay = "targets" | "street" | "trades" | "userTargets" | "priceTargets";
 
 export function PriceChartClient({
   bars,
@@ -58,6 +65,7 @@ export function PriceChartClient({
   userBuyPrice,
   userSellPrice,
   trades,
+  priceTargets,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -69,6 +77,7 @@ export function PriceChartClient({
     street: true,
     trades: true,
     userTargets: true,
+    priceTargets: true,
   });
 
   const data = useMemo(
@@ -200,6 +209,20 @@ export function PriceChartClient({
       }
     }
 
+    if (overlays.priceTargets) {
+      for (const target of priceTargets) {
+        series.createPriceLine({
+          price: target.price,
+          color: "#14b8a6",
+          lineWidth: 1,
+          lineStyle:
+            target.kind === "sell" ? LineStyle.Dashed : LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: target.kind === "sell" ? "Sell target" : "Buy target",
+        });
+      }
+    }
+
     if (overlays.trades && trades.length > 0) {
       const markers: SeriesMarker<UTCTimestamp>[] = trades.map((t) => ({
         time: t.time as UTCTimestamp,
@@ -235,6 +258,7 @@ export function PriceChartClient({
     userBuyPrice,
     userSellPrice,
     trades,
+    priceTargets,
   ]);
 
   const selectRange = (nextRange: PriceChartRange) => {
@@ -256,6 +280,7 @@ export function PriceChartClient({
   const hasTargets = Boolean(forecast);
   const hasStreet = Boolean(forecast?.streetTargetMean != null);
   const hasUserTargets = userBuyPrice != null || userSellPrice != null;
+  const hasPriceTargets = priceTargets.length > 0;
   const hasTrades = trades.length > 0;
 
   return (
@@ -301,7 +326,11 @@ export function PriceChartClient({
         <div ref={containerRef} className="h-72 w-full" />
       )}
 
-      {(hasTargets || hasStreet || hasUserTargets || hasTrades) && (
+      {(hasTargets ||
+        hasStreet ||
+        hasUserTargets ||
+        hasPriceTargets ||
+        hasTrades) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           {hasTargets ? (
             <OverlayChip
@@ -325,6 +354,14 @@ export function PriceChartClient({
               onClick={() => toggle("userTargets")}
               swatch="bg-[#f97316]"
               label="My buy / sell"
+            />
+          ) : null}
+          {hasPriceTargets ? (
+            <OverlayChip
+              active={overlays.priceTargets}
+              onClick={() => toggle("priceTargets")}
+              swatch="bg-[#14b8a6]"
+              label="My price targets"
             />
           ) : null}
           {hasTrades ? (

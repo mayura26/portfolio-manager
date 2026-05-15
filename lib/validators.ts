@@ -237,6 +237,31 @@ export const alertSchema = z
 
 export type AlertInput = z.infer<typeof alertSchema>;
 
+// ─── Price target (user-drawn chart target) ──────────────────
+
+export const priceTargetSchema = z
+  .object({
+    instrumentId: z.string().min(1),
+    mode: z.enum(["PRICE", "PERCENT"]),
+    value: decimalString,
+    note: z
+      .string()
+      .trim()
+      .max(500)
+      .optional()
+      .transform((v) => (v?.length ? v : null)),
+  })
+  .refine((d) => Number(d.value) !== 0, {
+    message: "Value cannot be zero",
+    path: ["value"],
+  })
+  .refine((d) => d.mode !== "PRICE" || Number(d.value) > 0, {
+    message: "Price must be greater than zero",
+    path: ["value"],
+  });
+
+export type PriceTargetInput = z.infer<typeof priceTargetSchema>;
+
 // ─── Review ───────────────────────────────────────────────────
 
 export const reviewActionSchema = z.object({

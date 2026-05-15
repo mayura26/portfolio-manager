@@ -5,7 +5,11 @@ import {
   PRICE_CHART_RANGES,
   type PriceChartRange,
 } from "@/lib/yahoo";
-import type { ChartForecast, ChartTradeMarker } from "./price-chart-client";
+import type {
+  ChartForecast,
+  ChartPriceTarget,
+  ChartTradeMarker,
+} from "./price-chart-client";
 import { PriceChartClient } from "./price-chart-client";
 
 type Props = {
@@ -28,7 +32,7 @@ export async function PriceChart({
     // Render the empty state below when Yahoo history is unavailable.
   }
 
-  const [forecastRow, targets, trades] = await Promise.all([
+  const [forecastRow, targets, trades, targetAlerts] = await Promise.all([
     resolveActiveForecast(instrumentId),
     db.portfolioTarget.findMany({
       where: { instrumentId },
@@ -38,6 +42,14 @@ export async function PriceChart({
       where: { instrumentId },
       select: { type: true, price: true, quantity: true, date: true },
       orderBy: { date: "asc" },
+    }),
+    db.alert.findMany({
+      where: {
+        instrumentId,
+        status: "ACTIVE",
+        type: { in: ["PRICE_ABOVE", "PRICE_BELOW"] },
+      },
+      select: { id: true, type: true, priceTarget: true },
     }),
   ]);
 
@@ -64,6 +76,14 @@ export async function PriceChart({
     quantity: Number(t.quantity),
   }));
 
+  const priceTargets: ChartPriceTarget[] = targetAlerts
+    .filter((a) => a.priceTarget != null)
+    .map((a) => ({
+      id: a.id,
+      kind: a.type === "PRICE_ABOVE" ? "sell" : "buy",
+      price: Number(a.priceTarget),
+    }));
+
   return (
     <PriceChartClient
       bars={bars}
@@ -73,6 +93,7 @@ export async function PriceChart({
       userBuyPrice={userBuy}
       userSellPrice={userSell}
       trades={tradeMarkers}
+      priceTargets={priceTargets}
     />
   );
 }

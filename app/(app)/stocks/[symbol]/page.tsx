@@ -14,6 +14,10 @@ import {
   PriceChartSkeleton,
   parsePriceChartRange,
 } from "@/components/stocks/price-chart";
+import {
+  PriceTargetPanel,
+  PriceTargetPanelSkeleton,
+} from "@/components/stocks/price-target-panel";
 import { RunForecastButton } from "@/components/stocks/run-forecast-button";
 import { SignalsCard } from "@/components/stocks/signals-card";
 import { db } from "@/lib/db";
@@ -32,9 +36,14 @@ export default function StockOverviewPage({
       <div className="flex flex-col gap-10 lg:col-span-2">
         <section>
           <h2 className="display mb-4 text-2xl text-foreground">Price</h2>
-          <Suspense fallback={<PriceChartSkeleton />}>
-            <PriceChartLoader params={params} searchParams={searchParams} />
-          </Suspense>
+          <div className="flex flex-col gap-4">
+            <Suspense fallback={<PriceChartSkeleton />}>
+              <PriceChartLoader params={params} searchParams={searchParams} />
+            </Suspense>
+            <Suspense fallback={<PriceTargetPanelSkeleton />}>
+              <PriceTargetsLoader params={params} />
+            </Suspense>
+          </div>
         </section>
 
         <section>
@@ -146,6 +155,20 @@ async function PriceChartLoader({
       yahooSymbol={instrument.yahooSymbol}
       currency={instrument.currency}
       range={range}
+    />
+  );
+}
+
+async function PriceTargetsLoader({ params }: { params: Params }) {
+  const { symbol } = await params;
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
+  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  if (!instrument) return null;
+  return (
+    <PriceTargetPanel
+      instrumentId={instrument.id}
+      currency={instrument.currency}
     />
   );
 }
