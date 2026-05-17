@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
 import { getSettings } from "@/actions/settings";
-import { getBenchmarkCloses } from "@/lib/benchmark";
 import {
   cashBalanceInGroupBaseThroughUtcDay,
   computeGroupCash,
@@ -74,8 +73,8 @@ export type GroupValueHistorySeries = {
   label: string;
   /** Index of the owning group; drives a stable color in the chart. */
   groupIndex?: number;
-  /** Visual treatment: equities band, cash band, or benchmark line. */
-  variant?: "equities" | "cash" | "benchmark";
+  /** Visual treatment: equities band or cash band. */
+  variant?: "equities" | "cash";
 };
 
 type EnrichedHolding = Holding & {
@@ -542,41 +541,6 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
       variant: "cash",
     });
   });
-
-  // S&P 500 benchmark line, rebased so it starts at the portfolio's total
-  // value on the first day of the window — directly comparable, in dollars,
-  // to the height of the stacked bands.
-  const spCloses = await getBenchmarkCloses(startDate);
-  if (spCloses.length > 0) {
-    let anchorIdx = -1;
-    let spAnchor: Decimal | null = null;
-    for (let i = 0; i < dates.length; i++) {
-      const close = priceOn(spCloses, dates[i]);
-      if (close?.gt(0)) {
-        anchorIdx = i;
-        spAnchor = close;
-        break;
-      }
-    }
-    if (anchorIdx >= 0 && spAnchor) {
-      let totalAnchor = 0;
-      for (const s of series) totalAnchor += points[anchorIdx][s.key] ?? 0;
-      if (totalAnchor > 0) {
-        for (let i = anchorIdx; i < dates.length; i++) {
-          const close = priceOn(spCloses, dates[i]);
-          if (!close) continue;
-          points[i].benchmark = Number(
-            close.dividedBy(spAnchor).times(totalAnchor).toFixed(2),
-          );
-        }
-        series.push({
-          key: "benchmark",
-          label: "S&P 500",
-          variant: "benchmark",
-        });
-      }
-    }
-  }
 
   return { baseCurrency, series, points };
 }

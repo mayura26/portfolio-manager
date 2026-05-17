@@ -24,6 +24,10 @@ import {
   ValueChart,
   ValueChartSkeleton,
 } from "@/components/dashboard/value-chart";
+import {
+  PerformanceChart,
+  PerformanceChartSkeleton,
+} from "@/components/shared/performance-chart";
 import { Skeleton } from "@/components/shared/skeleton";
 
 export default function DashboardPage() {
@@ -45,6 +49,15 @@ export default function DashboardPage() {
         <h2 className="display text-2xl text-foreground">Value over time</h2>
         <Suspense fallback={<ValueChartSkeleton />}>
           <ValueChart days={90} />
+        </Suspense>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">
+          Performance vs S&amp;P 500
+        </h2>
+        <Suspense fallback={<PerformanceChartSkeleton />}>
+          <PerformanceChart scope="account" days={90} />
         </Suspense>
       </section>
 
