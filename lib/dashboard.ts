@@ -308,49 +308,128 @@ export async function getTopMovers(limit = 5): Promise<{
   return { baseCurrency: ws.baseCurrency, movers: movers.slice(0, limit) };
 }
 
-export async function getValueHistory(days = 30): Promise<{
+export async function getValueHistoryByGroup(days = 90): Promise<{
   baseCurrency: string;
-  points: ValueHistoryStackedPoint[];
+  series: GroupValueHistorySeries[];
+  points: Array<{ date: Date } & Record<string, number>>;
 }> {
   const settings = await getSettings();
   const baseCurrency = settings.defaultBaseCurrency;
+
+  const groups = await db.portfolioGroup.findMany({
+    select: { id: true, name: true, baseCurrency: true },
+  });
+  if (groups.length === 0) return { baseCurrency, series: [], points: [] };
 
   const trades = await db.trade.findMany({
     orderBy: { date: "asc" },
     include: {
       instrument: true,
-      portfolio: { select: { baseCurrency: true } },
+      portfolio: { select: { groupId: true } },
     },
   });
+  if (trades.length === 0) return { baseCurrency, series: [], points: [] };
 
-  const curve = await buildEquityHistoryCurve(trades, days, baseCurrency);
-  if (!curve) return { baseCurrency, points: [] };
-
-  const groups = await db.portfolioGroup.findMany({ select: { id: true } });
-  const ledgers = await Promise.all(
-    groups.map(async (g) => getGroupCashLedger(g.id)),
-  );
-
-  const points: ValueHistoryStackedPoint[] = [];
-  for (let i = 0; i < curve.dates.length; i++) {
-    const day = curve.dates[i];
-    let cashGlobal = ZERO;
-    for (const gl of ledgers) {
-      const bal = cashBalanceInGroupBaseThroughUtcDay(gl.ledger, day);
-      if (!bal.isZero()) {
-        cashGlobal = cashGlobal.plus(
-          await convert(bal, gl.baseCurrency, baseCurrency, day),
-        );
-      }
+  const tradesByGroup = new Map<string, typeof trades>();
+  for (const t of trades) {
+    const gid = t.portfolio.groupId;
+    let arr = tradesByGroup.get(gid);
+    if (!arr) {
+      arr = [];
+      tradesByGroup.set(gid, arr);
     }
-    points.push({
-      date: day,
-      equities: Number(curve.equities[i].toFixed(2)),
-      cash: Number(cashGlobal.toFixed(2)),
-    });
+    arr.push(t);
   }
 
-  return { baseCurrency, points };
+  const earliestTrade = trades[0].date;
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+  since.setUTCHours(0, 0, 0, 0);
+  const startDate = earliestTrade > since ? earliestTrade : since;
+
+  const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
+  const prices = await db.priceHistory.findMany({
+    where: { instrumentId: { in: instrumentIds }, date: { gte: startDate } },
+    orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
+  });
+
+  const pricesByInstrument = new Map<
+    string,
+    { date: Date; close: Decimal }[]
+  >();
+  for (const p of prices) {
+    let arr = pricesByInstrument.get(p.instrumentId);
+    if (!arr) {
+      arr = [];
+      pricesByInstrument.set(p.instrumentId, arr);
+    }
+    arr.push({ date: p.date, close: new Decimal(p.close.toString()) });
+  }
+
+  const dates = uniqueSortedDates(
+    prices.map((p) => p.date),
+    startDate,
+  );
+  if (dates.length === 0) return { baseCurrency, series: [], points: [] };
+
+  const fxCache = new Map<string, Decimal>();
+  async function fxOn(from: string, to: string, asOf: Date): Promise<Decimal> {
+    if (from === to) return ONE;
+    const key = `${from}-${to}-${asOf.toISOString().slice(0, 10)}`;
+    const cached = fxCache.get(key);
+    if (cached) return cached;
+    const rate = await getFxRate(from, to, asOf);
+    fxCache.set(key, rate);
+    return rate;
+  }
+
+  const ledgers = new Map<
+    string,
+    Awaited<ReturnType<typeof getGroupCashLedger>>
+  >();
+  await Promise.all(
+    groups.map(async (g) => {
+      ledgers.set(g.id, await getGroupCashLedger(g.id));
+    }),
+  );
+
+  const points: Array<{ date: Date } & Record<string, number>> = [];
+  for (const day of dates) {
+    const row = { date: day } as { date: Date } & Record<string, number>;
+    for (const g of groups) {
+      const gTrades = tradesByGroup.get(g.id) ?? [];
+      const instSet = Array.from(new Set(gTrades.map((t) => t.instrumentId)));
+      let equity = ZERO;
+      for (const instrumentId of instSet) {
+        const qty = quantityHeldOn(gTrades, instrumentId, day);
+        if (qty.isZero()) continue;
+        const close = priceOn(pricesByInstrument.get(instrumentId), day);
+        if (!close) continue;
+        const tr = gTrades.find((t) => t.instrumentId === instrumentId);
+        if (!tr) continue;
+        const fx = await fxOn(tr.instrument.currency, baseCurrency, day);
+        equity = equity.plus(qty.times(close).times(fx));
+      }
+
+      let cash = ZERO;
+      const gl = ledgers.get(g.id);
+      if (gl) {
+        const bal = cashBalanceInGroupBaseThroughUtcDay(gl.ledger, day);
+        if (!bal.isZero()) {
+          cash = await convert(bal, gl.baseCurrency, baseCurrency, day);
+        }
+      }
+
+      row[`g_${g.id}`] = Number(equity.plus(cash).toFixed(2));
+    }
+    points.push(row);
+  }
+
+  const series: GroupValueHistorySeries[] = groups
+    .filter((g) => points.some((row) => (row[`g_${g.id}`] ?? 0) !== 0))
+    .map((g) => ({ key: `g_${g.id}`, label: g.name }));
+
+  return { baseCurrency, series, points };
 }
 
 type TradeForEquityCurve = {

@@ -1,22 +1,29 @@
-import { getValueHistory } from "@/lib/dashboard";
-import { ValueChartClient } from "./value-chart-client";
+import { GroupValueChartClient } from "@/components/groups/group-value-chart-client";
+import { getValueHistoryByGroup } from "@/lib/dashboard";
 
 type Props = {
   days?: number;
 };
 
 export async function ValueChart({ days = 90 }: Props) {
-  const data = await getValueHistory(days);
+  const data = await getValueHistoryByGroup(days);
+
+  const points = data.points.map((row) => {
+    const out: Record<string, string | number> = {
+      date: row.date.toISOString(),
+    };
+    for (const s of data.series) {
+      const v = row[s.key];
+      out[s.key] = typeof v === "number" ? v : 0;
+    }
+    return out;
+  });
 
   return (
-    <ValueChartClient
+    <GroupValueChartClient
       baseCurrency={data.baseCurrency}
-      stackedCash
-      points={data.points.map((p) => ({
-        date: p.date.toISOString(),
-        equities: p.equities,
-        cash: p.cash,
-      }))}
+      series={data.series}
+      points={points}
     />
   );
 }
