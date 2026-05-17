@@ -76,12 +76,17 @@ export async function importToGroup(
   }
 
   // Pre-resolve all unique symbols
-  const uniqueSymbols = [...new Set(trades.map((t) => t.symbol))];
+  const symbolCurrencyHints = new Map<string, string>();
+  for (const trade of trades) {
+    if (!symbolCurrencyHints.has(trade.symbol)) {
+      symbolCurrencyHints.set(trade.symbol, trade.currency);
+    }
+  }
   const instrumentMap = new Map<string, { id: string }>();
 
-  for (const symbol of uniqueSymbols) {
+  for (const [symbol, currencyHint] of symbolCurrencyHints) {
     try {
-      const inst = await findOrCreateInstrument(symbol);
+      const inst = await findOrCreateInstrument(symbol, { currencyHint });
       instrumentMap.set(symbol, inst);
     } catch (err) {
       failed.push({
@@ -256,12 +261,17 @@ export async function importTrades(
 
   const { baseCurrency } = portfolio;
 
-  const uniqueSymbols = [...new Set(trades.map((t) => t.symbol))];
+  const symbolCurrencyHints = new Map<string, string>();
+  for (const trade of trades) {
+    if (!symbolCurrencyHints.has(trade.symbol)) {
+      symbolCurrencyHints.set(trade.symbol, trade.currency);
+    }
+  }
   const instrumentMap = new Map<string, { id: string }>();
 
-  for (const symbol of uniqueSymbols) {
+  for (const [symbol, currencyHint] of symbolCurrencyHints) {
     try {
-      const inst = await findOrCreateInstrument(symbol);
+      const inst = await findOrCreateInstrument(symbol, { currencyHint });
       instrumentMap.set(symbol, inst);
     } catch (err) {
       failed.push({

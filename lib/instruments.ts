@@ -13,17 +13,56 @@ export function normalizeStockUrlSymbol(raw: string): string {
  * exchange suffix (e.g. `000660` → `000660.KS` on Yahoo / in our DB).
  */
 export function yahooSymbolCandidatesForUrlPath(key: string): string[] {
-  const out: string[] = [key];
-  if (!key.includes(".")) {
+  return yahooSymbolCandidatesForRawSymbol(key);
+}
+
+type SymbolCandidateOptions = {
+  currencyHint?: string;
+};
+
+/**
+ * Yahoo symbols to try when an upstream source gives us a local exchange
+ * symbol without Yahoo's market suffix.
+ */
+export function yahooSymbolCandidatesForRawSymbol(
+  raw: string,
+  options: SymbolCandidateOptions = {},
+): string[] {
+  const key = raw.trim().toUpperCase();
+  const currencyHint = options.currencyHint?.trim().toUpperCase();
+  const out: string[] = [];
+  const add = (...symbols: string[]) => {
+    for (const symbol of symbols) {
+      if (symbol) out.push(symbol);
+    }
+  };
+
+  if (key && !key.includes(".")) {
     if (/^\d{6}$/.test(key)) {
-      out.push(`${key}.KS`, `${key}.KQ`);
+      if (currencyHint === "KRW") {
+        add(`${key}.KS`, `${key}.KQ`, key);
+      } else {
+        add(key, `${key}.KS`, `${key}.KQ`);
+      }
     }
     if (/^\d{4}$/.test(key)) {
-      out.push(`${key}.T`);
+      if (currencyHint === "HKD") {
+        add(`${key}.HK`, key, `${key}.T`);
+      } else if (currencyHint === "JPY") {
+        add(`${key}.T`, key, `${key}.HK`);
+      } else {
+        add(key, `${key}.T`, `${key}.HK`);
+      }
     }
     if (/^\d{5}$/.test(key)) {
-      out.push(`${key}.HK`);
+      if (currencyHint === "HKD") {
+        add(`${key}.HK`, key);
+      } else {
+        add(key, `${key}.HK`);
+      }
     }
+  } else {
+    add(key);
   }
   return [...new Set(out)];
 }
@@ -60,18 +99,44 @@ export async function resolveInstrumentYahooSymbolFromUrlPath(
  * fetch metadata from Yahoo, persist it, and seed a short price history
  * window so latest-price lookups have something to read immediately.
  */
-export async function findOrCreateInstrument(yahooSymbol: string) {
+export async function findOrCreateInstrument(
+  yahooSymbol: string,
+  options: SymbolCandidateOptions = {},
+) {
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) throw new Error("Symbol is required");
 
-  const existing = await db.instrument.findUnique({
-    where: { yahooSymbol: sym },
-  });
-  if (existing) return existing;
+  const candidates = yahooSymbolCandidatesForRawSymbol(sym, options);
 
-  const meta = await lookupInstrument(sym);
-  if (!meta)
-    throw new Error(`Could not find instrument ${sym} on Yahoo Finance`);
+  for (const candidate of candidates) {
+    const existing = await db.instrument.findUnique({
+      where: { yahooSymbol: candidate },
+    });
+    if (existing) return existing;
+  }
+
+  const existingByLocalSymbol = await db.instrument.findMany({
+    where: { symbol: sym },
+    take: 2,
+  });
+  if (existingByLocalSymbol.length === 1) return existingByLocalSymbol[0];
+
+  let meta: Awaited<ReturnType<typeof lookupInstrument>> = null;
+  for (const candidate of candidates) {
+    try {
+      meta = await lookupInstrument(candidate);
+      if (meta) break;
+    } catch {
+      // Try the next exchange-specific candidate.
+    }
+  }
+  if (!meta) {
+    const suffixHint =
+      candidates.length > 1 ? ` (tried ${candidates.join(", ")})` : "";
+    throw new Error(
+      `Could not find instrument ${sym} on Yahoo Finance${suffixHint}`,
+    );
+  }
 
   const created = await db.instrument.create({
     data: {
