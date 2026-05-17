@@ -2,15 +2,15 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Ledger — Portfolio Manager",
-    short_name: "Ledger",
+    name: "Portfolio",
+    short_name: "Portfolio",
     description: "A considered ledger for long-term investing.",
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#faf7f2",
-    theme_color: "#c9512e",
+    background_color: "#030303",
+    theme_color: "#030303",
     categories: ["finance", "productivity"],
     icons: [
       {
