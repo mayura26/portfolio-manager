@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { getSettings } from "@/actions/settings";
+import { getBenchmarkCloses } from "@/lib/benchmark";
 import {
   cashBalanceInGroupBaseThroughUtcDay,
   computeGroupCash,
@@ -18,6 +19,14 @@ import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
 
+export type GroupPnlRow = {
+  groupId: string;
+  name: string;
+  unrealized: Decimal;
+  dailyChange: Decimal;
+  realized: Decimal;
+};
+
 export type DashboardSummary = {
   baseCurrency: string;
   portfolioCount: number;
@@ -30,6 +39,8 @@ export type DashboardSummary = {
   totalDailyChange: Decimal;
   totalDailyChangePercent: Decimal | null;
   hasMissingPrices: boolean;
+  /** Per-group P&L, sorted by group name. */
+  groupBreakdown: GroupPnlRow[];
 };
 
 export type AllocationSlice = {
@@ -58,7 +69,14 @@ export type ValueHistoryStackedPoint = {
   costBasis?: number;
 };
 
-export type GroupValueHistorySeries = { key: string; label: string };
+export type GroupValueHistorySeries = {
+  key: string;
+  label: string;
+  /** Index of the owning group; drives a stable color in the chart. */
+  groupIndex?: number;
+  /** Visual treatment: equities band, cash band, or benchmark line. */
+  variant?: "equities" | "cash" | "benchmark";
+};
 
 type EnrichedHolding = Holding & {
   portfolioId: string;
@@ -74,9 +92,17 @@ type EnrichedHolding = Holding & {
 
 type DashboardWorkingSet = {
   baseCurrency: string;
-  portfolios: { id: string; name: string; baseCurrency: string }[];
+  portfolios: {
+    id: string;
+    name: string;
+    baseCurrency: string;
+    groupId: string;
+    groupName: string;
+  }[];
   enriched: EnrichedHolding[];
   totalRealizedGlobal: Decimal;
+  /** Realized P&L per portfolio id, converted to the global base currency. */
+  realizedByPortfolio: Map<string, Decimal>;
   hasMissingPrices: boolean;
 };
 
@@ -85,12 +111,19 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
     getSettings(),
     db.portfolio.findMany({
       where: excludeEmptyUnassignedWhere,
-      select: { id: true, name: true, baseCurrency: true },
+      select: {
+        id: true,
+        name: true,
+        baseCurrency: true,
+        groupId: true,
+        group: { select: { name: true } },
+      },
     }),
   ]);
 
   const baseCurrency = settings.defaultBaseCurrency;
   const enriched: EnrichedHolding[] = [];
+  const realizedByPortfolio = new Map<string, Decimal>();
   let totalRealizedGlobal = ZERO;
   let hasMissingPrices = false;
 
@@ -103,9 +136,9 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
         ? ONE
         : await getFxRate(portfolio.baseCurrency, baseCurrency);
 
-    totalRealizedGlobal = totalRealizedGlobal.plus(
-      data.totalRealizedPnL.times(portfolioToGlobal),
-    );
+    const realizedGlobal = data.totalRealizedPnL.times(portfolioToGlobal);
+    totalRealizedGlobal = totalRealizedGlobal.plus(realizedGlobal);
+    realizedByPortfolio.set(portfolio.id, realizedGlobal);
 
     for (const h of data.holdings) {
       const costGlobal = h.costBase.times(portfolioToGlobal);
@@ -151,9 +184,16 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
 
   return {
     baseCurrency,
-    portfolios,
+    portfolios: portfolios.map((p) => ({
+      id: p.id,
+      name: p.name,
+      baseCurrency: p.baseCurrency,
+      groupId: p.groupId,
+      groupName: p.group.name,
+    })),
     enriched,
     totalRealizedGlobal,
+    realizedByPortfolio,
     hasMissingPrices,
   };
 }
@@ -179,6 +219,32 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   let totalDailyChange = ZERO;
   let canComputeDaily = true;
 
+  const portfolioToGroup = new Map(
+    ws.portfolios.map((p) => [p.id, { id: p.groupId, name: p.groupName }]),
+  );
+  type GroupAcc = {
+    name: string;
+    cost: Decimal;
+    marketValue: Decimal;
+    dailyChange: Decimal;
+    realized: Decimal;
+  };
+  const groupAcc = new Map<string, GroupAcc>();
+  const ensureGroup = (id: string, name: string): GroupAcc => {
+    let acc = groupAcc.get(id);
+    if (!acc) {
+      acc = {
+        name,
+        cost: ZERO,
+        marketValue: ZERO,
+        dailyChange: ZERO,
+        realized: ZERO,
+      };
+      groupAcc.set(id, acc);
+    }
+    return acc;
+  };
+
   for (const h of ws.enriched) {
     totalCostBase = totalCostBase.plus(h.costGlobal);
     if (h.marketValueGlobal)
@@ -188,7 +254,34 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     } else {
       canComputeDaily = false;
     }
+
+    const group = portfolioToGroup.get(h.portfolioId);
+    if (group) {
+      const acc = ensureGroup(group.id, group.name);
+      acc.cost = acc.cost.plus(h.costGlobal);
+      if (h.marketValueGlobal)
+        acc.marketValue = acc.marketValue.plus(h.marketValueGlobal);
+      if (h.dailyChangeGlobal)
+        acc.dailyChange = acc.dailyChange.plus(h.dailyChangeGlobal);
+    }
   }
+
+  for (const [portfolioId, realized] of ws.realizedByPortfolio) {
+    const group = portfolioToGroup.get(portfolioId);
+    if (!group) continue;
+    const acc = ensureGroup(group.id, group.name);
+    acc.realized = acc.realized.plus(realized);
+  }
+
+  const groupBreakdown: GroupPnlRow[] = Array.from(groupAcc.entries())
+    .map(([groupId, acc]) => ({
+      groupId,
+      name: acc.name,
+      unrealized: acc.marketValue.minus(acc.cost),
+      dailyChange: acc.dailyChange,
+      realized: acc.realized,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const totalUnrealizedPnL = totalMarketValueBase.minus(totalCostBase);
   const previousValue = totalMarketValueBase.minus(totalDailyChange);
@@ -220,6 +313,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     totalDailyChange: canComputeDaily ? totalDailyChange : ZERO,
     totalDailyChangePercent,
     hasMissingPrices: ws.hasMissingPrices,
+    groupBreakdown,
   };
 }
 
@@ -318,6 +412,7 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
 
   const groups = await db.portfolioGroup.findMany({
     select: { id: true, name: true, baseCurrency: true },
+    orderBy: { name: "asc" },
   });
   if (groups.length === 0) return { baseCurrency, series: [], points: [] };
 
@@ -420,14 +515,68 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
         }
       }
 
-      row[`g_${g.id}`] = Number(equity.plus(cash).toFixed(2));
+      row[`g_${g.id}_eq`] = Number(equity.toFixed(2));
+      row[`g_${g.id}_cash`] = Number(cash.toFixed(2));
     }
     points.push(row);
   }
 
-  const series: GroupValueHistorySeries[] = groups
-    .filter((g) => points.some((row) => (row[`g_${g.id}`] ?? 0) !== 0))
-    .map((g) => ({ key: `g_${g.id}`, label: g.name }));
+  const activeGroups = groups.filter((g) =>
+    points.some(
+      (row) =>
+        (row[`g_${g.id}_eq`] ?? 0) !== 0 || (row[`g_${g.id}_cash`] ?? 0) !== 0,
+    ),
+  );
+  const series: GroupValueHistorySeries[] = [];
+  activeGroups.forEach((g, gi) => {
+    series.push({
+      key: `g_${g.id}_eq`,
+      label: `${g.name} — Equities`,
+      groupIndex: gi,
+      variant: "equities",
+    });
+    series.push({
+      key: `g_${g.id}_cash`,
+      label: `${g.name} — Cash`,
+      groupIndex: gi,
+      variant: "cash",
+    });
+  });
+
+  // S&P 500 benchmark line, rebased so it starts at the portfolio's total
+  // value on the first day of the window — directly comparable, in dollars,
+  // to the height of the stacked bands.
+  const spCloses = await getBenchmarkCloses(startDate);
+  if (spCloses.length > 0) {
+    let anchorIdx = -1;
+    let spAnchor: Decimal | null = null;
+    for (let i = 0; i < dates.length; i++) {
+      const close = priceOn(spCloses, dates[i]);
+      if (close?.gt(0)) {
+        anchorIdx = i;
+        spAnchor = close;
+        break;
+      }
+    }
+    if (anchorIdx >= 0 && spAnchor) {
+      let totalAnchor = 0;
+      for (const s of series) totalAnchor += points[anchorIdx][s.key] ?? 0;
+      if (totalAnchor > 0) {
+        for (let i = anchorIdx; i < dates.length; i++) {
+          const close = priceOn(spCloses, dates[i]);
+          if (!close) continue;
+          points[i].benchmark = Number(
+            close.dividedBy(spAnchor).times(totalAnchor).toFixed(2),
+          );
+        }
+        series.push({
+          key: "benchmark",
+          label: "S&P 500",
+          variant: "benchmark",
+        });
+      }
+    }
+  }
 
   return { baseCurrency, series, points };
 }

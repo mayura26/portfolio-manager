@@ -1,9 +1,35 @@
 import Decimal from "decimal.js";
 import { StatCard } from "@/components/shared/stat-card";
-import { getDashboardSummary } from "@/lib/dashboard";
+import { groupColor } from "@/lib/chart-colors";
+import { type GroupPnlRow, getDashboardSummary } from "@/lib/dashboard";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
 const ZERO = new Decimal(0);
+
+type Tone = "gain" | "loss" | "neutral";
+
+function toneOf(amount: Decimal): Tone {
+  if (amount.isZero()) return "neutral";
+  return amount.isPositive() ? "gain" : "loss";
+}
+
+/** Per-group rows for one P&L metric, colored to match the value chart. */
+function breakdownFor(
+  groups: GroupPnlRow[],
+  baseCurrency: string,
+  pick: (g: GroupPnlRow) => Decimal,
+) {
+  if (groups.length < 2) return undefined;
+  return groups.map((g, i) => {
+    const amount = pick(g);
+    return {
+      label: g.name,
+      value: formatCurrency(amount.toString(), baseCurrency, { signed: true }),
+      tone: toneOf(amount),
+      swatch: groupColor(i),
+    };
+  });
+}
 
 function TotalValueCard({
   stocksBase,
@@ -36,9 +62,6 @@ function TotalValueCard({
       <p className="label">Total value</p>
       <p className="display tabular mt-3 text-3xl text-foreground">
         {formatCurrency(total.toString(), baseCurrency)}
-      </p>
-      <p className="mt-1 text-xs text-muted">
-        Stocks + cash in your default currency
       </p>
 
       <div
@@ -143,6 +166,11 @@ export async function SummaryCards() {
             : "—",
           tone: unrealizedTone,
         }}
+        breakdown={breakdownFor(
+          data.groupBreakdown,
+          data.baseCurrency,
+          (g) => g.unrealized,
+        )}
       />
       <StatCard
         label="Daily change"
@@ -164,6 +192,11 @@ export async function SummaryCards() {
               }
             : undefined
         }
+        breakdown={breakdownFor(
+          data.groupBreakdown,
+          data.baseCurrency,
+          (g) => g.dailyChange,
+        )}
       />
       <StatCard
         label="Realized P&L"
@@ -183,6 +216,11 @@ export async function SummaryCards() {
                 : "—",
           tone: realizedTone,
         }}
+        breakdown={breakdownFor(
+          data.groupBreakdown,
+          data.baseCurrency,
+          (g) => g.realized,
+        )}
       />
     </div>
   );
@@ -206,6 +244,10 @@ export function SummaryCardsSkeleton() {
           <div className="h-3 w-20 bg-border" />
           <div className="mt-3 h-8 w-32 bg-border" />
           <div className="mt-2 h-3 w-24 bg-border" />
+          <div className="mt-4 space-y-2 border-t border-border pt-3">
+            <div className="h-4 w-full bg-border" />
+            <div className="h-4 w-full bg-border" />
+          </div>
         </div>
       ))}
     </div>

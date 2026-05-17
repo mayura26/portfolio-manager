@@ -14,7 +14,9 @@ export async function ValueChart({ days = 90 }: Props) {
     };
     for (const s of data.series) {
       const v = row[s.key];
-      out[s.key] = typeof v === "number" ? v : 0;
+      // The benchmark line has no value before its anchor date — leave the
+      // key unset so the line starts cleanly instead of dropping to zero.
+      if (typeof v === "number") out[s.key] = v;
     }
     return out;
   });
