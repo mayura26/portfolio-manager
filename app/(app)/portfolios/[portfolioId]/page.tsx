@@ -8,10 +8,6 @@ import {
   PortfolioValueChartSkeleton,
 } from "@/components/portfolios/portfolio-value-chart";
 import { EmptyState } from "@/components/shared/empty-state";
-import {
-  PerformanceChart,
-  PerformanceChartSkeleton,
-} from "@/components/shared/performance-chart";
 import { Skeleton } from "@/components/shared/skeleton";
 import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
@@ -116,21 +112,6 @@ async function PortfolioOverview({ params }: { params: Params }) {
         <div className="hairline bg-surface px-5 py-5">
           <Suspense fallback={<PortfolioValueChartSkeleton />}>
             <PortfolioValueChart portfolioId={portfolio.id} days={90} />
-          </Suspense>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="display text-2xl text-foreground">
-          Performance vs S&amp;P 500
-        </h2>
-        <div className="hairline bg-surface px-5 py-5">
-          <Suspense fallback={<PerformanceChartSkeleton />}>
-            <PerformanceChart
-              scope="portfolio"
-              portfolioId={portfolio.id}
-              days={90}
-            />
           </Suspense>
         </div>
       </section>

@@ -1,31 +1,36 @@
 import Decimal from "decimal.js";
 import { BENCHMARK_LABEL, getBenchmarkCloses } from "@/lib/benchmark";
 import { getGroupCashLedger } from "@/lib/cash";
-import {
-  getGroupValueHistory,
-  getPortfolioValueHistory,
-  getValueHistoryByGroup,
-} from "@/lib/dashboard";
+import { getGroupValueHistory, getValueHistoryByGroup } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
 
-const ONE = new Decimal(1);
+const BENCHMARK_KEY = "benchmark";
 
-export type PerformancePoint = {
-  date: string;
-  /** Cumulative time-weighted return %, rebased to 0 at the window start. */
-  portfolio: number;
-  /** Cumulative S&P 500 return %, or null before its first close. */
-  benchmark: number | null;
+export type PerformanceLine = {
+  key: string;
+  label: string;
+  /** "benchmark" renders as a dashed reference line; "entity" is a solid line. */
+  kind: "entity" | "benchmark";
 };
 
-export type PerformanceSeries = {
-  label: string;
-  benchmarkLabel: string;
+export type PerformancePoint = Record<string, string | number | null>;
+
+export type PerformanceData = {
+  lines: PerformanceLine[];
   points: PerformancePoint[];
 };
 
 type Flow = { date: Date; amount: number };
+
+type EntityInput = {
+  key: string;
+  label: string;
+  /** Total value per curve date. */
+  values: number[];
+  /** External flows (dated); bucketed onto the curve internally. */
+  flows: Flow[];
+};
 
 function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -48,7 +53,7 @@ function priceOnOrBefore(
 /**
  * Cumulative time-weighted return %, rebased to 0 at the first date. Each
  * day's sub-period return neutralizes that day's external flow, so deposits
- * and withdrawals don't masquerade as performance.
+ * and withdrawals (or trades, for a portfolio) don't masquerade as performance.
  */
 function twrPercent(values: number[], flows: number[]): number[] {
   const out: number[] = [];
@@ -101,33 +106,6 @@ function benchmarkPercent(
   });
 }
 
-async function buildSeries(
-  label: string,
-  dates: Date[],
-  values: number[],
-  flows: Flow[],
-): Promise<PerformanceSeries> {
-  if (dates.length < 2) {
-    return { label, benchmarkLabel: BENCHMARK_LABEL, points: [] };
-  }
-
-  const portfolioPct = twrPercent(values, bucketFlows(dates, flows));
-
-  // Fetch a few days before the window so the benchmark has a close to
-  // anchor on at the very first date.
-  const since = new Date(dates[0]);
-  since.setUTCDate(since.getUTCDate() - 7);
-  const closes = await getBenchmarkCloses(since);
-  const benchPct = benchmarkPercent(dates, closes);
-
-  const points: PerformancePoint[] = dates.map((d, i) => ({
-    date: d.toISOString(),
-    portfolio: portfolioPct[i],
-    benchmark: benchPct[i],
-  }));
-  return { label, benchmarkLabel: BENCHMARK_LABEL, points };
-}
-
 /** Sum every numeric series key in a value-history row. */
 function rowTotal(
   row: Record<string, number>,
@@ -141,79 +119,125 @@ function rowTotal(
   return total;
 }
 
-/** Time-weighted return of one portfolio vs the S&P 500. Trades are flows. */
-export async function getPortfolioPerformance(
-  portfolioId: string,
-  days = 90,
-): Promise<PerformanceSeries> {
-  const portfolio = await db.portfolio.findUnique({
-    where: { id: portfolioId },
-    select: { name: true, baseCurrency: true },
-  });
-  const history = await getPortfolioValueHistory(portfolioId, days);
-  const dates = history.points.map((p) => p.date);
-  const values = history.points.map((p) => p.equities);
+async function buildPerformance(
+  dates: Date[],
+  entities: EntityInput[],
+): Promise<PerformanceData> {
+  if (dates.length < 2 || entities.length === 0) {
+    return { lines: [], points: [] };
+  }
 
-  const base = portfolio?.baseCurrency ?? history.baseCurrency;
+  // Fetch a few days before the window so the benchmark has a close to
+  // anchor on at the very first date.
+  const since = new Date(dates[0]);
+  since.setUTCDate(since.getUTCDate() - 7);
+  const closes = await getBenchmarkCloses(since);
+  const benchPct = benchmarkPercent(dates, closes);
+
+  const entityPct = entities.map((e) => ({
+    key: e.key,
+    pct: twrPercent(e.values, bucketFlows(dates, e.flows)),
+  }));
+
+  const points: PerformancePoint[] = dates.map((d, i) => {
+    const row: PerformancePoint = { date: d.toISOString() };
+    for (const e of entityPct) row[e.key] = e.pct[i];
+    row[BENCHMARK_KEY] = benchPct[i];
+    return row;
+  });
+
+  const lines: PerformanceLine[] = [
+    ...entities.map((e) => ({
+      key: e.key,
+      label: e.label,
+      kind: "entity" as const,
+    })),
+    { key: BENCHMARK_KEY, label: BENCHMARK_LABEL, kind: "benchmark" as const },
+  ];
+
+  return { lines, points };
+}
+
+/**
+ * Time-weighted return of every portfolio in a group vs the S&P 500. Each
+ * portfolio is its own line; a portfolio's trades are its external flows.
+ */
+export async function getGroupPerformance(
+  groupId: string,
+  days = 90,
+): Promise<PerformanceData> {
+  const history = await getGroupValueHistory(groupId, days);
+  const dates = history.points.map((p) => p.date);
+  if (dates.length < 2) return { lines: [], points: [] };
+
+  const groupBase = history.baseCurrency;
+  const portfolioSeries = history.series.filter((s) => s.key.startsWith("p_"));
+
   const trades = await db.trade.findMany({
-    where: { portfolioId },
+    where: { portfolio: { groupId } },
     orderBy: { date: "asc" },
     select: {
+      portfolioId: true,
       date: true,
       type: true,
       quantity: true,
       price: true,
       fees: true,
       currency: true,
-      fxRate: true,
     },
   });
-  const flows: Flow[] = trades.map((t) => {
-    const tradeFx =
-      t.currency === base
-        ? ONE
-        : t.fxRate != null
-          ? new Decimal(t.fxRate.toString())
-          : ONE;
-    const gross = new Decimal(t.price.toString())
-      .times(t.quantity.toString())
-      .times(tradeFx);
-    const fees = new Decimal(t.fees.toString()).times(tradeFx);
+  const flowsByPortfolio = new Map<string, Flow[]>();
+  for (const t of trades) {
+    const gross = new Decimal(t.price.toString()).times(t.quantity.toString());
+    const fees = new Decimal(t.fees.toString());
+    const grossBase =
+      t.currency === groupBase
+        ? gross
+        : await convert(gross, t.currency, groupBase, t.date);
+    const feesBase =
+      t.currency === groupBase
+        ? fees
+        : await convert(fees, t.currency, groupBase, t.date);
     const amount =
-      t.type === "BUY" ? gross.plus(fees) : gross.minus(fees).negated();
-    return { date: t.date, amount: Number(amount) };
-  });
+      t.type === "BUY"
+        ? grossBase.plus(feesBase)
+        : grossBase.minus(feesBase).negated();
+    let arr = flowsByPortfolio.get(t.portfolioId);
+    if (!arr) {
+      arr = [];
+      flowsByPortfolio.set(t.portfolioId, arr);
+    }
+    arr.push({ date: t.date, amount: Number(amount) });
+  }
 
-  return buildSeries(portfolio?.name ?? "Portfolio", dates, values, flows);
-}
+  const entities: EntityInput[] = portfolioSeries
+    .map((s) => {
+      const portfolioId = s.key.slice(2);
+      const values = history.points.map((row) => {
+        const v = row[s.key];
+        return typeof v === "number" ? v : 0;
+      });
+      return {
+        key: s.key,
+        label: s.label,
+        values,
+        flows: flowsByPortfolio.get(portfolioId) ?? [],
+      };
+    })
+    // Drop portfolios that never held anything in the window.
+    .filter((e) => e.values.some((v) => v !== 0));
 
-/** Time-weighted return of a group vs the S&P 500. Deposits/withdrawals are flows. */
-export async function getGroupPerformance(
-  groupId: string,
-  days = 90,
-): Promise<PerformanceSeries> {
-  const group = await db.portfolioGroup.findUnique({
-    where: { id: groupId },
-    select: { name: true },
-  });
-  const history = await getGroupValueHistory(groupId, days);
-  const dates = history.points.map((p) => p.date);
-  const values = history.points.map((row) => rowTotal(row, history.series));
-
-  const { ledger } = await getGroupCashLedger(groupId);
-  const flows: Flow[] = ledger
-    .filter((e) => e.kind === "transaction" && e.type !== "DIVIDEND")
-    .map((e) => ({ date: e.date, amount: Number(e.amountBase) }));
-
-  return buildSeries(group?.name ?? "Group", dates, values, flows);
+  return buildPerformance(dates, entities);
 }
 
 /** Time-weighted return of the whole account vs the S&P 500. */
 export async function getAccountPerformance(
   days = 90,
-): Promise<PerformanceSeries> {
+): Promise<PerformanceData> {
   const history = await getValueHistoryByGroup(days);
   const dates = history.points.map((p) => p.date);
+  if (dates.length < 2) return { lines: [], points: [] };
+
   const values = history.points.map((row) => rowTotal(row, history.series));
 
   const globalBase = history.baseCurrency;
@@ -231,5 +255,7 @@ export async function getAccountPerformance(
     }
   }
 
-  return buildSeries("Whole portfolio", dates, values, flows);
+  return buildPerformance(dates, [
+    { key: "account", label: "Whole portfolio", values, flows },
+  ]);
 }

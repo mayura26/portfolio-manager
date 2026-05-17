@@ -698,7 +698,10 @@ export async function getGroupValueHistory(
   const group = await db.portfolioGroup.findUnique({
     where: { id: groupId },
     include: {
-      portfolios: { select: { id: true, name: true, baseCurrency: true } },
+      portfolios: {
+        where: excludeEmptyUnassignedWhere,
+        select: { id: true, name: true, baseCurrency: true },
+      },
     },
   });
   if (!group) {
@@ -830,6 +833,11 @@ function uniqueSortedDates(dates: Date[], from: Date): Date[] {
     .map((t) => new Date(t));
 }
 
+/** UTC midnight of a date, as epoch ms — for day-granular trade comparisons. */
+function utcDayStart(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
 function quantityHeldOn(
   trades: {
     date: Date;
@@ -840,10 +848,13 @@ function quantityHeldOn(
   instrumentId: string,
   asOf: Date,
 ): Decimal {
+  const through = utcDayStart(asOf);
   let qty = ZERO;
   for (const t of trades) {
     if (t.instrumentId !== instrumentId) continue;
-    if (t.date.getTime() > asOf.getTime()) break;
+    // Compare by day: a trade is held from its trade date onward, regardless
+    // of the intraday time component on the stored timestamp.
+    if (utcDayStart(t.date) > through) break;
     const q = new Decimal(t.quantity.toString());
     qty = t.type === "BUY" ? qty.plus(q) : qty.minus(q);
   }
@@ -858,9 +869,10 @@ function quantityHeldOnForPortfolio(
   const subset = trades
     .filter((t) => t.instrumentId === instrumentId)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const through = utcDayStart(asOf);
   let qty = ZERO;
   for (const t of subset) {
-    if (t.date.getTime() > asOf.getTime()) break;
+    if (utcDayStart(t.date) > through) break;
     const q = new Decimal(t.quantity.toString());
     qty = t.type === "BUY" ? qty.plus(q) : qty.minus(q);
   }
@@ -871,13 +883,17 @@ function priceOn(
   series: { date: Date; close: Decimal }[] | undefined,
   asOf: Date,
 ): Decimal | null {
-  if (!series) return null;
+  if (!series || series.length === 0) return null;
   let result: Decimal | null = null;
   for (const point of series) {
     if (point.date.getTime() > asOf.getTime()) break;
     result = point.close;
   }
-  return result;
+  // Before an instrument's first available bar (e.g. a freshly bought holding
+  // whose price history hasn't backfilled yet), fall back to the earliest
+  // known price so the position isn't valued at zero — which would otherwise
+  // make total value crater on the buy date and "recover" once prices arrive.
+  return result ?? series[0].close;
 }
 
 export type PortfolioSummary = {

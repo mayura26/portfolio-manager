@@ -1,14 +1,9 @@
-import {
-  getAccountPerformance,
-  getGroupPerformance,
-  getPortfolioPerformance,
-} from "@/lib/performance";
+import { getAccountPerformance, getGroupPerformance } from "@/lib/performance";
 import { PerformanceChartClient } from "./performance-chart-client";
 
 type Props = { days?: number } & (
   | { scope: "account" }
   | { scope: "group"; groupId: string }
-  | { scope: "portfolio"; portfolioId: string }
 );
 
 export async function PerformanceChart(props: Props) {
@@ -16,9 +11,7 @@ export async function PerformanceChart(props: Props) {
   const data =
     props.scope === "account"
       ? await getAccountPerformance(days)
-      : props.scope === "group"
-        ? await getGroupPerformance(props.groupId, days)
-        : await getPortfolioPerformance(props.portfolioId, days);
+      : await getGroupPerformance(props.groupId, days);
 
   return <PerformanceChartClient {...data} />;
 }
