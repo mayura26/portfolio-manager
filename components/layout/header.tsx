@@ -1,6 +1,7 @@
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { AppLogo } from "@/components/layout/app-logo";
 import { HeaderAuth } from "@/components/layout/header-auth";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import {
@@ -18,8 +19,8 @@ export function Header() {
         <Suspense fallback={<MobileNavFallback />}>
           <MobileNav />
         </Suspense>
-        <Link href="/dashboard" className="display text-lg text-foreground">
-          Ledger
+        <Link href="/dashboard">
+          <AppLogo size="sm" showSubtitle={false} />
         </Link>
       </div>
 

@@ -27,6 +27,10 @@ export const metadata: Metadata = {
   },
   description: "A considered ledger for long-term investing.",
   applicationName: "Ledger",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
   appleWebApp: {
     capable: true,
     title: "Ledger",

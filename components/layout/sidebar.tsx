@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppLogo } from "./app-logo";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav-config";
 import { NavLink } from "./nav-link";
 
@@ -7,8 +8,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:w-60 md:flex-col md:border-r md:border-border md:bg-background">
       <div className="px-5 py-6">
         <Link href="/dashboard" className="block">
-          <h1 className="display text-2xl text-foreground">Ledger</h1>
-          <p className="label mt-1">Portfolio Manager</p>
+          <AppLogo />
         </Link>
       </div>
 
@@ -34,8 +34,7 @@ export function SidebarSkeleton() {
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col md:border-r md:border-border md:bg-background">
       <div className="px-5 py-6">
-        <h1 className="display text-2xl text-foreground">Ledger</h1>
-        <p className="label mt-1">Portfolio Manager</p>
+        <AppLogo />
       </div>
     </aside>
   );

@@ -2,7 +2,7 @@
 // Cache-first for the navigation shell, network-first for everything else.
 
 const CACHE_NAME = "ledger-shell-v1";
-const SHELL_URLS = ["/dashboard", "/manifest.webmanifest", "/icon.svg"];
+const SHELL_URLS = ["/dashboard", "/manifest.webmanifest", "/logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -68,8 +68,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title ?? "Ledger";
   const options = {
     body: payload.body ?? "",
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/logo.png",
+    badge: "/logo.png",
     data: payload.data ?? {},
     tag: payload.data?.alertId ?? undefined,
   };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { AppLogo } from "@/components/layout/app-logo";
 
 type Props = {
   authEnabled: boolean;
@@ -32,7 +33,7 @@ export function LoginForm({ authEnabled }: Props) {
   if (!authEnabled) {
     return (
       <div className="hairline max-w-md border-border bg-surface-elevated px-8 py-10 shadow-sm">
-        <p className="label text-muted">Ledger</p>
+        <AppLogo showSubtitle={false} />
         <h1 className="display mt-2 text-3xl text-foreground">Sign in</h1>
         <p className="mt-4 text-sm text-muted">
           Authentication is not configured. Set{" "}
@@ -94,7 +95,7 @@ export function LoginForm({ authEnabled }: Props) {
 
   return (
     <div className="hairline w-full max-w-md border-border bg-surface-elevated px-8 py-10 shadow-sm">
-      <p className="label text-muted">Ledger</p>
+      <AppLogo showSubtitle={false} />
       <h1 className="display mt-2 text-3xl text-foreground">Sign in</h1>
       <p className="mt-2 text-sm text-muted">
         Enter the credentials configured for this deployment.

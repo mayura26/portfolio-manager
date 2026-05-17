@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { AppLogo } from "./app-logo";
 import { type NavItem, PRIMARY_NAV, SECONDARY_NAV } from "./nav-config";
 
 export function MobileNav() {
@@ -58,8 +59,7 @@ export function MobileNav() {
         <aside className="absolute inset-y-0 left-0 z-1 flex w-[min(20rem,85vw)] max-w-full flex-col border-r border-border bg-background shadow-xl animate-slide-up">
           <div className="flex items-center justify-between px-5 py-6">
             <Link href="/dashboard" className="block">
-              <h1 className="display text-2xl text-foreground">Ledger</h1>
-              <p className="label mt-1">Portfolio Manager</p>
+              <AppLogo />
             </Link>
             <button
               type="button"
