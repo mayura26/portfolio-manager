@@ -1,11 +1,10 @@
 // Ledger service worker — minimal app-shell + push handler.
 // Cache-first for the navigation shell, network-first for everything else.
 
-const CACHE_NAME = "ledger-shell-v2";
+const CACHE_NAME = "ledger-shell-v3";
 const NOTIFICATION_ICON = "/notification-icon.svg";
 const SHELL_URLS = [
   "/dashboard",
-  "/manifest.webmanifest",
   "/logo.png",
   NOTIFICATION_ICON,
   "/web-app-manifest-192x192.png",
