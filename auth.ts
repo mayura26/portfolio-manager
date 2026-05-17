@@ -50,8 +50,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const { pathname } = request.nextUrl;
       if (pathname.startsWith("/api/auth")) return true;
       if (pathname === "/login") return true;
-      if (pathname === "/manifest.webmanifest") return true;
-      if (pathname === "/icon.svg" || pathname === "/icon-maskable.svg") {
+      if (
+        pathname === "/manifest.webmanifest" ||
+        pathname === "/notification-icon.svg" ||
+        pathname === "/logo.png" ||
+        pathname === "/web-app-manifest-192x192.png" ||
+        pathname === "/web-app-manifest-512x512.png" ||
+        pathname === "/apple-icon.png" ||
+        /^\/icon\d+\.(svg|png)$/.test(pathname)
+      ) {
         return true;
       }
 

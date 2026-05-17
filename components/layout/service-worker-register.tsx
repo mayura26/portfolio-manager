@@ -6,9 +6,15 @@ export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-    if (process.env.NODE_ENV !== "production") return;
 
-    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(
+      window.location.hostname,
+    );
+    if (!window.isSecureContext && !isLocalhost) return;
+
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .catch(() => undefined);
   }, []);
 
   return null;

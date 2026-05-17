@@ -5,6 +5,7 @@ import { PushToggle } from "@/components/settings/push-toggle";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { Skeleton } from "@/components/shared/skeleton";
 import { isAuthFullyConfigured } from "@/lib/auth-env";
+import { db } from "@/lib/db";
 
 export default function SettingsPage() {
   const authGate = isAuthFullyConfigured();
@@ -70,5 +71,11 @@ async function GeneralSettings() {
 
 async function PushSection() {
   const settings = await getSettings();
-  return <PushToggle initiallyEnabled={settings.pushEnabled} />;
+  const subscriptionCount = await db.pushSubscription.count();
+  return (
+    <PushToggle
+      globallyEnabled={settings.pushEnabled}
+      subscriptionCount={subscriptionCount}
+    />
+  );
 }
