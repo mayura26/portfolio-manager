@@ -732,7 +732,7 @@ export async function getGroupValueHistory(
   if (!curve) {
     const series: GroupValueHistorySeries[] = [
       ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-      { key: "cash", label: "Cash" },
+      { key: "cash", label: "Cash", variant: "cash" as const },
     ];
     return {
       baseCurrency: groupBase,
@@ -778,7 +778,7 @@ export async function getGroupValueHistory(
 
   const series: GroupValueHistorySeries[] = [
     ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-    { key: "cash", label: "Cash" },
+    { key: "cash", label: "Cash", variant: "cash" as const },
   ];
 
   const points: Array<{ date: Date } & Record<string, number>> = [];

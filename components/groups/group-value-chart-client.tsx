@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { GROUP_PALETTE } from "@/lib/chart-colors";
+import { cashColor, groupColor } from "@/lib/chart-colors";
 
 export type GroupValueChartSeries = {
   key: string;
@@ -30,7 +30,8 @@ type Props = {
 };
 
 function seriesColor(s: GroupValueChartSeries, idx: number): string {
-  return GROUP_PALETTE[(s.groupIndex ?? idx) % GROUP_PALETTE.length];
+  const gi = s.groupIndex ?? idx;
+  return s.variant === "cash" ? cashColor(gi) : groupColor(gi);
 }
 
 export function GroupValueChartClient({ baseCurrency, series, points }: Props) {
@@ -157,16 +158,9 @@ export function GroupValueChartClient({ baseCurrency, series, points }: Props) {
                   stackId="group"
                   hide={hidden.has(s.key)}
                   stroke={color}
-                  strokeWidth={s.variant === "cash" ? 1.25 : 1.5}
-                  strokeDasharray={s.variant === "cash" ? "3 2" : undefined}
+                  strokeWidth={1.5}
                   fill={color}
-                  fillOpacity={
-                    s.variant === "cash"
-                      ? 0.18
-                      : s.variant === "equities"
-                        ? 0.45
-                        : 0.35
-                  }
+                  fillOpacity={s.variant === "cash" ? 0.32 : 0.5}
                 />
               );
             })}
@@ -189,10 +183,7 @@ export function GroupValueChartClient({ baseCurrency, series, points }: Props) {
               <span
                 aria-hidden
                 className="inline-block h-3 w-3 shrink-0"
-                style={{
-                  background: color,
-                  opacity: s.variant === "cash" ? 0.5 : 1,
-                }}
+                style={{ background: color }}
               />
               <span
                 style={{
