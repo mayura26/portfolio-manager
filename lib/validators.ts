@@ -27,7 +27,7 @@ const nonNegativeDecimal = decimalString.refine((v) => Number(v) >= 0, {
 // ─── Portfolio ────────────────────────────────────────────────
 
 export const portfolioSchema = z.object({
-  groupId: z.string().min(1).optional().default("default"),
+  groupId: z.string().min(1, "Group is required"),
   name: z.string().trim().min(1, "Name is required").max(100),
   description: z
     .string()

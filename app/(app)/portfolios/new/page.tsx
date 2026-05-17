@@ -30,13 +30,22 @@ export default function NewPortfolioPage() {
 }
 
 async function NewPortfolioForm() {
-  const settings = await db.settings.findUnique({ where: { id: "singleton" } });
+  const [settings, groups] = await Promise.all([
+    db.settings.findUnique({ where: { id: "singleton" } }),
+    db.portfolioGroup.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, baseCurrency: true },
+    }),
+  ]);
   const defaultCurrency = settings?.defaultBaseCurrency ?? "USD";
+  const defaultGroup =
+    groups.find((group) => group.id === "default")?.id ?? groups[0]?.id;
 
   return (
     <PortfolioForm
       action={createPortfolio}
-      defaults={{ baseCurrency: defaultCurrency }}
+      groups={groups}
+      defaults={{ baseCurrency: defaultCurrency, groupId: defaultGroup }}
       submitLabel="Create portfolio"
       cancelHref="/portfolios"
     />

@@ -20,9 +20,15 @@ export default function PortfolioSettingsPage({
 
 async function PortfolioSettings({ params }: { params: Params }) {
   const { portfolioId } = await params;
-  const portfolio = await db.portfolio.findUnique({
-    where: { id: portfolioId },
-  });
+  const [portfolio, groups] = await Promise.all([
+    db.portfolio.findUnique({
+      where: { id: portfolioId },
+    }),
+    db.portfolioGroup.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, baseCurrency: true },
+    }),
+  ]);
   if (!portfolio) notFound();
 
   const updateAction = updatePortfolio.bind(null, portfolio.id);
@@ -34,7 +40,9 @@ async function PortfolioSettings({ params }: { params: Params }) {
         <h2 className="display mb-4 text-2xl text-foreground">Details</h2>
         <PortfolioForm
           action={updateAction}
+          groups={groups}
           defaults={{
+            groupId: portfolio.groupId,
             name: portfolio.name,
             description: portfolio.description,
             baseCurrency: portfolio.baseCurrency,

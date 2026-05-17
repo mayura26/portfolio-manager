@@ -10,7 +10,13 @@ type Props = {
     state: ActionState | undefined,
     formData: FormData,
   ) => Promise<ActionState>;
+  groups: {
+    id: string;
+    name: string;
+    baseCurrency: string;
+  }[];
   defaults?: {
+    groupId?: string;
     name?: string;
     description?: string | null;
     baseCurrency?: string;
@@ -21,6 +27,7 @@ type Props = {
 
 export function PortfolioForm({
   action,
+  groups,
   defaults,
   submitLabel,
   cancelHref,
@@ -57,6 +64,31 @@ export function PortfolioForm({
       </Field>
 
       <Field
+        id="groupId"
+        label="Group"
+        hint="Choose the allocation bucket this portfolio belongs to."
+        error={fieldErrors?.groupId?.[0]}
+      >
+        <select
+          id="groupId"
+          name="groupId"
+          defaultValue={defaults?.groupId ?? groups[0]?.id ?? ""}
+          required
+          disabled={groups.length === 0}
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:border-border-strong disabled:opacity-50"
+        >
+          {groups.length === 0 ? (
+            <option value="">Create a group first</option>
+          ) : null}
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name} / {group.baseCurrency}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field
         id="description"
         label="Description"
         hint="Optional. Why this portfolio exists, mandate, constraints."
@@ -89,7 +121,7 @@ export function PortfolioForm({
       <div className="flex items-center gap-3 pt-2">
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || groups.length === 0}
           className="bg-accent px-4 py-2 text-sm text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {pending ? "Saving…" : submitLabel}
