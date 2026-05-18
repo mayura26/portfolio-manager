@@ -1,4 +1,4 @@
-import { Plus, Settings as SettingsIcon } from "lucide-react";
+import { Download, Plus, Settings as SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -83,6 +83,13 @@ async function GroupDetail({ params }: { params: Params }) {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href={`/api/groups/${group.id}/simply-wall-st`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-muted hover:text-foreground"
+          >
+            <Download className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+            Simply Wall St
+          </a>
           <Link
             href={`/groups/${group.id}/cash`}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-muted hover:text-foreground"
