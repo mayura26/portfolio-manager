@@ -59,8 +59,8 @@ async function PortfolioComposition({ params }: { params: Params }) {
         <div>
           <h2 className="display text-2xl text-foreground">AI composition</h2>
           <p className="mt-1 max-w-prose text-sm text-muted">
-            Review target vs actual weights with an AI second opinion. Each row
-            gets a status and the analysis suggests rebalances.
+            Review target ranges, actual weights, concentration, and inherited
+            group profile with an AI second opinion.
           </p>
         </div>
         <RunCompositionButton scope="portfolio" portfolioId={portfolioId} />
@@ -76,7 +76,7 @@ async function PortfolioComposition({ params }: { params: Params }) {
             />
           </div>
           <div className="hairline bg-surface px-5 py-5">
-            <p className="label mb-4">Target allocation</p>
+            <p className="label mb-4">Target midpoint allocation</p>
             <AllocationChartClient
               slices={targetSlices}
               baseCurrency={allocation.baseCurrency}

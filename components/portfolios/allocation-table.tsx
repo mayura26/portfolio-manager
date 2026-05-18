@@ -24,7 +24,7 @@ export function AllocationTable({
             <Th>Instrument</Th>
             <Th align="right">Quantity</Th>
             <Th align="right">Market value</Th>
-            <Th align="right">Target %</Th>
+            <Th align="right">Target range</Th>
             <Th align="right">Actual %</Th>
             <Th align="right">Drift</Th>
             <Th align="right">Buy plan</Th>
@@ -56,12 +56,12 @@ export function AllocationTable({
                   </Link>
                   <div className="label mt-0.5 text-subtle">
                     {r.currency}
-                    {!r.isHeld ? " · target only" : ""}
+                    {!r.isHeld ? " - target only" : ""}
                   </div>
                 </Td>
                 <Td align="right">
                   <span className="tabular">
-                    {r.isHeld ? formatQuantity(r.quantity.toString()) : "—"}
+                    {r.isHeld ? formatQuantity(r.quantity.toString()) : "-"}
                   </span>
                 </Td>
                 <Td align="right">
@@ -71,14 +71,17 @@ export function AllocationTable({
                           r.marketValueBase.toString(),
                           baseCurrency,
                         )
-                      : "—"}
+                      : "-"}
                   </span>
                 </Td>
                 <Td align="right">
                   <span className="tabular text-muted">
                     {r.hasTarget
-                      ? `${formatNumber(r.targetPercent.toString(), { decimals: 2 })}%`
-                      : "—"}
+                      ? formatTargetRange(
+                          r.targetMinPercent.toString(),
+                          r.targetMaxPercent.toString(),
+                        )
+                      : "-"}
                   </span>
                 </Td>
                 <Td align="right">
@@ -87,13 +90,19 @@ export function AllocationTable({
                   </span>
                 </Td>
                 <Td align="right">
-                  <DriftCell drift={Number(r.driftPercent.toString())} />
+                  <DriftCell
+                    drift={Number(r.driftPercent.toString())}
+                    status={r.rangeStatus}
+                  />
                 </Td>
                 <Td align="right">
                   {r.hasTarget ? (
                     <BuyPlanCell
                       row={{
                         targetPercent: r.targetPercent.toString(),
+                        rebalanceTargetPercent:
+                          r.rebalanceTargetPercent.toString(),
+                        rangeStatus: r.rangeStatus,
                         marketValueBase: r.marketValueBase.toString(),
                         intendedBuyPrice:
                           r.intendedBuyPrice?.toString() ?? null,
@@ -116,11 +125,33 @@ export function AllocationTable({
   );
 }
 
-function DriftCell({ drift }: { drift: number }) {
-  if (Math.abs(drift) < 0.005) {
-    return <span className="tabular text-muted">on target</span>;
+function formatTargetRange(min: string, max: string) {
+  if (Math.abs(Number(min) - Number(max)) < 0.0001) {
+    return `${formatNumber(min, { decimals: 2 })}%`;
   }
-  const tone = Math.abs(drift) >= 5 ? "text-loss" : "text-warning";
+  return `${formatNumber(min, { decimals: 2 })}-${formatNumber(max, {
+    decimals: 2,
+  })}%`;
+}
+
+function DriftCell({
+  drift,
+  status,
+}: {
+  drift: number;
+  status: "on-target" | "underweight" | "overweight";
+}) {
+  if (status === "on-target" || Math.abs(drift) < 0.005) {
+    return <span className="tabular text-muted">in range</span>;
+  }
+  const tone =
+    status === "overweight"
+      ? Math.abs(drift) >= 5
+        ? "text-overweight-strong"
+        : "text-overweight"
+      : Math.abs(drift) >= 5
+        ? "text-loss"
+        : "text-warning";
   const sign = drift > 0 ? "+" : "";
   return (
     <span className={`tabular ${tone}`}>

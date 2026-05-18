@@ -51,6 +51,36 @@ export const portfolioGroupSchema = z.object({
     .optional()
     .transform((v) => (v?.length ? v : null)),
   baseCurrency: currencySchema,
+  investmentObjective: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+  riskTolerance: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+  timeHorizon: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+  liquidityNeed: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
+  investmentProfileNotes: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .transform((v) => (v?.length ? v : null)),
 });
 
 export type PortfolioGroupInput = z.infer<typeof portfolioGroupSchema>;
@@ -62,30 +92,70 @@ const percentString = decimalString.refine(
   { message: "Must be between 0 and 100" },
 );
 
+const targetRangeFields = {
+  targetMinPercent: percentString,
+  targetMaxPercent: percentString,
+};
+
 export const groupTargetsSchema = z
   .object({
-    cashTargetPercent: percentString,
+    cashTargetMinPercent: percentString,
+    cashTargetMaxPercent: percentString,
     portfolios: z
       .array(
-        z.object({
-          portfolioId: z.string().min(1),
-          targetPercent: percentString,
-        }),
+        z
+          .object({
+            portfolioId: z.string().min(1),
+            ...targetRangeFields,
+          })
+          .refine(
+            (d) => Number(d.targetMinPercent) <= Number(d.targetMaxPercent),
+            {
+              message: "Min must be less than or equal to max",
+              path: ["targetMaxPercent"],
+            },
+          )
+          .transform((d) => ({
+            ...d,
+            targetPercent: (
+              (Number(d.targetMinPercent) + Number(d.targetMaxPercent)) /
+              2
+            ).toString(),
+          })),
       )
       .min(0),
   })
   .refine(
+    (d) => Number(d.cashTargetMinPercent) <= Number(d.cashTargetMaxPercent),
+    {
+      message: "Cash min must be less than or equal to max",
+      path: ["cashTargetMaxPercent"],
+    },
+  )
+  .refine(
     (d) => {
-      const sum =
-        Number(d.cashTargetPercent) +
-        d.portfolios.reduce((acc, p) => acc + Number(p.targetPercent), 0);
-      return Math.abs(sum - 100) < 0.0001;
+      const minSum =
+        Number(d.cashTargetMinPercent) +
+        d.portfolios.reduce((acc, p) => acc + Number(p.targetMinPercent), 0);
+      const maxSum =
+        Number(d.cashTargetMaxPercent) +
+        d.portfolios.reduce((acc, p) => acc + Number(p.targetMaxPercent), 0);
+      return minSum <= 100.0001 && maxSum >= 99.9999;
     },
     {
-      message: "Cash + portfolio targets must sum to 100%",
-      path: ["cashTargetPercent"],
+      message: "Target ranges must allow a total allocation of 100%",
+      path: ["cashTargetMinPercent"],
     },
-  );
+  )
+  .transform((d) => ({
+    cashTargetMinPercent: d.cashTargetMinPercent,
+    cashTargetMaxPercent: d.cashTargetMaxPercent,
+    cashTargetPercent: (
+      (Number(d.cashTargetMinPercent) + Number(d.cashTargetMaxPercent)) /
+      2
+    ).toString(),
+    portfolios: d.portfolios,
+  }));
 
 export type GroupTargetsInput = z.infer<typeof groupTargetsSchema>;
 
@@ -96,33 +166,52 @@ export const portfolioTargetsSchema = z
     portfolioId: z.string().min(1),
     targets: z
       .array(
-        z.object({
-          instrumentId: z.string().min(1),
-          targetPercent: percentString,
-          intendedBuyPrice: positiveDecimal.optional().nullable(),
-          intendedSellPrice: positiveDecimal.optional().nullable(),
-          trimAtGainPercent: nonNegativeDecimal.optional().nullable(),
-          notes: z
-            .string()
-            .trim()
-            .max(500)
-            .optional()
-            .transform((v) => (v?.length ? v : null)),
-        }),
+        z
+          .object({
+            instrumentId: z.string().min(1),
+            intendedBuyPrice: positiveDecimal.optional().nullable(),
+            intendedSellPrice: positiveDecimal.optional().nullable(),
+            trimAtGainPercent: nonNegativeDecimal.optional().nullable(),
+            notes: z
+              .string()
+              .trim()
+              .max(500)
+              .optional()
+              .transform((v) => (v?.length ? v : null)),
+            ...targetRangeFields,
+          })
+          .refine(
+            (d) => Number(d.targetMinPercent) <= Number(d.targetMaxPercent),
+            {
+              message: "Min must be less than or equal to max",
+              path: ["targetMaxPercent"],
+            },
+          )
+          .transform((d) => ({
+            ...d,
+            targetPercent: (
+              (Number(d.targetMinPercent) + Number(d.targetMaxPercent)) /
+              2
+            ).toString(),
+          })),
       )
       .min(0),
   })
   .refine(
     (d) => {
       if (d.targets.length === 0) return true;
-      const sum = d.targets.reduce(
-        (acc, t) => acc + Number(t.targetPercent),
+      const minSum = d.targets.reduce(
+        (acc, t) => acc + Number(t.targetMinPercent),
         0,
       );
-      return Math.abs(sum - 100) < 0.0001;
+      const maxSum = d.targets.reduce(
+        (acc, t) => acc + Number(t.targetMaxPercent),
+        0,
+      );
+      return minSum <= 100.0001 && maxSum >= 99.9999;
     },
     {
-      message: "Holding targets must sum to 100%",
+      message: "Holding target ranges must allow a total allocation of 100%",
       path: ["targets"],
     },
   );

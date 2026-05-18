@@ -39,6 +39,7 @@ export async function analyzePortfolioComposition(
   }
   const portfolio = await db.portfolio.findUnique({
     where: { id: portfolioId },
+    include: { group: true },
   });
   if (!portfolio) return { ok: false, error: "Portfolio not found" };
 
@@ -51,14 +52,41 @@ export async function analyzePortfolioComposition(
       name: portfolio.name,
       baseCurrency: portfolio.baseCurrency,
       totalValueBase: allocation.totalMarketValueBase.toNumber(),
+      investmentProfile: groupProfile(portfolio.group),
+      metrics: {
+        topPositionPercent: topPercent(
+          allocation.rows.map((r) => r.actualPercent.toNumber()),
+        ),
+        top3PositionPercent: topPercent(
+          allocation.rows.map((r) => r.actualPercent.toNumber()),
+          3,
+        ),
+        holdingCount: allocation.rows.filter((r) => r.isHeld).length,
+        sectorExposures: exposures(
+          allocation.rows.map((r) => ({
+            label: r.sector ?? "Unknown",
+            percent: r.actualPercent.toNumber(),
+          })),
+        ),
+        currencyExposures: exposures(
+          allocation.rows.map((r) => ({
+            label: r.currency,
+            percent: r.actualPercent.toNumber(),
+          })),
+        ),
+      },
       rows: allocation.rows.map((r) => ({
         rowKey: r.instrumentId,
         symbol: r.symbol,
         name: r.name,
         sector: r.sector,
         targetPercent: r.targetPercent.toNumber(),
+        targetMinPercent: r.targetMinPercent.toNumber(),
+        targetMaxPercent: r.targetMaxPercent.toNumber(),
         actualPercent: r.actualPercent.toNumber(),
         driftPercent: r.driftPercent.toNumber(),
+        rangeStatus: r.rangeStatus,
+        rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
         marketValueBase: r.marketValueBase.toNumber(),
         isHeld: r.isHeld,
       })),
@@ -97,6 +125,8 @@ export async function analyzeGroupComposition(
   }
 
   const settings = await db.settings.findUnique({ where: { id: "singleton" } });
+  const group = await db.portfolioGroup.findUnique({ where: { id: groupId } });
+  if (!group) return { ok: false, error: "Group not found" };
   const { model, reasoningEffort } = getAiSettings(settings);
 
   try {
@@ -105,6 +135,20 @@ export async function analyzeGroupComposition(
       name: allocation.name,
       baseCurrency: allocation.baseCurrency,
       totalValueBase: allocation.totalValueBase.toNumber(),
+      investmentProfile: groupProfile(group),
+      metrics: {
+        topPortfolioPercent: topPercent(
+          allocation.rows
+            .filter((r) => r.kind === "portfolio")
+            .map((r) => r.actualPercent.toNumber()),
+        ),
+        portfolioCount: allocation.rows.filter((r) => r.kind === "portfolio")
+          .length,
+        cashPercent:
+          allocation.rows
+            .find((r) => r.kind === "cash")
+            ?.actualPercent.toNumber() ?? 0,
+      },
       rows: allocation.rows.map((r) =>
         r.kind === "cash"
           ? {
@@ -112,8 +156,12 @@ export async function analyzeGroupComposition(
               label: "Cash",
               kind: "cash" as const,
               targetPercent: r.targetPercent.toNumber(),
+              targetMinPercent: r.targetMinPercent.toNumber(),
+              targetMaxPercent: r.targetMaxPercent.toNumber(),
               actualPercent: r.actualPercent.toNumber(),
               driftPercent: r.driftPercent.toNumber(),
+              rangeStatus: r.rangeStatus,
+              rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
               valueBase: r.actualValueBase.toNumber(),
             }
           : {
@@ -121,8 +169,12 @@ export async function analyzeGroupComposition(
               label: r.name,
               kind: "portfolio" as const,
               targetPercent: r.targetPercent.toNumber(),
+              targetMinPercent: r.targetMinPercent.toNumber(),
+              targetMaxPercent: r.targetMaxPercent.toNumber(),
               actualPercent: r.actualPercent.toNumber(),
               driftPercent: r.driftPercent.toNumber(),
+              rangeStatus: r.rangeStatus,
+              rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
               valueBase: r.actualValueBase.toNumber(),
             },
       ),
@@ -149,4 +201,40 @@ export async function analyzeGroupComposition(
           : "Composition analysis failed",
     };
   }
+}
+
+function groupProfile(group: {
+  investmentObjective: string | null;
+  riskTolerance: string | null;
+  timeHorizon: string | null;
+  liquidityNeed: string | null;
+  investmentProfileNotes: string | null;
+}) {
+  return {
+    objective: group.investmentObjective,
+    riskTolerance: group.riskTolerance,
+    timeHorizon: group.timeHorizon,
+    liquidityNeed: group.liquidityNeed,
+    notes: group.investmentProfileNotes,
+  };
+}
+
+function topPercent(values: number[], count = 1) {
+  return values
+    .filter((value) => value > 0)
+    .sort((a, b) => b - a)
+    .slice(0, count)
+    .reduce((acc, value) => acc + value, 0);
+}
+
+function exposures(rows: { label: string; percent: number }[]) {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    if (row.percent <= 0) continue;
+    map.set(row.label, (map.get(row.label) ?? 0) + row.percent);
+  }
+  return Array.from(map.entries())
+    .map(([label, percent]) => ({ label, percent }))
+    .sort((a, b) => b.percent - a.percent)
+    .slice(0, 8);
 }

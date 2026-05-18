@@ -14,6 +14,11 @@ type Props = {
     name?: string;
     description?: string | null;
     baseCurrency?: string;
+    investmentObjective?: string | null;
+    riskTolerance?: string | null;
+    timeHorizon?: string | null;
+    liquidityNeed?: string | null;
+    investmentProfileNotes?: string | null;
   };
   submitLabel: string;
   cancelHref: string;
@@ -83,6 +88,94 @@ export function GroupForm({
           name="baseCurrency"
           defaultValue={defaults?.baseCurrency ?? "USD"}
           required
+        />
+      </Field>
+
+      <div className="border-t border-border pt-6">
+        <p className="label">Investment profile</p>
+        <p className="mt-1 text-xs text-subtle">
+          Used by AI composition analysis to judge suitability and risk.
+        </p>
+      </div>
+
+      <Field
+        id="investmentObjective"
+        label="Objective"
+        error={fieldErrors?.investmentObjective?.[0]}
+      >
+        <input
+          id="investmentObjective"
+          name="investmentObjective"
+          type="text"
+          maxLength={200}
+          defaultValue={defaults?.investmentObjective ?? ""}
+          placeholder="e.g. Long-term growth, income, capital preservation"
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+        />
+      </Field>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field
+          id="riskTolerance"
+          label="Risk"
+          error={fieldErrors?.riskTolerance?.[0]}
+        >
+          <input
+            id="riskTolerance"
+            name="riskTolerance"
+            type="text"
+            maxLength={100}
+            defaultValue={defaults?.riskTolerance ?? ""}
+            placeholder="Moderate"
+            className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+          />
+        </Field>
+
+        <Field
+          id="timeHorizon"
+          label="Horizon"
+          error={fieldErrors?.timeHorizon?.[0]}
+        >
+          <input
+            id="timeHorizon"
+            name="timeHorizon"
+            type="text"
+            maxLength={100}
+            defaultValue={defaults?.timeHorizon ?? ""}
+            placeholder="5-10 years"
+            className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+          />
+        </Field>
+
+        <Field
+          id="liquidityNeed"
+          label="Liquidity"
+          error={fieldErrors?.liquidityNeed?.[0]}
+        >
+          <input
+            id="liquidityNeed"
+            name="liquidityNeed"
+            type="text"
+            maxLength={100}
+            defaultValue={defaults?.liquidityNeed ?? ""}
+            placeholder="Low"
+            className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+          />
+        </Field>
+      </div>
+
+      <Field
+        id="investmentProfileNotes"
+        label="Profile notes"
+        error={fieldErrors?.investmentProfileNotes?.[0]}
+      >
+        <textarea
+          id="investmentProfileNotes"
+          name="investmentProfileNotes"
+          rows={4}
+          maxLength={1000}
+          defaultValue={defaults?.investmentProfileNotes ?? ""}
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
         />
       </Field>
 

@@ -9,8 +9,8 @@ export type PortfolioTargetsActionState =
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
 /**
- * Bulk-replace the target rows for a portfolio. The submitted set must sum to
- * exactly 100% (or be empty, which clears all targets).
+ * Bulk-replace target rows for a portfolio. The submitted ranges must allow a
+ * 100% allocation (or be empty, which clears all targets).
  */
 export async function setPortfolioTargets(
   portfolioId: string,
@@ -20,7 +20,12 @@ export async function setPortfolioTargets(
   const instrumentIds = formData
     .getAll("instrumentId")
     .map((v) => v.toString());
-  const targets = formData.getAll("targetPercent").map((v) => v.toString());
+  const targetMins = formData
+    .getAll("targetMinPercent")
+    .map((v) => v.toString());
+  const targetMaxes = formData
+    .getAll("targetMaxPercent")
+    .map((v) => v.toString());
   const buyPrices = formData
     .getAll("intendedBuyPrice")
     .map((v) => v.toString());
@@ -33,18 +38,20 @@ export async function setPortfolioTargets(
   const notes = formData.getAll("notes").map((v) => v.toString());
 
   if (
-    instrumentIds.length !== targets.length ||
     instrumentIds.length !== buyPrices.length ||
     instrumentIds.length !== sellPrices.length ||
     instrumentIds.length !== trimGains.length ||
-    instrumentIds.length !== notes.length
+    instrumentIds.length !== notes.length ||
+    instrumentIds.length !== targetMins.length ||
+    instrumentIds.length !== targetMaxes.length
   ) {
     return { ok: false, error: "Mismatched target inputs" };
   }
 
   const rows = instrumentIds.map((id, i) => ({
     instrumentId: id,
-    targetPercent: targets[i],
+    targetMinPercent: targetMins[i],
+    targetMaxPercent: targetMaxes[i],
     intendedBuyPrice: buyPrices[i].length > 0 ? buyPrices[i] : null,
     intendedSellPrice: sellPrices[i].length > 0 ? sellPrices[i] : null,
     trimAtGainPercent: trimGains[i].length > 0 ? trimGains[i] : null,
@@ -60,7 +67,8 @@ export async function setPortfolioTargets(
     return {
       ok: false,
       error:
-        parsed.error.issues[0]?.message ?? "Targets must sum to exactly 100%",
+        parsed.error.issues[0]?.message ??
+        "Target ranges must allow a 100% allocation",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -93,6 +101,8 @@ export async function setPortfolioTargets(
           portfolioId,
           instrumentId: row.instrumentId,
           targetPercent: row.targetPercent,
+          targetMinPercent: row.targetMinPercent,
+          targetMaxPercent: row.targetMaxPercent,
           intendedBuyPrice: row.intendedBuyPrice ?? null,
           intendedSellPrice: row.intendedSellPrice ?? null,
           trimAtGainPercent: row.trimAtGainPercent ?? null,
@@ -100,6 +110,8 @@ export async function setPortfolioTargets(
         },
         update: {
           targetPercent: row.targetPercent,
+          targetMinPercent: row.targetMinPercent,
+          targetMaxPercent: row.targetMaxPercent,
           intendedBuyPrice: row.intendedBuyPrice ?? null,
           intendedSellPrice: row.intendedSellPrice ?? null,
           trimAtGainPercent: row.trimAtGainPercent ?? null,

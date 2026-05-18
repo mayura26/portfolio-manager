@@ -17,7 +17,7 @@ export function GroupAllocationTable({ allocation, returns }: Props) {
         <thead>
           <tr className="border-b border-border text-left text-muted">
             <Th>Holding</Th>
-            <Th align="right">Target %</Th>
+            <Th align="right">Target range</Th>
             <Th align="right">Actual %</Th>
             <Th align="right">Drift</Th>
             <Th align="right">Value</Th>
@@ -44,7 +44,10 @@ export function GroupAllocationTable({ allocation, returns }: Props) {
               </Td>
               <Td align="right">
                 <span className="tabular text-muted">
-                  {formatNumber(r.targetPercent.toString(), { decimals: 2 })}%
+                  {formatTargetRange(
+                    r.targetMinPercent.toString(),
+                    r.targetMaxPercent.toString(),
+                  )}
                 </span>
               </Td>
               <Td align="right">
@@ -53,7 +56,10 @@ export function GroupAllocationTable({ allocation, returns }: Props) {
                 </span>
               </Td>
               <Td align="right">
-                <DriftCell drift={Number(r.driftPercent.toString())} />
+                <DriftCell
+                  drift={Number(r.driftPercent.toString())}
+                  status={r.rangeStatus}
+                />
               </Td>
               <Td align="right">
                 <span className="tabular">
@@ -77,11 +83,33 @@ export function GroupAllocationTable({ allocation, returns }: Props) {
   );
 }
 
-function DriftCell({ drift }: { drift: number }) {
-  if (Math.abs(drift) < 0.005) {
-    return <span className="tabular text-muted">—</span>;
+function formatTargetRange(min: string, max: string) {
+  if (Math.abs(Number(min) - Number(max)) < 0.0001) {
+    return `${formatNumber(min, { decimals: 2 })}%`;
   }
-  const tone = Math.abs(drift) >= 5 ? "text-loss" : "text-warning";
+  return `${formatNumber(min, { decimals: 2 })}-${formatNumber(max, {
+    decimals: 2,
+  })}%`;
+}
+
+function DriftCell({
+  drift,
+  status,
+}: {
+  drift: number;
+  status: "on-target" | "underweight" | "overweight";
+}) {
+  if (status === "on-target" || Math.abs(drift) < 0.005) {
+    return <span className="tabular text-muted">in range</span>;
+  }
+  const tone =
+    status === "overweight"
+      ? Math.abs(drift) >= 5
+        ? "text-overweight-strong"
+        : "text-overweight"
+      : Math.abs(drift) >= 5
+        ? "text-loss"
+        : "text-warning";
   const sign = drift > 0 ? "+" : "";
   return (
     <span className={`tabular ${tone}`}>
@@ -93,7 +121,7 @@ function DriftCell({ drift }: { drift: number }) {
 
 function ReturnCell({ value }: { value: number | undefined }) {
   if (value === undefined) {
-    return <span className="tabular text-muted">—</span>;
+    return <span className="tabular text-muted">-</span>;
   }
   const tone =
     value > 0.005 ? "text-gain" : value < -0.005 ? "text-loss" : "text-muted";

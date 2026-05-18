@@ -82,9 +82,9 @@ async function PortfolioTargets({ params }: { params: Params }) {
       <header>
         <h2 className="display text-2xl text-foreground">Target weights</h2>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          Set the % of this portfolio you want in each instrument. Watchlist
-          stocks assigned to this portfolio appear in the picker. The total must
-          be exactly 100%.
+          Set the target range for each instrument. Watchlist stocks assigned to
+          this portfolio appear in the picker. The combined ranges must allow a
+          100% allocation.
         </p>
       </header>
 
@@ -104,6 +104,8 @@ function rowFromAllocation(r: {
   name: string;
   currency: string;
   targetPercent: { toString(): string };
+  targetMinPercent: { toString(): string };
+  targetMaxPercent: { toString(): string };
   intendedBuyPrice: { toString(): string } | null;
   intendedSellPrice: { toString(): string } | null;
   trimAtGainPercent: { toString(): string } | null;
@@ -117,6 +119,8 @@ function rowFromAllocation(r: {
     name: r.name,
     currency: r.currency,
     targetPercent: r.hasTarget ? r.targetPercent.toString() : "0",
+    targetMinPercent: r.hasTarget ? r.targetMinPercent.toString() : "0",
+    targetMaxPercent: r.hasTarget ? r.targetMaxPercent.toString() : "0",
     intendedBuyPrice: r.intendedBuyPrice ? r.intendedBuyPrice.toString() : "",
     intendedSellPrice: r.intendedSellPrice
       ? r.intendedSellPrice.toString()

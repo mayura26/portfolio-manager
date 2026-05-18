@@ -14,6 +14,11 @@ function parseFormData(formData: FormData) {
     name: formData.get("name"),
     description: formData.get("description"),
     baseCurrency: formData.get("baseCurrency"),
+    investmentObjective: formData.get("investmentObjective"),
+    riskTolerance: formData.get("riskTolerance"),
+    timeHorizon: formData.get("timeHorizon"),
+    liquidityNeed: formData.get("liquidityNeed"),
+    investmentProfileNotes: formData.get("investmentProfileNotes"),
   });
 }
 
@@ -31,7 +36,12 @@ export async function createGroup(
   }
 
   const group = await db.portfolioGroup.create({
-    data: { ...parsed.data, cashTargetPercent: "100" },
+    data: {
+      ...parsed.data,
+      cashTargetPercent: "100",
+      cashTargetMinPercent: "100",
+      cashTargetMaxPercent: "100",
+    },
   });
 
   revalidatePath("/groups");
@@ -101,30 +111,40 @@ export async function updateGroupIbkr(
 }
 
 /**
- * Bulk-set the target weights for every portfolio in a group plus the cash slot.
- * Validates that they sum to exactly 100%.
+ * Bulk-set the target ranges for every portfolio in a group plus the cash slot.
+ * Validates that the combined ranges allow a 100% allocation.
  */
 export async function setGroupTargets(
   groupId: string,
   _prev: GroupActionState | undefined,
   formData: FormData,
 ): Promise<GroupActionState> {
-  const cashTargetPercent =
-    formData.get("cashTargetPercent")?.toString() ?? "0";
+  const cashTargetMinPercent =
+    formData.get("cashTargetMinPercent")?.toString() ?? "0";
+  const cashTargetMaxPercent =
+    formData.get("cashTargetMaxPercent")?.toString() ?? "0";
   const portfolioIds = formData.getAll("portfolioId").map((v) => v.toString());
-  const portfolioTargets = formData
-    .getAll("portfolioTargetPercent")
+  const portfolioMinTargets = formData
+    .getAll("portfolioTargetMinPercent")
+    .map((v) => v.toString());
+  const portfolioMaxTargets = formData
+    .getAll("portfolioTargetMaxPercent")
     .map((v) => v.toString());
 
-  if (portfolioIds.length !== portfolioTargets.length) {
+  if (
+    portfolioIds.length !== portfolioMinTargets.length ||
+    portfolioIds.length !== portfolioMaxTargets.length
+  ) {
     return { ok: false, error: "Mismatched portfolio target inputs" };
   }
 
   const parsed = groupTargetsSchema.safeParse({
-    cashTargetPercent,
+    cashTargetMinPercent,
+    cashTargetMaxPercent,
     portfolios: portfolioIds.map((id, i) => ({
       portfolioId: id,
-      targetPercent: portfolioTargets[i],
+      targetMinPercent: portfolioMinTargets[i],
+      targetMaxPercent: portfolioMaxTargets[i],
     })),
   });
 
@@ -132,7 +152,8 @@ export async function setGroupTargets(
     return {
       ok: false,
       error:
-        parsed.error.issues[0]?.message ?? "Targets must sum to exactly 100%",
+        parsed.error.issues[0]?.message ??
+        "Target ranges must allow a 100% allocation",
       fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
@@ -140,12 +161,20 @@ export async function setGroupTargets(
   await db.$transaction(async (tx) => {
     await tx.portfolioGroup.update({
       where: { id: groupId },
-      data: { cashTargetPercent: parsed.data.cashTargetPercent },
+      data: {
+        cashTargetPercent: parsed.data.cashTargetPercent,
+        cashTargetMinPercent: parsed.data.cashTargetMinPercent,
+        cashTargetMaxPercent: parsed.data.cashTargetMaxPercent,
+      },
     });
     for (const p of parsed.data.portfolios) {
       await tx.portfolio.update({
         where: { id: p.portfolioId },
-        data: { targetPercentInGroup: p.targetPercent },
+        data: {
+          targetPercentInGroup: p.targetPercent,
+          targetMinPercentInGroup: p.targetMinPercent,
+          targetMaxPercentInGroup: p.targetMaxPercent,
+        },
       });
     }
   });

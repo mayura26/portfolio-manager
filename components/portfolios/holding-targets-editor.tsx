@@ -15,6 +15,8 @@ type Row = {
   name: string;
   currency: string;
   targetPercent: string;
+  targetMinPercent: string;
+  targetMaxPercent: string;
   intendedBuyPrice: string;
   intendedSellPrice: string;
   trimAtGainPercent: string;
@@ -51,9 +53,21 @@ export function HoldingTargetsEditor({
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [pickerValue, setPickerValue] = useState("");
 
-  const sum = useMemo(
+  const minSum = useMemo(
+    () => rows.reduce((acc, r) => acc + Number(r.targetMinPercent || 0), 0),
+    [rows],
+  );
+  const maxSum = useMemo(
+    () => rows.reduce((acc, r) => acc + Number(r.targetMaxPercent || 0), 0),
+    [rows],
+  );
+  const midpointSum = useMemo(
     () => rows.reduce((acc, r) => acc + Number(r.targetPercent || 0), 0),
     [rows],
+  );
+  const rangeOk = minSum <= 100.0001 && maxSum >= 99.9999;
+  const rowsOk = rows.every(
+    (r) => Number(r.targetMinPercent || 0) <= Number(r.targetMaxPercent || 0),
   );
 
   const availableToAdd = selectableInstruments.filter(
@@ -78,6 +92,8 @@ export function HoldingTargetsEditor({
         name: found.name,
         currency: found.currency,
         targetPercent: "0",
+        targetMinPercent: "0",
+        targetMaxPercent: "0",
         intendedBuyPrice: watchlistBuyPrices[found.id] ?? "",
         intendedSellPrice: "",
         trimAtGainPercent: "",
@@ -108,7 +124,8 @@ export function HoldingTargetsEditor({
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="label px-3 py-3">Instrument</th>
-              <th className="label px-3 py-3 text-right">Target %</th>
+              <th className="label px-3 py-3 text-right">Min %</th>
+              <th className="label px-3 py-3 text-right">Max %</th>
               <th className="label px-3 py-3 text-right">Buy price</th>
               <th className="label px-3 py-3 text-right">Sell price</th>
               <th className="label px-3 py-3 text-right">Trim at %</th>
@@ -120,7 +137,7 @@ export function HoldingTargetsEditor({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-3 py-8 text-center text-sm text-muted"
                 >
                   No targets yet. Add an instrument below to start.
@@ -147,16 +164,43 @@ export function HoldingTargetsEditor({
                   </td>
                   <td className="px-3 py-3 text-right">
                     <input
-                      name="targetPercent"
+                      name="targetMinPercent"
                       type="number"
                       min="0"
                       max="100"
                       step="0.01"
                       required
-                      value={r.targetPercent}
+                      value={r.targetMinPercent}
                       onChange={(e) =>
                         updateRow(r.instrumentId, {
-                          targetPercent: e.target.value,
+                          targetMinPercent: e.target.value,
+                          targetPercent: (
+                            (Number(e.target.value || 0) +
+                              Number(r.targetMaxPercent || 0)) /
+                            2
+                          ).toString(),
+                        })
+                      }
+                      className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      name="targetMaxPercent"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      required
+                      value={r.targetMaxPercent}
+                      onChange={(e) =>
+                        updateRow(r.instrumentId, {
+                          targetMaxPercent: e.target.value,
+                          targetPercent: (
+                            (Number(r.targetMinPercent || 0) +
+                              Number(e.target.value || 0)) /
+                            2
+                          ).toString(),
                         })
                       }
                       className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
@@ -268,7 +312,11 @@ export function HoldingTargetsEditor({
       </div>
 
       <div className="flex items-center justify-between">
-        <SumToHundredIndicator sum={sum} />
+        <SumToHundredIndicator
+          minSum={minSum}
+          maxSum={maxSum}
+          label={`Range midpoint ${midpointSum.toFixed(2)}%`}
+        />
         <div className="flex items-center gap-3">
           <Link
             href={`/portfolios/${portfolioId}`}
@@ -278,9 +326,7 @@ export function HoldingTargetsEditor({
           </Link>
           <button
             type="submit"
-            disabled={
-              pending || (rows.length > 0 && Math.abs(sum - 100) > 0.0001)
-            }
+            disabled={pending || (rows.length > 0 && (!rangeOk || !rowsOk))}
             className="bg-accent px-4 py-2 text-sm text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save targets"}

@@ -48,7 +48,9 @@ model Portfolio {
   baseCurrency String   @default("USD")
 
   // Target weight of this portfolio inside its group (0-100). Group cash takes the remainder.
-  targetPercentInGroup Decimal @default(0) @db.Decimal(8, 4)
+  targetPercentInGroup    Decimal @default(0) @db.Decimal(8, 4)
+  targetMinPercentInGroup Decimal @default(0) @db.Decimal(8, 4)
+  targetMaxPercentInGroup Decimal @default(0) @db.Decimal(8, 4)
 
   // AI composition analysis (latest snapshot, JSON shape produced by lib/composition-ai.ts).
   aiCompositionAnalysis    Json?
@@ -368,8 +370,17 @@ model PortfolioGroup {
   baseCurrency String   @default("USD")
 
   // Target weight reserved for cash (0-100). Plus the target weights of all
-  // portfolios in this group must equal 100.
-  cashTargetPercent Decimal @default(0) @db.Decimal(8, 4)
+  // portfolios in this group must equal 100. Min/max fields define the allowed
+  // band; the single target remains a midpoint/reference for compatibility.
+  cashTargetPercent    Decimal @default(0) @db.Decimal(8, 4)
+  cashTargetMinPercent Decimal @default(0) @db.Decimal(8, 4)
+  cashTargetMaxPercent Decimal @default(0) @db.Decimal(8, 4)
+
+  investmentObjective     String?
+  riskTolerance           String?
+  timeHorizon             String?
+  liquidityNeed           String?
+  investmentProfileNotes  String?
 
   ibkrFlexToken   String?
   ibkrFlexQueryId String?
@@ -468,6 +479,8 @@ model PortfolioTarget {
   portfolioId        String
   instrumentId       String
   targetPercent      Decimal  @db.Decimal(8, 4)
+  targetMinPercent   Decimal  @default(0) @db.Decimal(8, 4)
+  targetMaxPercent   Decimal  @default(0) @db.Decimal(8, 4)
   intendedBuyPrice   Decimal? @db.Decimal(18, 4)
   intendedSellPrice  Decimal? @db.Decimal(18, 4)
   trimAtGainPercent  Decimal? @db.Decimal(8, 4)

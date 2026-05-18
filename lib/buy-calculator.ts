@@ -5,7 +5,7 @@ const ZERO = new Decimal(0);
 const HUNDRED = new Decimal(100);
 
 export type BuyPlan = {
-  // Target value at the current portfolio total (held constant for simplicity).
+  // Nearest in-range target value at the current portfolio total.
   targetValueBase: Decimal;
   currentValueBase: Decimal;
   // gap = targetValue - currentValue. Positive = buy more; negative = overweight.
@@ -28,7 +28,8 @@ export function computeBuyPlan(
   totalPortfolioValueBase: Decimal,
   groupCashBase: Decimal,
 ): BuyPlan {
-  const targetValueBase = row.targetPercent
+  const targetPercent = row.rebalanceTargetPercent ?? row.targetPercent;
+  const targetValueBase = targetPercent
     .dividedBy(HUNDRED)
     .times(totalPortfolioValueBase);
   const gapValueBase = targetValueBase.minus(row.marketValueBase);

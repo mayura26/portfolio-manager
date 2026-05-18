@@ -6,6 +6,8 @@ import type { AllocationRow } from "@/lib/portfolio-allocation";
 type Props = {
   row: {
     targetPercent: string;
+    rebalanceTargetPercent: string;
+    rangeStatus: "on-target" | "underweight" | "overweight";
     marketValueBase: string;
     intendedBuyPrice: string | null;
   };
@@ -24,13 +26,17 @@ export function BuyPlanCell({
 }: Props) {
   const fakeRow = {
     targetPercent: new Decimal(row.targetPercent),
+    rebalanceTargetPercent: new Decimal(row.rebalanceTargetPercent),
     marketValueBase: new Decimal(row.marketValueBase),
     intendedBuyPrice: row.intendedBuyPrice
       ? new Decimal(row.intendedBuyPrice)
       : null,
   } as Pick<
     AllocationRow,
-    "targetPercent" | "marketValueBase" | "intendedBuyPrice"
+    | "targetPercent"
+    | "rebalanceTargetPercent"
+    | "marketValueBase"
+    | "intendedBuyPrice"
   >;
   const plan = computeBuyPlan(
     fakeRow as AllocationRow,
@@ -38,9 +44,13 @@ export function BuyPlanCell({
     new Decimal(groupCashBase),
   );
 
+  if (row.rangeStatus === "on-target") {
+    return <span className="text-xs text-muted">In range</span>;
+  }
+
   if (plan.gapValueBase.lte(0)) {
     return (
-      <span className="text-xs text-muted">
+      <span className="text-xs text-overweight">
         Trim{" "}
         {formatCurrency(
           plan.gapValueBase.abs().toString(),

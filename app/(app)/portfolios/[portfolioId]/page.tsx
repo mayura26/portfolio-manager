@@ -55,8 +55,9 @@ async function PortfolioOverview({ params }: { params: Params }) {
     );
   }
 
-  const targetSumOk =
-    Math.abs(Number(allocation.targetSum.toString()) - 100) < 0.0001;
+  const targetRangeOk =
+    Number(allocation.targetMinSum.toString()) <= 100.0001 &&
+    Number(allocation.targetMaxSum.toString()) >= 99.9999;
 
   return (
     <div className="flex flex-col gap-8">
@@ -95,7 +96,10 @@ async function PortfolioOverview({ params }: { params: Params }) {
           {portfolio.group.name}
         </Link>{" "}
         · Target weight in group:{" "}
-        {Number(portfolio.targetPercentInGroup.toString()).toFixed(2)}%
+        {formatRange(
+          portfolio.targetMinPercentInGroup.toString(),
+          portfolio.targetMaxPercentInGroup.toString(),
+        )}
       </p>
 
       {holdings.hasMissingPrices ? (
@@ -122,11 +126,9 @@ async function PortfolioOverview({ params }: { params: Params }) {
             Allocation (target vs actual)
           </h2>
           <div className="flex items-center gap-3">
-            {!targetSumOk && allocation.rows.some((r) => r.hasTarget) ? (
+            {!targetRangeOk && allocation.rows.some((r) => r.hasTarget) ? (
               <span className="text-xs text-warning">
-                Targets sum to{" "}
-                {Number(allocation.targetSum.toString()).toFixed(2)}% — fix on
-                the Targets tab
+                Target ranges do not include 100% - fix on the Targets tab
               </span>
             ) : null}
             <Link
@@ -182,4 +184,11 @@ function Stat({
       </p>
     </div>
   );
+}
+
+function formatRange(min: string, max: string) {
+  if (Math.abs(Number(min) - Number(max)) < 0.0001) {
+    return `${Number(min).toFixed(2)}%`;
+  }
+  return `${Number(min).toFixed(2)}%-${Number(max).toFixed(2)}%`;
 }

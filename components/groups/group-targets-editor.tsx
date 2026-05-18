@@ -8,12 +8,14 @@ import { SumToHundredIndicator } from "@/components/shared/sum-to-hundred-indica
 type Portfolio = {
   id: string;
   name: string;
-  targetPercentInGroup: string;
+  targetMinPercentInGroup: string;
+  targetMaxPercentInGroup: string;
 };
 
 type Props = {
   groupId: string;
-  cashTargetPercent: string;
+  cashTargetMinPercent: string;
+  cashTargetMaxPercent: string;
   portfolios: Portfolio[];
   action: (
     groupId: string,
@@ -24,7 +26,8 @@ type Props = {
 
 export function GroupTargetsEditor({
   groupId,
-  cashTargetPercent,
+  cashTargetMinPercent,
+  cashTargetMaxPercent,
   portfolios,
   action,
 }: Props) {
@@ -34,14 +37,44 @@ export function GroupTargetsEditor({
     FormData
   >(bound, undefined);
 
-  const [cash, setCash] = useState(cashTargetPercent);
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(portfolios.map((p) => [p.id, p.targetPercentInGroup])),
+  const [cash, setCash] = useState({
+    min: cashTargetMinPercent,
+    max: cashTargetMaxPercent,
+  });
+  const [values, setValues] = useState<
+    Record<string, { min: string; max: string }>
+  >(
+    Object.fromEntries(
+      portfolios.map((p) => [
+        p.id,
+        {
+          min: p.targetMinPercentInGroup,
+          max: p.targetMaxPercentInGroup,
+        },
+      ]),
+    ),
   );
 
-  const sum =
-    Number(cash || 0) +
-    portfolios.reduce((acc, p) => acc + Number(values[p.id] || 0), 0);
+  const minSum =
+    Number(cash.min || 0) +
+    portfolios.reduce((acc, p) => acc + Number(values[p.id]?.min || 0), 0);
+  const maxSum =
+    Number(cash.max || 0) +
+    portfolios.reduce((acc, p) => acc + Number(values[p.id]?.max || 0), 0);
+  const midpointSum =
+    (Number(cash.min || 0) + Number(cash.max || 0)) / 2 +
+    portfolios.reduce(
+      (acc, p) =>
+        acc +
+        (Number(values[p.id]?.min || 0) + Number(values[p.id]?.max || 0)) / 2,
+      0,
+    );
+  const rangeOk = minSum <= 100.0001 && maxSum >= 99.9999;
+  const rowsOk =
+    Number(cash.min || 0) <= Number(cash.max || 0) &&
+    portfolios.every(
+      (p) => Number(values[p.id]?.min || 0) <= Number(values[p.id]?.max || 0),
+    );
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -59,14 +92,15 @@ export function GroupTargetsEditor({
           <thead>
             <tr className="border-b border-border text-left text-muted">
               <th className="label px-3 py-3">Portfolio</th>
-              <th className="label px-3 py-3 text-right">Target %</th>
+              <th className="label px-3 py-3 text-right">Min %</th>
+              <th className="label px-3 py-3 text-right">Max %</th>
             </tr>
           </thead>
           <tbody>
             {portfolios.length === 0 ? (
               <tr>
                 <td
-                  colSpan={2}
+                  colSpan={3}
                   className="px-3 py-6 text-center text-sm text-muted"
                 >
                   No portfolios in this group yet.
@@ -84,15 +118,42 @@ export function GroupTargetsEditor({
                   </td>
                   <td className="px-3 py-3 text-right">
                     <input
-                      name="portfolioTargetPercent"
+                      name="portfolioTargetMinPercent"
                       type="number"
                       min="0"
                       max="100"
                       step="0.01"
                       required
-                      value={values[p.id] ?? ""}
+                      value={values[p.id]?.min ?? ""}
                       onChange={(e) =>
-                        setValues((v) => ({ ...v, [p.id]: e.target.value }))
+                        setValues((v) => ({
+                          ...v,
+                          [p.id]: {
+                            min: e.target.value,
+                            max: v[p.id]?.max ?? "",
+                          },
+                        }))
+                      }
+                      className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      name="portfolioTargetMaxPercent"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      required
+                      value={values[p.id]?.max ?? ""}
+                      onChange={(e) =>
+                        setValues((v) => ({
+                          ...v,
+                          [p.id]: {
+                            min: v[p.id]?.min ?? "",
+                            max: e.target.value,
+                          },
+                        }))
                       }
                       className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
                     />
@@ -104,14 +165,31 @@ export function GroupTargetsEditor({
               <td className="px-3 py-3 text-foreground">Cash</td>
               <td className="px-3 py-3 text-right">
                 <input
-                  name="cashTargetPercent"
+                  name="cashTargetMinPercent"
                   type="number"
                   min="0"
                   max="100"
                   step="0.01"
                   required
-                  value={cash}
-                  onChange={(e) => setCash(e.target.value)}
+                  value={cash.min}
+                  onChange={(e) =>
+                    setCash((prev) => ({ ...prev, min: e.target.value }))
+                  }
+                  className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
+                />
+              </td>
+              <td className="px-3 py-3 text-right">
+                <input
+                  name="cashTargetMaxPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  required
+                  value={cash.max}
+                  onChange={(e) =>
+                    setCash((prev) => ({ ...prev, max: e.target.value }))
+                  }
                   className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
                 />
               </td>
@@ -121,7 +199,11 @@ export function GroupTargetsEditor({
       </div>
 
       <div className="flex items-center justify-between">
-        <SumToHundredIndicator sum={sum} />
+        <SumToHundredIndicator
+          minSum={minSum}
+          maxSum={maxSum}
+          label={`Range midpoint ${midpointSum.toFixed(2)}%`}
+        />
         <div className="flex items-center gap-3">
           <Link
             href={`/groups/${groupId}`}
@@ -131,7 +213,7 @@ export function GroupTargetsEditor({
           </Link>
           <button
             type="submit"
-            disabled={pending || Math.abs(sum - 100) > 0.0001}
+            disabled={pending || !rangeOk || !rowsOk}
             className="bg-accent px-4 py-2 text-sm text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save targets"}

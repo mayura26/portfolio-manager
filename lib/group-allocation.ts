@@ -1,4 +1,9 @@
 import Decimal from "decimal.js";
+import {
+  type AllocationRangeStatus,
+  computeRangeDrift,
+  midpointPercent,
+} from "@/lib/allocation-range";
 import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
@@ -12,17 +17,25 @@ export type GroupPortfolioRow = {
   name: string;
   baseCurrency: string;
   targetPercent: Decimal;
+  targetMinPercent: Decimal;
+  targetMaxPercent: Decimal;
   actualValueBase: Decimal;
   actualPercent: Decimal;
   driftPercent: Decimal;
+  rangeStatus: AllocationRangeStatus;
+  rebalanceTargetPercent: Decimal;
 };
 
 export type GroupCashRow = {
   kind: "cash";
   targetPercent: Decimal;
+  targetMinPercent: Decimal;
+  targetMaxPercent: Decimal;
   actualValueBase: Decimal;
   actualPercent: Decimal;
   driftPercent: Decimal;
+  rangeStatus: AllocationRangeStatus;
+  rebalanceTargetPercent: Decimal;
 };
 
 export type GroupRow = GroupPortfolioRow | GroupCashRow;
@@ -35,6 +48,8 @@ export type GroupAllocation = {
   totalValueBase: Decimal;
   rows: GroupRow[];
   targetSum: Decimal;
+  targetMinSum: Decimal;
+  targetMaxSum: Decimal;
   hasMissingPrices: boolean;
 };
 
@@ -84,7 +99,13 @@ export async function computeGroupAllocation(
 
   const rows: GroupRow[] = [];
   for (const { portfolio, valueInGroupBase } of portfolioValues) {
-    const targetPct = new Decimal(portfolio.targetPercentInGroup.toString());
+    const targetMinPct = new Decimal(
+      portfolio.targetMinPercentInGroup.toString(),
+    );
+    const targetMaxPct = new Decimal(
+      portfolio.targetMaxPercentInGroup.toString(),
+    );
+    const targetPct = midpointPercent(targetMinPct, targetMaxPct);
     if (
       portfolio.name === "Unassigned" &&
       portfolio._count.trades === 0 &&
@@ -95,31 +116,59 @@ export async function computeGroupAllocation(
     const actualPct = totalValueBase.gt(0)
       ? valueInGroupBase.dividedBy(totalValueBase).times(100)
       : ZERO;
+    const rangeDrift = computeRangeDrift({
+      actualPercent: actualPct,
+      targetMinPercent: targetMinPct,
+      targetMaxPercent: targetMaxPct,
+    });
     rows.push({
       kind: "portfolio",
       portfolioId: portfolio.id,
       name: portfolio.name,
       baseCurrency: portfolio.baseCurrency,
       targetPercent: targetPct,
+      targetMinPercent: targetMinPct,
+      targetMaxPercent: targetMaxPct,
       actualValueBase: valueInGroupBase,
       actualPercent: actualPct,
-      driftPercent: actualPct.minus(targetPct),
+      driftPercent: rangeDrift.driftPercent,
+      rangeStatus: rangeDrift.status,
+      rebalanceTargetPercent: rangeDrift.rebalanceTargetPercent,
     });
   }
 
-  const cashTarget = new Decimal(group.cashTargetPercent.toString());
+  const cashTargetMin = new Decimal(group.cashTargetMinPercent.toString());
+  const cashTargetMax = new Decimal(group.cashTargetMaxPercent.toString());
+  const cashTarget = midpointPercent(cashTargetMin, cashTargetMax);
   const cashActual = totalValueBase.gt(0)
     ? cashInfo.currentCash.dividedBy(totalValueBase).times(100)
     : ZERO;
+  const cashRangeDrift = computeRangeDrift({
+    actualPercent: cashActual,
+    targetMinPercent: cashTargetMin,
+    targetMaxPercent: cashTargetMax,
+  });
   rows.push({
     kind: "cash",
     targetPercent: cashTarget,
+    targetMinPercent: cashTargetMin,
+    targetMaxPercent: cashTargetMax,
     actualValueBase: cashInfo.currentCash,
     actualPercent: cashActual,
-    driftPercent: cashActual.minus(cashTarget),
+    driftPercent: cashRangeDrift.driftPercent,
+    rangeStatus: cashRangeDrift.status,
+    rebalanceTargetPercent: cashRangeDrift.rebalanceTargetPercent,
   });
 
   const targetSum = rows.reduce((acc, r) => acc.plus(r.targetPercent), ZERO);
+  const targetMinSum = rows.reduce(
+    (acc, r) => acc.plus(r.targetMinPercent),
+    ZERO,
+  );
+  const targetMaxSum = rows.reduce(
+    (acc, r) => acc.plus(r.targetMaxPercent),
+    ZERO,
+  );
 
   return {
     groupId,
@@ -129,6 +178,8 @@ export async function computeGroupAllocation(
     totalValueBase,
     rows,
     targetSum,
+    targetMinSum,
+    targetMaxSum,
     hasMissingPrices,
   };
 }

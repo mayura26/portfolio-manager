@@ -51,8 +51,8 @@ async function GroupSettings({ params }: { params: Params }) {
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="display text-4xl text-foreground">Group settings</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Edit metadata and bulk-set target weights. Cash + portfolio targets
-          must sum to exactly 100%.
+          Edit metadata, investment profile, and bulk-set target ranges. Cash +
+          portfolio ranges must allow a 100% allocation.
         </p>
       </header>
 
@@ -64,6 +64,11 @@ async function GroupSettings({ params }: { params: Params }) {
             name: group.name,
             description: group.description,
             baseCurrency: group.baseCurrency,
+            investmentObjective: group.investmentObjective,
+            riskTolerance: group.riskTolerance,
+            timeHorizon: group.timeHorizon,
+            liquidityNeed: group.liquidityNeed,
+            investmentProfileNotes: group.investmentProfileNotes,
           }}
           submitLabel="Save details"
           cancelHref={`/groups/${groupId}`}
@@ -74,11 +79,13 @@ async function GroupSettings({ params }: { params: Params }) {
         <h2 className="display mb-4 text-2xl text-foreground">Targets</h2>
         <GroupTargetsEditor
           groupId={groupId}
-          cashTargetPercent={group.cashTargetPercent.toString()}
+          cashTargetMinPercent={group.cashTargetMinPercent.toString()}
+          cashTargetMaxPercent={group.cashTargetMaxPercent.toString()}
           portfolios={group.portfolios.map((p) => ({
             id: p.id,
             name: p.name,
-            targetPercentInGroup: p.targetPercentInGroup.toString(),
+            targetMinPercentInGroup: p.targetMinPercentInGroup.toString(),
+            targetMaxPercentInGroup: p.targetMaxPercentInGroup.toString(),
           }))}
           action={setGroupTargets}
         />

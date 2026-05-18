@@ -34,6 +34,8 @@
   /* Status */
   --warning: #b88a3e;
   --info: #4a6b8a;
+  --overweight: #2f8fbd;
+  --overweight-strong: #0f766e;
   --success: var(--gain);
   --danger: var(--loss);
 }
@@ -61,6 +63,8 @@
 
     --warning: #d4a662;
     --info: #6b8eb0;
+    --overweight: #65c7f7;
+    --overweight-strong: #2dd4bf;
   }
 }
 
@@ -86,6 +90,8 @@
 
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-overweight: var(--overweight);
+  --color-overweight-strong: var(--overweight-strong);
   --color-success: var(--gain);
   --color-danger: var(--loss);
 

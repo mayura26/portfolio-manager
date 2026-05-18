@@ -1,4 +1,9 @@
 import Decimal from "decimal.js";
+import {
+  type AllocationRangeStatus,
+  computeRangeDrift,
+  midpointPercent,
+} from "@/lib/allocation-range";
 import { db } from "@/lib/db";
 import { computeHoldings } from "@/lib/holdings";
 
@@ -16,7 +21,11 @@ export type AllocationRow = {
   marketValueBase: Decimal;
   actualPercent: Decimal;
   targetPercent: Decimal;
+  targetMinPercent: Decimal;
+  targetMaxPercent: Decimal;
   driftPercent: Decimal;
+  rangeStatus: AllocationRangeStatus;
+  rebalanceTargetPercent: Decimal;
   intendedBuyPrice: Decimal | null;
   intendedSellPrice: Decimal | null;
   trimAtGainPercent: Decimal | null;
@@ -31,6 +40,8 @@ export type PortfolioAllocation = {
   rows: AllocationRow[];
   totalMarketValueBase: Decimal;
   targetSum: Decimal;
+  targetMinSum: Decimal;
+  targetMaxSum: Decimal;
   hasMissingPrices: boolean;
 };
 
@@ -57,10 +68,27 @@ export async function computePortfolioAllocation(
   for (const h of holdings.holdings) {
     seen.add(h.instrumentId);
     const target = targetMap.get(h.instrumentId);
+    const targetMinPct = target
+      ? new Decimal(target.targetMinPercent.toString())
+      : ZERO;
+    const targetMaxPct = target
+      ? new Decimal(target.targetMaxPercent.toString())
+      : ZERO;
     const targetPct = target
-      ? new Decimal(target.targetPercent.toString())
+      ? midpointPercent(targetMinPct, targetMaxPct)
       : ZERO;
     const actualPct = h.allocationPercent ?? ZERO;
+    const rangeDrift = target
+      ? computeRangeDrift({
+          actualPercent: actualPct,
+          targetMinPercent: targetMinPct,
+          targetMaxPercent: targetMaxPct,
+        })
+      : {
+          status: "on-target" as const,
+          driftPercent: ZERO,
+          rebalanceTargetPercent: actualPct,
+        };
     rows.push({
       instrumentId: h.instrumentId,
       yahooSymbol: h.yahooSymbol,
@@ -73,7 +101,11 @@ export async function computePortfolioAllocation(
       marketValueBase: h.marketValueBase ?? ZERO,
       actualPercent: actualPct,
       targetPercent: targetPct,
-      driftPercent: actualPct.minus(targetPct),
+      targetMinPercent: targetMinPct,
+      targetMaxPercent: targetMaxPct,
+      driftPercent: rangeDrift.driftPercent,
+      rangeStatus: rangeDrift.status,
+      rebalanceTargetPercent: rangeDrift.rebalanceTargetPercent,
       intendedBuyPrice: target?.intendedBuyPrice
         ? new Decimal(target.intendedBuyPrice.toString())
         : null,
@@ -91,7 +123,14 @@ export async function computePortfolioAllocation(
 
   for (const t of targets) {
     if (seen.has(t.instrumentId)) continue;
-    const targetPct = new Decimal(t.targetPercent.toString());
+    const targetMinPct = new Decimal(t.targetMinPercent.toString());
+    const targetMaxPct = new Decimal(t.targetMaxPercent.toString());
+    const targetPct = midpointPercent(targetMinPct, targetMaxPct);
+    const rangeDrift = computeRangeDrift({
+      actualPercent: ZERO,
+      targetMinPercent: targetMinPct,
+      targetMaxPercent: targetMaxPct,
+    });
     rows.push({
       instrumentId: t.instrumentId,
       yahooSymbol: t.instrument.yahooSymbol,
@@ -104,7 +143,11 @@ export async function computePortfolioAllocation(
       marketValueBase: ZERO,
       actualPercent: ZERO,
       targetPercent: targetPct,
-      driftPercent: targetPct.negated(),
+      targetMinPercent: targetMinPct,
+      targetMaxPercent: targetMaxPct,
+      driftPercent: rangeDrift.driftPercent,
+      rangeStatus: rangeDrift.status,
+      rebalanceTargetPercent: rangeDrift.rebalanceTargetPercent,
       intendedBuyPrice: t.intendedBuyPrice
         ? new Decimal(t.intendedBuyPrice.toString())
         : null,
@@ -129,6 +172,14 @@ export async function computePortfolioAllocation(
   });
 
   const targetSum = rows.reduce((acc, r) => acc.plus(r.targetPercent), ZERO);
+  const targetMinSum = rows.reduce(
+    (acc, r) => acc.plus(r.targetMinPercent),
+    ZERO,
+  );
+  const targetMaxSum = rows.reduce(
+    (acc, r) => acc.plus(r.targetMaxPercent),
+    ZERO,
+  );
 
   return {
     portfolioId,
@@ -136,6 +187,8 @@ export async function computePortfolioAllocation(
     rows,
     totalMarketValueBase: holdings.totalMarketValueBase,
     targetSum,
+    targetMinSum,
+    targetMaxSum,
     hasMissingPrices: holdings.hasMissingPrices,
   };
 }
