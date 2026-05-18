@@ -4,9 +4,11 @@ import type { GroupAllocation } from "@/lib/group-allocation";
 
 type Props = {
   allocation: GroupAllocation;
+  /** Window time-weighted return % per portfolio id. */
+  returns?: Map<string, number>;
 };
 
-export function GroupAllocationTable({ allocation }: Props) {
+export function GroupAllocationTable({ allocation, returns }: Props) {
   const { rows, baseCurrency } = allocation;
 
   return (
@@ -19,6 +21,7 @@ export function GroupAllocationTable({ allocation }: Props) {
             <Th align="right">Actual %</Th>
             <Th align="right">Drift</Th>
             <Th align="right">Value</Th>
+            <Th align="right">90d return</Th>
           </tr>
         </thead>
         <tbody>
@@ -57,6 +60,15 @@ export function GroupAllocationTable({ allocation }: Props) {
                   {formatCurrency(r.actualValueBase.toString(), baseCurrency)}
                 </span>
               </Td>
+              <Td align="right">
+                <ReturnCell
+                  value={
+                    r.kind === "portfolio"
+                      ? returns?.get(r.portfolioId)
+                      : undefined
+                  }
+                />
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -75,6 +87,21 @@ function DriftCell({ drift }: { drift: number }) {
     <span className={`tabular ${tone}`}>
       {sign}
       {drift.toFixed(2)}%
+    </span>
+  );
+}
+
+function ReturnCell({ value }: { value: number | undefined }) {
+  if (value === undefined) {
+    return <span className="tabular text-muted">—</span>;
+  }
+  const tone =
+    value > 0.005 ? "text-gain" : value < -0.005 ? "text-loss" : "text-muted";
+  const sign = value > 0 ? "+" : "";
+  return (
+    <span className={`tabular ${tone}`}>
+      {sign}
+      {value.toFixed(2)}%
     </span>
   );
 }

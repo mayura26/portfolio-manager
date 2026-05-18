@@ -158,21 +158,36 @@ async function buildPerformance(
   return { lines, points };
 }
 
-/**
- * Time-weighted return of every portfolio in a group vs the S&P 500. Each
- * portfolio is its own line; a portfolio's trades are its external flows.
- */
+/** Time-weighted return of a group as a whole vs the S&P 500. */
 export async function getGroupPerformance(
   groupId: string,
   days = 90,
 ): Promise<PerformanceData> {
+  const group = await db.portfolioGroup.findUnique({
+    where: { id: groupId },
+    select: { name: true },
+  });
   const history = await getGroupValueHistory(groupId, days);
   const dates = history.points.map((p) => p.date);
   if (dates.length < 2) return { lines: [], points: [] };
 
-  const groupBase = history.baseCurrency;
-  const portfolioSeries = history.series.filter((s) => s.key.startsWith("p_"));
+  const values = history.points.map((row) => rowTotal(row, history.series));
 
+  const { ledger } = await getGroupCashLedger(groupId);
+  const flows: Flow[] = ledger
+    .filter((e) => e.kind === "transaction" && e.type !== "DIVIDEND")
+    .map((e) => ({ date: e.date, amount: Number(e.amountBase) }));
+
+  return buildPerformance(dates, [
+    { key: "group", label: group?.name ?? "Group", values, flows },
+  ]);
+}
+
+/** Per-portfolio trade flows for a group, in the group's base currency. */
+async function groupTradeFlows(
+  groupId: string,
+  groupBase: string,
+): Promise<Map<string, Flow[]>> {
   const trades = await db.trade.findMany({
     where: { portfolio: { groupId } },
     orderBy: { date: "asc" },
@@ -186,7 +201,7 @@ export async function getGroupPerformance(
       currency: true,
     },
   });
-  const flowsByPortfolio = new Map<string, Flow[]>();
+  const byPortfolio = new Map<string, Flow[]>();
   for (const t of trades) {
     const gross = new Decimal(t.price.toString()).times(t.quantity.toString());
     const fees = new Decimal(t.fees.toString());
@@ -202,32 +217,46 @@ export async function getGroupPerformance(
       t.type === "BUY"
         ? grossBase.plus(feesBase)
         : grossBase.minus(feesBase).negated();
-    let arr = flowsByPortfolio.get(t.portfolioId);
+    let arr = byPortfolio.get(t.portfolioId);
     if (!arr) {
       arr = [];
-      flowsByPortfolio.set(t.portfolioId, arr);
+      byPortfolio.set(t.portfolioId, arr);
     }
     arr.push({ date: t.date, amount: Number(amount) });
   }
+  return byPortfolio;
+}
 
-  const entities: EntityInput[] = portfolioSeries
-    .map((s) => {
-      const portfolioId = s.key.slice(2);
-      const values = history.points.map((row) => {
-        const v = row[s.key];
-        return typeof v === "number" ? v : 0;
-      });
-      return {
-        key: s.key,
-        label: s.label,
-        values,
-        flows: flowsByPortfolio.get(portfolioId) ?? [],
-      };
-    })
-    // Drop portfolios that never held anything in the window.
-    .filter((e) => e.values.some((v) => v !== 0));
+/**
+ * Final cumulative time-weighted return % per portfolio in a group, keyed by
+ * portfolio id. A portfolio's own trades are treated as its external flows.
+ */
+export async function getGroupPortfolioReturns(
+  groupId: string,
+  days = 90,
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  const history = await getGroupValueHistory(groupId, days);
+  const dates = history.points.map((p) => p.date);
+  if (dates.length < 2) return result;
 
-  return buildPerformance(dates, entities);
+  const portfolioSeries = history.series.filter((s) => s.key.startsWith("p_"));
+  const flowsByPortfolio = await groupTradeFlows(groupId, history.baseCurrency);
+
+  for (const s of portfolioSeries) {
+    const portfolioId = s.key.slice(2);
+    const values = history.points.map((row) => {
+      const v = row[s.key];
+      return typeof v === "number" ? v : 0;
+    });
+    if (!values.some((v) => v !== 0)) continue;
+    const pct = twrPercent(
+      values,
+      bucketFlows(dates, flowsByPortfolio.get(portfolioId) ?? []),
+    );
+    result.set(portfolioId, pct[pct.length - 1]);
+  }
+  return result;
 }
 
 /** Time-weighted return of the whole account vs the S&P 500. */

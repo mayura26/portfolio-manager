@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/format";
 import { computeGroupAllocation } from "@/lib/group-allocation";
+import { getGroupPortfolioReturns } from "@/lib/performance";
 
 type Params = Promise<{ groupId: string }>;
 
@@ -36,7 +37,10 @@ async function GroupDetail({ params }: { params: Params }) {
   const group = await db.portfolioGroup.findUnique({ where: { id: groupId } });
   if (!group) notFound();
 
-  const allocation = await computeGroupAllocation(groupId);
+  const [allocation, portfolioReturns] = await Promise.all([
+    computeGroupAllocation(groupId),
+    getGroupPortfolioReturns(groupId, 90),
+  ]);
 
   const rowLabelMap = new Map<string, string>();
   for (const r of allocation.rows) {
@@ -168,7 +172,10 @@ async function GroupDetail({ params }: { params: Params }) {
         </Link>
       </div>
       <div className="mt-3">
-        <GroupAllocationTable allocation={allocation} />
+        <GroupAllocationTable
+          allocation={allocation}
+          returns={portfolioReturns}
+        />
       </div>
 
       <div className="mt-8 flex items-center justify-between">
