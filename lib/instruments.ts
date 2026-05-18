@@ -61,6 +61,8 @@ export function yahooSymbolCandidatesForRawSymbol(
         add(key, `${key}.HK`);
       }
     }
+    // US and other markets: bare ticker (AAPL, VOO, …).
+    if (out.length === 0) add(key);
   } else {
     add(key);
   }
