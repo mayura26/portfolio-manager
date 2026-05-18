@@ -46,7 +46,11 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(echo \"Exit: $?\")",
-      "Bash(grep -E \"lib\\\\\\\\\\\\\\\\signals|forecasts|forecast-upload|forecast-card|forecast-history|pin-forecast|signals-card|signals-panel|price-chart|portfolio-allocation|portfolio-targets|alerts.ts|holding-targets-editor|validators|yahoo.ts|cron-forecasts|stocks.\\\\[symbol\\\\]|dashboard.page|forecasts-extract|analysis.upload\")"
+      "Bash(grep -E \"lib\\\\\\\\\\\\\\\\signals|forecasts|forecast-upload|forecast-card|forecast-history|pin-forecast|signals-card|signals-panel|price-chart|portfolio-allocation|portfolio-targets|alerts.ts|holding-targets-editor|validators|yahoo.ts|cron-forecasts|stocks.\\\\[symbol\\\\]|dashboard.page|forecasts-extract|analysis.upload\")",
+      "Bash(cd *)",
+      "Bash(Select-Object -First 40)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.scripts,null,1\\)\\)\")"
     ]
   }
 }
