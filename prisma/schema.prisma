@@ -382,6 +382,7 @@ model PortfolioGroup {
 
   portfolios       Portfolio[]
   cashTransactions CashTransaction[]
+  cashStatementImports CashStatementImport[]
 
   @@index([createdAt])
 }
@@ -397,6 +398,39 @@ enum CashTransactionType {
   DIVIDEND
 }
 
+enum CashTransactionSource {
+  MANUAL
+  IBKR
+  EXTERNAL_STATEMENT
+}
+
+model CashStatementImport {
+  id             String   @id @default(cuid())
+  groupId        String
+  provider       String
+  accountLast4   String
+  sourceAccountKey String
+  accountType    String?
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+  statementGeneratedAt DateTime?
+  currency       String
+  endingBalance  Decimal  @db.Decimal(18, 4)
+  filename       String
+  fileHash       String
+  importInserted Int      @default(0)
+  importSkipped  Int      @default(0)
+  reconciliationDelta Decimal @default(0) @db.Decimal(18, 4)
+  createdAt      DateTime @default(now())
+
+  group PortfolioGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  cashTransactions CashTransaction[]
+
+  @@unique([groupId, fileHash])
+  @@index([groupId, createdAt(sort: Desc)])
+  @@index([groupId, sourceAccountKey, periodEnd])
+}
+
 model CashTransaction {
   id        String              @id @default(cuid())
   groupId   String
@@ -410,11 +444,17 @@ model CashTransaction {
   updatedAt DateTime            @updatedAt
 
   externalRef String?
+  source      CashTransactionSource @default(MANUAL)
+  sourceAccountKey String?
+  statementImportId String?
 
   group PortfolioGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  statementImport CashStatementImport? @relation(fields: [statementImportId], references: [id], onDelete: SetNull)
 
   @@unique([groupId, externalRef])
   @@index([groupId, date])
+  @@index([groupId, source, sourceAccountKey, date])
+  @@index([statementImportId])
 }
 
 // ─────────────────────────────────────────────────────────────

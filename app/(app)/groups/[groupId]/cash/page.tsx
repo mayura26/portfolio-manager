@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CashTransactionForm } from "@/components/groups/cash-transaction-form";
 import { DeleteCashButton } from "@/components/groups/delete-cash-button";
+import { ExternalCashImportForm } from "@/components/groups/external-cash-import-form";
 import { Skeleton } from "@/components/shared/skeleton";
 import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
@@ -81,6 +82,13 @@ async function GroupCash({ params }: { params: Params }) {
         />
       </section>
 
+      <section className="mb-8">
+        <h2 className="display mb-3 text-2xl text-foreground">
+          Import external cash statement
+        </h2>
+        <ExternalCashImportForm groupId={groupId} statementCurrency="AUD" />
+      </section>
+
       <section>
         <h2 className="display mb-3 text-2xl text-foreground">Ledger</h2>
         <div className="hairline overflow-x-auto bg-surface-elevated">
@@ -118,6 +126,9 @@ async function GroupCash({ params }: { params: Params }) {
                     </td>
                     <td className="px-3 py-3">
                       <span className="label">{e.type}</span>
+                      <div className="mt-1 text-xs text-subtle">
+                        {cashSourceLabel(e)}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-right tabular">
                       {formatCurrency(e.amountCurrency.toString(), e.currency)}
@@ -154,4 +165,18 @@ async function GroupCash({ params }: { params: Params }) {
       </section>
     </div>
   );
+}
+
+function cashSourceLabel(e: {
+  kind: "transaction" | "trade";
+  source: string | null;
+  sourceAccountKey: string | null;
+}): string {
+  if (e.kind === "trade") return "trade-driven";
+  if (e.source === "EXTERNAL_STATEMENT") {
+    const account = e.sourceAccountKey?.split(":").at(-1)?.slice(-4);
+    return account ? `external statement - ${account}` : "external statement";
+  }
+  if (e.source === "IBKR") return "IBKR sync";
+  return "manual";
 }

@@ -421,15 +421,17 @@ async function importCashTransactions(
   const rows = cashTxs.map((tx) => {
     const dateKey = `${tx.currency}|${tx.date.toISOString().split("T")[0]}`;
     const fxRate = fxCache.get(dateKey) ?? new Decimal(1);
+    const amount = new Decimal(tx.amount).abs();
     return {
       groupId,
       type: tx.type as "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND",
-      amount: tx.amount,
+      amount: amount.toString(),
       currency: tx.currency,
       fxRate: fxRate.toString(),
       date: tx.date,
       notes: tx.description || null,
       externalRef: tx.externalRef,
+      source: "IBKR" as const,
     };
   });
 

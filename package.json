@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
+    "test:external-cash": "tsx scripts/test-external-cash-parser.ts",
     "cron:prices": "tsx scripts/cron-prices.ts",
     "cron:fx-rates": "tsx scripts/cron-fx-rates.ts",
     "cron:alerts": "tsx scripts/cron-alerts.ts",

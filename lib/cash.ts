@@ -14,6 +14,8 @@ export type CashLedgerEntry = {
   amountCurrency: Decimal;
   currency: string;
   notes: string | null;
+  source: string | null;
+  sourceAccountKey: string | null;
 };
 
 export type GroupCash = {
@@ -67,6 +69,8 @@ async function materializeLedgerForGroup(
       amountCurrency: amount,
       currency: ct.currency,
       notes: ct.notes,
+      source: ct.source,
+      sourceAccountKey: ct.sourceAccountKey,
     });
   }
 
@@ -99,6 +103,8 @@ async function materializeLedgerForGroup(
           amountCurrency: grossLocal.plus(fees),
           currency: trade.currency,
           notes: null,
+          source: null,
+          sourceAccountKey: null,
         });
       } else {
         const proceeds = grossBase.minus(feesBase);
@@ -111,6 +117,8 @@ async function materializeLedgerForGroup(
           amountCurrency: grossLocal.minus(fees),
           currency: trade.currency,
           notes: null,
+          source: null,
+          sourceAccountKey: null,
         });
       }
     }
