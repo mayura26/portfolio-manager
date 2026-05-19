@@ -433,3 +433,12 @@ export const buyRangeSchema = z
   });
 
 export type BuyRangeInput = z.infer<typeof buyRangeSchema>;
+
+// ─── Portfolio Review / Weekly Report ─────────────────────────
+
+export const auditCheckKeySchema = z.string().trim().min(1).max(200);
+
+export const weekStartSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected an ISO date (YYYY-MM-DD)");

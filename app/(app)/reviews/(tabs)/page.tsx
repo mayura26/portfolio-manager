@@ -20,16 +20,7 @@ function parseStatus(value: string | undefined): Status | "all" {
 
 export default function ReviewsPage({ searchParams }: PageProps<"/reviews">) {
   return (
-    <div className="mx-auto max-w-6xl">
-      <header className="mb-6 border-b border-border pb-6">
-        <p className="label">Decision queue</p>
-        <h1 className="display mt-2 text-4xl text-foreground">Reviews</h1>
-        <p className="mt-2 max-w-prose text-sm text-muted">
-          Triggered alerts open a review here. Walk through them deliberately
-          and record your reasoning.
-        </p>
-      </header>
-
+    <div>
       <Suspense fallback={<Skeleton className="h-10 w-72" />}>
         <ReviewFilters />
       </Suspense>

@@ -564,3 +564,31 @@ model InstrumentForecastDocument {
 
   @@index([instrumentId, createdAt(sort: Desc)])
 }
+
+// ─────────────────────────────────────────────────────────────
+// Portfolio Review — muted setup-audit checks.
+// Each row silences one audit gap, keyed by a stable per-gap identifier.
+// ─────────────────────────────────────────────────────────────
+
+model MutedAuditCheck {
+  id        String   @id @default(cuid())
+  checkKey  String   @unique
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Weekly Report — AI-written Sunday→Saturday review, saved so re-reads
+// don't re-generate. One row per week (keyed by its Sunday start date).
+// ─────────────────────────────────────────────────────────────
+
+model WeeklyReport {
+  id          String   @id @default(cuid())
+  weekStart   DateTime @db.Date
+  weekEnd     DateTime @db.Date
+  content     Json
+  model       String
+  generatedAt DateTime @default(now())
+
+  @@unique([weekStart])
+  @@index([weekStart(sort: Desc)])
+}
