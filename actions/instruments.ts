@@ -4,6 +4,45 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { stockNoteSchema } from "@/lib/validators";
 
+export type AutoWatcherActionState =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function setAutoWatcher(
+  instrumentId: string,
+  enabled: boolean,
+  threshold?: number,
+): Promise<AutoWatcherActionState> {
+  const instrument = await db.instrument.findUnique({
+    where: { id: instrumentId },
+    select: { id: true, yahooSymbol: true },
+  });
+  if (!instrument) return { ok: false, error: "Instrument not found" };
+
+  const thresholdValue =
+    threshold !== undefined && threshold > 0 && threshold <= 100
+      ? threshold
+      : undefined;
+
+  await db.instrument.update({
+    where: { id: instrumentId },
+    data: {
+      autoWatcherEnabled: enabled,
+      ...(thresholdValue !== undefined
+        ? { autoWatcherThreshold: thresholdValue.toString() }
+        : {}),
+      // Reset state when toggling on or changing threshold so next cron
+      // starts fresh without firing a storm of stale milestone alerts
+      autoWatcherLastBand: null,
+      autoWatcherLastDailyAt: null,
+    },
+  });
+
+  revalidatePath("/stocks");
+  revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  return { ok: true };
+}
+
 export type NoteActionState =
   | { ok: true; noteId?: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };

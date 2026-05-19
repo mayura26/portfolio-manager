@@ -28,6 +28,16 @@ export type StockCardContext = {
     price: string | null;
     currency: string;
   }[];
+  priceInfo: {
+    currentPrice: string;
+    currency: string;
+    dayPct: string | null;
+    weekPct: string | null;
+    monthPct: string | null;
+    yearPct: string | null;
+    dayPctRaw: number | null;
+  } | null;
+  autoWatcher: boolean;
 };
 
 type Props = {
@@ -66,6 +76,8 @@ export function StockCard({ instrument, context }: Props) {
         />
       </div>
 
+      {context?.priceInfo ? <PriceInfoRow info={context.priceInfo} /> : null}
+
       {badges.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {badges.map((badge) => (
@@ -101,6 +113,12 @@ function getBadges(context: StockCardContext | undefined) {
   if (!context) return [];
 
   return [
+    context.autoWatcher
+      ? {
+          label: "AutoWatcher ◉",
+          className: "border-accent/40 bg-accent/10 text-accent",
+        }
+      : null,
     context.position
       ? {
           label: "Held",
@@ -150,6 +168,65 @@ function getBadges(context: StockCardContext | undefined) {
       : null,
   ].filter((badge): badge is { label: string; className: string } =>
     Boolean(badge),
+  );
+}
+
+type PeriodChange = {
+  label: string;
+  value: string | null;
+  raw: number | null;
+};
+
+function PriceInfoRow({ info }: { info: NonNullable<StockCardContext["priceInfo"]> }) {
+  const periods: PeriodChange[] = [
+    { label: "1D", value: info.dayPct, raw: info.dayPctRaw },
+    {
+      label: "1W",
+      value: info.weekPct,
+      raw: info.weekPct ? parseFloat(info.weekPct) : null,
+    },
+    {
+      label: "1M",
+      value: info.monthPct,
+      raw: info.monthPct ? parseFloat(info.monthPct) : null,
+    },
+    {
+      label: "1Y",
+      value: info.yearPct,
+      raw: info.yearPct ? parseFloat(info.yearPct) : null,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+      {/* Current price + day change */}
+      <div className="flex items-baseline gap-2">
+        <span className="tabular text-lg text-foreground">{info.currentPrice}</span>
+        {info.dayPct !== null && info.dayPctRaw !== null ? (
+          <span className={`tabular text-xs font-medium ${pnlClass(info.dayPctRaw.toString())}`}>
+            {info.dayPct}
+          </span>
+        ) : (
+          <span className="text-xs text-subtle">—</span>
+        )}
+      </div>
+
+      {/* Period change pills */}
+      <div className="flex items-center gap-3">
+        {periods.map((p) => (
+          <span key={p.label} className="flex items-center gap-1">
+            <span className="label text-[10px] text-subtle">{p.label}</span>
+            <span
+              className={`tabular text-[10px] font-medium ${
+                p.raw !== null ? pnlClass(p.raw.toString()) : "text-subtle"
+              }`}
+            >
+              {p.value ?? "—"}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

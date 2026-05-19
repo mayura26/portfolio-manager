@@ -10,6 +10,9 @@ import {
 import { db } from "@/lib/db";
 import { computeHoldings } from "@/lib/holdings";
 import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
+import { loadPriceChanges, type PriceChangeData } from "@/lib/price-changes";
+import { formatCurrency, formatPercent } from "@/lib/format";
+import Decimal from "decimal.js";
 
 type PortfolioStockGroup = {
   id: string | null;
@@ -85,24 +88,29 @@ async function StocksGrid() {
     }
   }
 
-  const holdingsEntries = await Promise.all(
-    Array.from(linkedPortfolioIds).map(async (portfolioId) => {
+  const instrumentIds = instruments.map((i) => i.id);
+
+  const [priceChanges, ...holdingsEntries] = await Promise.all([
+    loadPriceChanges(instrumentIds),
+    ...Array.from(linkedPortfolioIds).map(async (portfolioId) => {
       const holdings = await computeHoldings(portfolioId);
       return [
         portfolioId,
         new Map(holdings.holdings.map((h) => [h.instrumentId, h])),
       ] as const;
     }),
-  );
+  ]);
+
   const holdingsByPortfolio = new Map(holdingsEntries);
 
   for (const instrument of instruments) {
     const portfolioIds = getVisiblePortfolioIds(instrument, portfolioMap);
+    const priceData = priceChanges.get(instrument.id) ?? null;
 
     if (portfolioIds.length === 0) {
       noPortfolioGroup.stocks.push({
         instrument,
-        context: buildStockContext(instrument, null, null),
+        context: buildStockContext(instrument, null, null, priceData),
       });
       continue;
     }
@@ -116,10 +124,12 @@ async function StocksGrid() {
         holdingsByPortfolio.get(portfolioId)?.get(instrument.id) ?? null;
       group.stocks.push({
         instrument,
-        context: buildStockContext(instrument, portfolioId, {
-          holding,
-          baseCurrency: portfolio.baseCurrency,
-        }),
+        context: buildStockContext(
+          instrument,
+          portfolioId,
+          { holding, baseCurrency: portfolio.baseCurrency },
+          priceData,
+        ),
       });
     }
   }
@@ -175,6 +185,7 @@ async function loadInstruments() {
         },
       },
     },
+    // autoWatcherEnabled is a scalar field included by default
   });
 }
 
@@ -244,6 +255,12 @@ function getVisiblePortfolioIds(
   return Array.from(ids);
 }
 
+function formatPct(value: Decimal | null): string | null {
+  if (!value) return null;
+  // value is already a percentage like 2.4 — divide by 100 for formatPercent
+  return formatPercent(value.dividedBy(100), { signed: true, decimals: 2 });
+}
+
 function buildStockContext(
   instrument: InstrumentRow,
   portfolioId: string | null,
@@ -253,6 +270,7 @@ function buildStockContext(
       | null;
     baseCurrency: string;
   } | null,
+  priceData: PriceChangeData | null,
 ): StockCardContext {
   const groupTrades = portfolioId
     ? instrument.trades.filter((trade) => trade.portfolioId === portfolioId)
@@ -280,12 +298,29 @@ function buildStockContext(
   const primaryTarget = groupTargets[0] ?? null;
   const holding = positionData?.holding ?? null;
 
+  const priceInfo = priceData
+    ? {
+        currentPrice: formatCurrency(
+          priceData.currentPrice,
+          instrument.currency,
+        ),
+        currency: instrument.currency,
+        dayPct: formatPct(priceData.dayPct),
+        weekPct: formatPct(priceData.weekPct),
+        monthPct: formatPct(priceData.monthPct),
+        yearPct: formatPct(priceData.yearPct),
+        dayPctRaw: priceData.dayPct?.toNumber() ?? null,
+      }
+    : null;
+
   return {
     hasTrade: groupTrades.length > 0,
     hasTarget: groupTargets.length > 0,
     hasWatchlist: groupWatchlistItems.length > 0,
     hasAlert: groupAlerts.length > 0,
     hasReview: groupReviews.length > 0,
+    priceInfo,
+    autoWatcher: instrument.autoWatcherEnabled,
     position: holding
       ? {
           quantity: holding.quantity.toString(),

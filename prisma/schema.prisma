@@ -87,6 +87,12 @@ model Instrument {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // AutoWatcher — daily AI news monitoring + P&L milestone alerts
+  autoWatcherEnabled     Boolean   @default(false)
+  autoWatcherThreshold   Decimal   @default(10) @db.Decimal(8, 4)
+  autoWatcherLastBand    Int?
+  autoWatcherLastDailyAt DateTime?
+
   trades         Trade[]
   prices         PriceHistory[]
   alerts         Alert[]
@@ -305,6 +311,7 @@ enum NotificationType {
   DIVIDEND_EVENT
   EARNINGS_EVENT
   FORECAST_DEVIATION
+  AUTO_WATCHER
   SYSTEM
 }
 

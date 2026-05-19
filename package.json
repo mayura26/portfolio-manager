@@ -17,7 +17,8 @@
     "cron:fx-rates": "tsx scripts/cron-fx-rates.ts",
     "cron:alerts": "tsx scripts/cron-alerts.ts",
     "cron:forecasts": "tsx scripts/cron-forecasts.ts",
-    "cron:ibkr-sync": "tsx scripts/cron-ibkr-sync.ts"
+    "cron:ibkr-sync": "tsx scripts/cron-ibkr-sync.ts",
+    "cron:autowatcher": "tsx scripts/cron-autowatcher.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

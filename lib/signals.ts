@@ -31,7 +31,7 @@ export type SellSignal = {
   reason: string;
 };
 
-type AggregatePosition = {
+export type AggregatePosition = {
   instrumentId: string;
   yahooSymbol: string;
   symbol: string;
@@ -219,7 +219,7 @@ function maxDec(a: Decimal | null, b: Decimal | null): Decimal | null {
   return a.gte(b) ? a : b;
 }
 
-async function aggregateOpenPositions(
+export async function aggregateOpenPositions(
   portfolioId?: string,
 ): Promise<AggregatePosition[]> {
   const portfolios = portfolioId
