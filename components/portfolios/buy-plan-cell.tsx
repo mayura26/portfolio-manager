@@ -8,8 +8,12 @@ type Props = {
     targetPercent: string;
     rebalanceTargetPercent: string;
     rangeStatus: "on-target" | "underweight" | "overweight";
+    quantity: string;
+    marketPrice: string | null;
     marketValueBase: string;
     intendedBuyPrice: string | null;
+    intendedSellPrice: string | null;
+    instrumentCurrency: string;
   };
   totalPortfolioValueBase: string;
   portfolioBaseCurrency: string;
@@ -49,6 +53,17 @@ export function BuyPlanCell({
   }
 
   if (plan.gapValueBase.lte(0)) {
+    const trimPlan = computeTrimPlan(row, plan.gapValueBase.abs());
+
+    if (trimPlan) {
+      return (
+        <span className="tabular text-xs text-overweight">
+          Trim {formatTrimQuantity(trimPlan.quantity)} @{" "}
+          {formatCurrency(trimPlan.price.toString(), row.instrumentCurrency)}
+        </span>
+      );
+    }
+
     return (
       <span className="text-xs text-overweight">
         Trim{" "}
@@ -82,4 +97,44 @@ export function BuyPlanCell({
       ) : null}
     </div>
   );
+}
+
+function computeTrimPlan(
+  row: Props["row"],
+  trimValueBase: Decimal,
+): { quantity: Decimal; price: Decimal } | null {
+  const quantityHeld = new Decimal(row.quantity);
+  const quotePrice = row.intendedSellPrice
+    ? new Decimal(row.intendedSellPrice)
+    : row.marketPrice
+      ? new Decimal(row.marketPrice)
+      : null;
+
+  if (!quotePrice || quotePrice.lte(0) || quantityHeld.lte(0)) {
+    return null;
+  }
+
+  let basePrice = quotePrice;
+  if (row.marketPrice) {
+    const marketPrice = new Decimal(row.marketPrice);
+    const marketValueBase = new Decimal(row.marketValueBase);
+    const marketValueLocal = quantityHeld.times(marketPrice);
+
+    if (marketPrice.gt(0) && marketValueBase.gt(0) && marketValueLocal.gt(0)) {
+      const inferredFx = marketValueBase.dividedBy(marketValueLocal);
+      basePrice = quotePrice.times(inferredFx);
+    }
+  }
+
+  if (basePrice.lte(0)) return null;
+
+  const quantity = Decimal.min(quantityHeld, trimValueBase.dividedBy(basePrice));
+  return { quantity, price: quotePrice };
+}
+
+function formatTrimQuantity(quantity: Decimal) {
+  const abs = quantity.abs();
+  if (abs.gte(1000)) return formatNumber(quantity, { decimals: 0 });
+  if (abs.gte(1)) return formatNumber(quantity, { decimals: 2 });
+  return formatNumber(quantity, { decimals: 4 });
 }

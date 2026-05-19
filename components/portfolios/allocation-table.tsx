@@ -103,9 +103,14 @@ export function AllocationTable({
                         rebalanceTargetPercent:
                           r.rebalanceTargetPercent.toString(),
                         rangeStatus: r.rangeStatus,
+                        quantity: r.quantity.toString(),
+                        marketPrice: r.marketPrice?.toString() ?? null,
                         marketValueBase: r.marketValueBase.toString(),
                         intendedBuyPrice:
                           r.intendedBuyPrice?.toString() ?? null,
+                        intendedSellPrice:
+                          r.intendedSellPrice?.toString() ?? null,
+                        instrumentCurrency: r.currency,
                       }}
                       totalPortfolioValueBase={totalMarketValueBase.toString()}
                       portfolioBaseCurrency={baseCurrency}

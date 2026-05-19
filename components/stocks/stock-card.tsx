@@ -6,8 +6,10 @@ import {
   formatQuantity,
   pnlClass,
 } from "@/lib/format";
+import { AutoWatcherToggle } from "./autowatcher-toggle";
 
 export type StockCardContext = {
+  instrumentId: string;
   hasTrade: boolean;
   hasTarget: boolean;
   hasWatchlist: boolean;
@@ -28,6 +30,11 @@ export type StockCardContext = {
     price: string | null;
     currency: string;
   }[];
+  sellTargets: {
+    source: "portfolio" | "alert";
+    price: string | null;
+    currency: string;
+  }[];
   priceInfo: {
     currentPrice: string;
     changes: {
@@ -37,6 +44,7 @@ export type StockCardContext = {
     }[];
   } | null;
   autoWatcher: boolean;
+  autoWatcherThreshold: number;
 };
 
 type Props = {
@@ -53,13 +61,11 @@ type Props = {
 
 export function StockCard({ instrument, context }: Props) {
   const badges = getBadges(context);
+  const stockHref = `/stocks/${encodeURIComponent(instrument.yahooSymbol)}`;
 
   return (
-    <Link
-      href={`/stocks/${encodeURIComponent(instrument.yahooSymbol)}`}
-      className="group hairline flex min-h-40 flex-col gap-3 bg-surface p-5 transition-colors hover:border-border-strong"
-    >
-      <div className="flex items-start justify-between gap-3">
+    <article className="group hairline flex min-h-40 flex-col gap-3 bg-surface p-5 transition-colors hover:border-border-strong">
+      <Link href={stockHref} className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="display tabular text-xl text-foreground">
             {instrument.symbol}
@@ -73,7 +79,7 @@ export function StockCard({ instrument, context }: Props) {
           strokeWidth={1.5}
           aria-hidden
         />
-      </div>
+      </Link>
 
       {context?.priceInfo ? <PriceInfoRow info={context.priceInfo} /> : null}
 
@@ -90,10 +96,23 @@ export function StockCard({ instrument, context }: Props) {
         </div>
       ) : null}
 
+      {context?.position ? (
+        <div>
+          <AutoWatcherToggle
+            instrumentId={context.instrumentId}
+            enabled={context.autoWatcher}
+            threshold={context.autoWatcherThreshold}
+          />
+        </div>
+      ) : null}
+
       {context?.position ? <PositionMetrics context={context} /> : null}
 
-      {context?.buyTargets.length ? (
-        <BuyTargetDetails targets={context.buyTargets} />
+      {context &&
+      (context.targetPercent ||
+        context.buyTargets.length ||
+        context.sellTargets.length) ? (
+        <TargetDetails context={context} />
       ) : null}
 
       <div className="mt-auto flex items-center justify-between border-t border-border pt-3 text-xs text-muted">
@@ -104,7 +123,7 @@ export function StockCard({ instrument, context }: Props) {
           <span className="truncate">{instrument.sector}</span>
         ) : null}
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -112,38 +131,9 @@ function getBadges(context: StockCardContext | undefined) {
   if (!context) return [];
 
   return [
-    context.autoWatcher
-      ? {
-          label: "AutoWatcher ◉",
-          className: "border-accent/40 bg-accent/10 text-accent",
-        }
-      : null,
-    context.position
-      ? {
-          label: "Held",
-          className: "border-gain/40 bg-gain/10 text-gain",
-        }
-      : null,
     !context.position && context.hasTrade
       ? {
           label: "Traded",
-          className: "border-border bg-surface-elevated text-muted",
-        }
-      : null,
-    context.buyTargets.length > 0
-      ? {
-          label: "Buy target",
-          className: "border-accent/40 bg-accent/10 text-accent",
-        }
-      : null,
-    context.hasTarget
-      ? {
-          label: context.targetPercent
-            ? `Target ${formatPercent(Number(context.targetPercent) / 100, {
-                decimals: 2,
-                signed: false,
-              })}`
-            : "Target",
           className: "border-border bg-surface-elevated text-muted",
         }
       : null,
@@ -179,7 +169,6 @@ function PriceInfoRow({
 
   return (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
-      {/* Current price + day change */}
       <div className="flex items-baseline gap-2">
         <span className="tabular text-lg text-foreground">
           {info.currentPrice}
@@ -189,11 +178,10 @@ function PriceInfoRow({
             {day.formatted}
           </span>
         ) : (
-          <span className="text-xs text-subtle">—</span>
+          <span className="text-xs text-subtle">-</span>
         )}
       </div>
 
-      {/* Period change pills */}
       <div className="flex items-center gap-3">
         {info.changes.map((c) => (
           <span key={c.label} className="flex items-center gap-1">
@@ -203,7 +191,7 @@ function PriceInfoRow({
                 c.raw !== null ? pnlClass(c.raw) : "text-subtle"
               }`}
             >
-              {c.formatted ?? "—"}
+              {c.formatted ?? "-"}
             </span>
           </span>
         ))}
@@ -275,30 +263,49 @@ function Metric({
   );
 }
 
-function BuyTargetDetails({
-  targets,
-}: {
-  targets: StockCardContext["buyTargets"];
-}) {
+function TargetDetails({ context }: { context: StockCardContext }) {
   return (
     <div className="flex flex-col gap-1 border-t border-border pt-3 text-xs">
-      {targets.map((target, index) => (
-        <div
+      {context.targetPercent ? (
+        <TargetRow
+          label="Target"
+          value={formatPercent(Number(context.targetPercent) / 100, {
+            decimals: 2,
+            signed: false,
+          })}
+        />
+      ) : null}
+
+      {context.buyTargets.map((target, index) => (
+        <TargetRow
           key={`${target.source}-${index}`}
-          className="flex items-center justify-between gap-3"
-        >
-          <span className="label text-[10px] text-subtle">
-            {target.source === "watchlist"
+          label={
+            target.source === "watchlist"
               ? "Buy zone"
               : target.source === "portfolio"
                 ? "Buy price"
-                : "Buy alert"}
-          </span>
-          <span className="tabular truncate text-muted">
-            {formatBuyTarget(target)}
-          </span>
-        </div>
+                : "Buy alert"
+          }
+          value={formatBuyTarget(target)}
+        />
       ))}
+
+      {context.sellTargets.map((target, index) => (
+        <TargetRow
+          key={`${target.source}-${index}`}
+          label={target.source === "portfolio" ? "Sell price" : "Sell alert"}
+          value={formatPriceTarget(target)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TargetRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="label text-[10px] text-subtle">{label}</span>
+      <span className="tabular truncate text-muted">{value}</span>
     </div>
   );
 }
@@ -319,6 +326,14 @@ function formatBuyTarget(target: StockCardContext["buyTargets"][number]) {
     }
   }
 
+  if (target.price) {
+    return formatCurrency(target.price, target.currency);
+  }
+
+  return "-";
+}
+
+function formatPriceTarget(target: StockCardContext["sellTargets"][number]) {
   if (target.price) {
     return formatCurrency(target.price, target.currency);
   }

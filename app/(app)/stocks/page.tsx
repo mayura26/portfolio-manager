@@ -160,6 +160,7 @@ async function loadInstruments() {
           portfolioId: true,
           targetPercent: true,
           intendedBuyPrice: true,
+          intendedSellPrice: true,
         },
       },
       watchlistItems: {
@@ -185,7 +186,7 @@ async function loadInstruments() {
         },
       },
     },
-    // autoWatcherEnabled is a scalar field included by default
+    // AutoWatcher scalar fields are included by default.
   });
 }
 
@@ -318,6 +319,7 @@ function buildStockContext(
     : null;
 
   return {
+    instrumentId: instrument.id,
     hasTrade: groupTrades.length > 0,
     hasTarget: groupTargets.length > 0,
     hasWatchlist: groupWatchlistItems.length > 0,
@@ -325,6 +327,7 @@ function buildStockContext(
     hasReview: groupReviews.length > 0,
     priceInfo,
     autoWatcher: instrument.autoWatcherEnabled,
+    autoWatcherThreshold: Number(instrument.autoWatcherThreshold),
     position: holding
       ? {
           quantity: holding.quantity.toString(),
@@ -361,6 +364,22 @@ function buildStockContext(
           source: "alert" as const,
           low: null,
           high: null,
+          price: alert.priceTarget?.toString() ?? null,
+          currency: instrument.currency,
+        })),
+    ],
+    sellTargets: [
+      ...groupTargets
+        .filter((target) => target.intendedSellPrice)
+        .map((target) => ({
+          source: "portfolio" as const,
+          price: target.intendedSellPrice?.toString() ?? null,
+          currency: instrument.currency,
+        })),
+      ...groupAlerts
+        .filter((alert) => alert.type === "PRICE_ABOVE" && alert.priceTarget)
+        .map((alert) => ({
+          source: "alert" as const,
           price: alert.priceTarget?.toString() ?? null,
           currency: instrument.currency,
         })),
