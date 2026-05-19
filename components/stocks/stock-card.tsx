@@ -30,12 +30,11 @@ export type StockCardContext = {
   }[];
   priceInfo: {
     currentPrice: string;
-    currency: string;
-    dayPct: string | null;
-    weekPct: string | null;
-    monthPct: string | null;
-    yearPct: string | null;
-    dayPctRaw: number | null;
+    changes: {
+      label: string;
+      formatted: string | null;
+      raw: number | null;
+    }[];
   } | null;
   autoWatcher: boolean;
 };
@@ -171,40 +170,23 @@ function getBadges(context: StockCardContext | undefined) {
   );
 }
 
-type PeriodChange = {
-  label: string;
-  value: string | null;
-  raw: number | null;
-};
-
-function PriceInfoRow({ info }: { info: NonNullable<StockCardContext["priceInfo"]> }) {
-  const periods: PeriodChange[] = [
-    { label: "1D", value: info.dayPct, raw: info.dayPctRaw },
-    {
-      label: "1W",
-      value: info.weekPct,
-      raw: info.weekPct ? parseFloat(info.weekPct) : null,
-    },
-    {
-      label: "1M",
-      value: info.monthPct,
-      raw: info.monthPct ? parseFloat(info.monthPct) : null,
-    },
-    {
-      label: "1Y",
-      value: info.yearPct,
-      raw: info.yearPct ? parseFloat(info.yearPct) : null,
-    },
-  ];
+function PriceInfoRow({
+  info,
+}: {
+  info: NonNullable<StockCardContext["priceInfo"]>;
+}) {
+  const day = info.changes[0];
 
   return (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       {/* Current price + day change */}
       <div className="flex items-baseline gap-2">
-        <span className="tabular text-lg text-foreground">{info.currentPrice}</span>
-        {info.dayPct !== null && info.dayPctRaw !== null ? (
-          <span className={`tabular text-xs font-medium ${pnlClass(info.dayPctRaw.toString())}`}>
-            {info.dayPct}
+        <span className="tabular text-lg text-foreground">
+          {info.currentPrice}
+        </span>
+        {day && day.formatted !== null && day.raw !== null ? (
+          <span className={`tabular text-xs font-medium ${pnlClass(day.raw)}`}>
+            {day.formatted}
           </span>
         ) : (
           <span className="text-xs text-subtle">—</span>
@@ -213,15 +195,15 @@ function PriceInfoRow({ info }: { info: NonNullable<StockCardContext["priceInfo"
 
       {/* Period change pills */}
       <div className="flex items-center gap-3">
-        {periods.map((p) => (
-          <span key={p.label} className="flex items-center gap-1">
-            <span className="label text-[10px] text-subtle">{p.label}</span>
+        {info.changes.map((c) => (
+          <span key={c.label} className="flex items-center gap-1">
+            <span className="label text-[10px] text-subtle">{c.label}</span>
             <span
               className={`tabular text-[10px] font-medium ${
-                p.raw !== null ? pnlClass(p.raw.toString()) : "text-subtle"
+                c.raw !== null ? pnlClass(c.raw) : "text-subtle"
               }`}
             >
-              {p.value ?? "—"}
+              {c.formatted ?? "—"}
             </span>
           </span>
         ))}

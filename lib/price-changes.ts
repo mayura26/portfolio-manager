@@ -62,10 +62,7 @@ export async function loadPriceChanges(
   });
 
   // Group by instrumentId (rows are already sorted asc by instrumentId, date)
-  const byInstrument = new Map<
-    string,
-    { date: Date; close: Decimal }[]
-  >();
+  const byInstrument = new Map<string, { date: Date; close: Decimal }[]>();
   for (const row of rows) {
     let arr = byInstrument.get(row.instrumentId);
     if (!arr) {

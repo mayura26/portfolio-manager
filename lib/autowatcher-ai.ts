@@ -44,7 +44,9 @@ function buildUserMessage(input: AutoWatcherSummaryInput): string {
         ? `${input.unrealizedPnLPct >= 0 ? "+" : ""}${input.unrealizedPnLPct.toFixed(1)}%`
         : "n/a",
     recentNewsHeadlines:
-      input.newsHeadlines.length > 0 ? input.newsHeadlines : ["(no recent news)"],
+      input.newsHeadlines.length > 0
+        ? input.newsHeadlines
+        : ["(no recent news)"],
   };
 
   return `Generate a daily monitor update for this holding:\n${JSON.stringify(data, null, 2)}`;
@@ -74,7 +76,10 @@ export async function generateDailySummary(
           properties: {
             headline: { type: "string" },
             summary: { type: "string" },
-            sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+            sentiment: {
+              type: "string",
+              enum: ["bullish", "bearish", "neutral"],
+            },
           },
           required: ["headline", "summary", "sentiment"],
           additionalProperties: false,
@@ -103,7 +108,11 @@ export async function generateDailySummary(
     throw new Error("AI response missing required fields");
   }
 
-  const result = parsed as { headline: string; summary: string; sentiment: string };
+  const result = parsed as {
+    headline: string;
+    summary: string;
+    sentiment: string;
+  };
 
   const validSentiments = ["bullish", "bearish", "neutral"] as const;
   const sentiment = validSentiments.includes(

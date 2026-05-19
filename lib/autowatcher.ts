@@ -1,9 +1,10 @@
 import Decimal from "decimal.js";
+import { generateDailySummary } from "@/lib/autowatcher-ai";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { loadPriceChanges } from "@/lib/price-changes";
 import { aggregateOpenPositions } from "@/lib/signals";
 import { fetchNews } from "@/lib/yahoo";
-import { generateDailySummary } from "@/lib/autowatcher-ai";
 
 export type AutoWatcherItemResult = {
   instrumentId: string;
@@ -41,6 +42,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
     select: {
       id: true,
       symbol: true,
+      name: true,
       yahooSymbol: true,
       currency: true,
       autoWatcherThreshold: true,
@@ -50,16 +52,24 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
   });
 
   if (instruments.length === 0) {
-    return { processed: 0, pnlFired: 0, dailyFired: 0, skipped: 0, failures: [] };
+    return {
+      processed: 0,
+      pnlFired: 0,
+      dailyFired: 0,
+      skipped: 0,
+      failures: [],
+    };
   }
 
-  // Aggregate open positions across all portfolios once
+  // Aggregate open positions across all portfolios + load price changes once
   const allPositions = await aggregateOpenPositions();
   const positionMap = new Map(allPositions.map((p) => [p.instrumentId, p]));
+  const priceChanges = await loadPriceChanges(instruments.map((i) => i.id));
 
   let pnlFired = 0;
   let dailyFired = 0;
   let skipped = 0;
+  let processed = 0;
   const failures: AutoWatcherItemResult[] = [];
 
   for (const inst of instruments) {
@@ -76,8 +86,10 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
         skipped++;
         continue;
       }
+      processed++;
 
       const threshold = new Decimal(inst.autoWatcherThreshold.toString());
+      const thresholdNum = threshold.toNumber();
 
       // ── P&L milestone check ─────────────────────────────────────────
       const pnlPct = position.unrealizedPnLPercent;
@@ -92,20 +104,20 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
           });
         } else if (currentBand !== inst.autoWatcherLastBand) {
           const prevBand = inst.autoWatcherLastBand;
-          const milestoneLabel =
-            currentBand >= 0 ? `+${currentBand * 10}%` : `${currentBand * 10}%`;
+          const milestonePct = currentBand * thresholdNum;
+          const milestoneLabel = `${milestonePct >= 0 ? "+" : ""}${milestonePct}%`;
           const avgCost = position.costBase.dividedBy(position.quantity);
 
           await createNotification({
             type: "AUTO_WATCHER",
             title: `${inst.symbol} crossed ${milestoneLabel} milestone`,
-            message: `${inst.symbol} is now ${pnlPct.toFixed(1)}% vs cost basis (prev: ${prevBand * Number(threshold)}%). Avg cost ${formatMoney(avgCost, inst.currency)}, current ${position.marketPrice ? formatMoney(position.marketPrice, inst.currency) : "N/A"}.`,
+            message: `${inst.symbol} is now ${pnlPct.toFixed(1)}% vs cost basis (prev band: ${prevBand * thresholdNum}%). Avg cost ${formatMoney(avgCost, inst.currency)}, current ${position.marketPrice ? formatMoney(position.marketPrice, inst.currency) : "N/A"}.`,
             metadata: {
               kind: "milestone",
               currentBand,
               prevBand,
               pnlPct: pnlPct.toNumber(),
-              threshold: threshold.toNumber(),
+              threshold: thresholdNum,
             },
           });
 
@@ -121,26 +133,17 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
 
       // ── Daily AI summary check ──────────────────────────────────────
       const now = new Date();
-      if (inst.autoWatcherLastDailyAt && isSameDayUtc(inst.autoWatcherLastDailyAt, now)) {
-        // Already ran today
-      } else {
-        const recentPrices = await db.priceHistory.findMany({
-          where: { instrumentId: inst.id },
-          orderBy: { date: "desc" },
-          take: 3,
-          select: { date: true, close: true },
-        });
+      const ranToday =
+        inst.autoWatcherLastDailyAt &&
+        isSameDayUtc(inst.autoWatcherLastDailyAt, now);
 
-        if (recentPrices.length >= 2) {
-          const latestClose = new Decimal(recentPrices[0].close.toString());
-          const prevClose = new Decimal(recentPrices[1].close.toString());
-          const dayChangePct = !prevClose.isZero()
-            ? latestClose.minus(prevClose).dividedBy(prevClose).times(100).toNumber()
-            : 0;
+      if (!ranToday) {
+        const pc = priceChanges.get(inst.id);
+        if (pc) {
+          const dayChangePct = pc.dayPct?.toNumber() ?? 0;
 
           const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           let recentHeadlines: string[] = [];
-
           try {
             const newsItems = await fetchNews(inst.yahooSymbol, 8);
             recentHeadlines = newsItems
@@ -151,28 +154,21 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
             // News fetch failure shouldn't block the rest
           }
 
-          const shouldFire = Math.abs(dayChangePct) >= 1.5 || recentHeadlines.length > 0;
+          const shouldFire =
+            Math.abs(dayChangePct) >= 1.5 || recentHeadlines.length > 0;
 
           if (shouldFire) {
-            const weekPrices = recentPrices[2]
-              ? new Decimal(recentPrices[2].close.toString())
-              : null;
-            const weekChangePct =
-              weekPrices && !weekPrices.isZero()
-                ? latestClose.minus(weekPrices).dividedBy(weekPrices).times(100).toNumber()
-                : null;
-
-            const avgCostBase = position.costBase.dividedBy(position.quantity).toNumber();
-
             const summary = await generateDailySummary({
               symbol: inst.symbol,
-              name: inst.symbol,
+              name: inst.name,
               currency: inst.currency,
-              currentPrice: latestClose.toNumber(),
+              currentPrice: pc.currentPrice.toNumber(),
               dayChangePct,
-              weekChangePct,
-              avgCostBase,
-              unrealizedPnLPct: position.unrealizedPnLPercent?.toNumber() ?? null,
+              weekChangePct: pc.weekPct?.toNumber() ?? null,
+              avgCostBase: position.costBase
+                .dividedBy(position.quantity)
+                .toNumber(),
+              unrealizedPnLPct: pnlPct?.toNumber() ?? null,
               newsHeadlines: recentHeadlines,
             });
 
@@ -201,22 +197,8 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
     } catch (err) {
       result.error = err instanceof Error ? err.message : String(err);
       failures.push(result);
-      continue;
-    }
-
-    if (!result.error) {
-      // Only push non-failure results that actually did something
-      if (result.pnlAlertFired || result.dailySummaryFired) {
-        // Already counted above
-      }
     }
   }
 
-  return {
-    processed: instruments.length - skipped,
-    pnlFired,
-    dailyFired,
-    skipped,
-    failures,
-  };
+  return { processed, pnlFired, dailyFired, skipped, failures };
 }

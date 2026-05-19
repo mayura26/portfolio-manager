@@ -1,14 +1,13 @@
 "use client";
 
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useTransition, useState, useRef } from "react";
+import { useRef, useState, useTransition } from "react";
 import { setAutoWatcher } from "@/actions/instruments";
 
 type Props = {
   instrumentId: string;
   enabled: boolean;
   threshold: number;
-  yahooSymbol: string;
 };
 
 export function AutoWatcherToggle({ instrumentId, enabled, threshold }: Props) {
@@ -58,7 +57,9 @@ export function AutoWatcherToggle({ instrumentId, enabled, threshold }: Props) {
       </span>
 
       {/* Label */}
-      <span className={`label whitespace-nowrap ${enabled ? "text-foreground" : "text-muted"}`}>
+      <span
+        className={`label whitespace-nowrap ${enabled ? "text-foreground" : "text-muted"}`}
+      >
         AutoWatcher
       </span>
 
@@ -85,6 +86,7 @@ export function AutoWatcherToggle({ instrumentId, enabled, threshold }: Props) {
 
       {/* Toggle */}
       <button
+        type="button"
         onClick={handleToggle}
         disabled={isPending}
         aria-label={enabled ? "Disable AutoWatcher" : "Enable AutoWatcher"}

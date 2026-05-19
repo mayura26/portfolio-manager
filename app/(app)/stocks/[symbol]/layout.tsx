@@ -68,7 +68,6 @@ async function StockHeader({ params }: { params: Params }) {
                 instrumentId={instrument.id}
                 enabled={instrument.autoWatcherEnabled}
                 threshold={Number(instrument.autoWatcherThreshold)}
-                yahooSymbol={instrument.yahooSymbol}
               />
             </div>
           ) : null}

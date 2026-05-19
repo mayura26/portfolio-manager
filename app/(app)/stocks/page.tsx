@@ -1,3 +1,4 @@
+import type Decimal from "decimal.js";
 import { ArrowUpRight, LineChart } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -8,11 +9,10 @@ import {
   type StockCardContext,
 } from "@/components/stocks/stock-card";
 import { db } from "@/lib/db";
+import { formatCurrency, formatPercent } from "@/lib/format";
 import { computeHoldings } from "@/lib/holdings";
 import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 import { loadPriceChanges, type PriceChangeData } from "@/lib/price-changes";
-import { formatCurrency, formatPercent } from "@/lib/format";
-import Decimal from "decimal.js";
 
 type PortfolioStockGroup = {
   id: string | null;
@@ -304,12 +304,16 @@ function buildStockContext(
           priceData.currentPrice,
           instrument.currency,
         ),
-        currency: instrument.currency,
-        dayPct: formatPct(priceData.dayPct),
-        weekPct: formatPct(priceData.weekPct),
-        monthPct: formatPct(priceData.monthPct),
-        yearPct: formatPct(priceData.yearPct),
-        dayPctRaw: priceData.dayPct?.toNumber() ?? null,
+        changes: [
+          { label: "1D", pct: priceData.dayPct },
+          { label: "1W", pct: priceData.weekPct },
+          { label: "1M", pct: priceData.monthPct },
+          { label: "1Y", pct: priceData.yearPct },
+        ].map(({ label, pct }) => ({
+          label,
+          formatted: formatPct(pct),
+          raw: pct?.toNumber() ?? null,
+        })),
       }
     : null;
 
