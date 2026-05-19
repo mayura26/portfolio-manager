@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AllocationTable } from "@/components/portfolios/allocation-table";
+import { HoldingPerformanceTable } from "@/components/portfolios/holding-performance-table";
 import {
   PortfolioValueChart,
   PortfolioValueChartSkeleton,
@@ -12,6 +13,7 @@ import { Skeleton } from "@/components/shared/skeleton";
 import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { formatCurrency, pnlClass } from "@/lib/format";
+import { getPortfolioHoldingPerformance } from "@/lib/holding-performance";
 import { computeHoldings } from "@/lib/holdings";
 import { computePortfolioAllocation } from "@/lib/portfolio-allocation";
 
@@ -35,11 +37,13 @@ async function PortfolioOverview({ params }: { params: Params }) {
   });
   if (!portfolio) notFound();
 
-  const [holdings, allocation, groupCash] = await Promise.all([
-    computeHoldings(portfolioId),
-    computePortfolioAllocation(portfolioId),
-    computeGroupCash(portfolio.groupId),
-  ]);
+  const [holdings, allocation, groupCash, holdingPerformance] =
+    await Promise.all([
+      computeHoldings(portfolioId),
+      computePortfolioAllocation(portfolioId),
+      computeGroupCash(portfolio.groupId),
+      getPortfolioHoldingPerformance(portfolioId),
+    ]);
 
   if (allocation.rows.length === 0 && holdings.totalRealizedPnL.isZero()) {
     return (
@@ -161,6 +165,13 @@ async function PortfolioOverview({ params }: { params: Params }) {
           )}
         </p>
       </div>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">
+          Holding performance
+        </h2>
+        <HoldingPerformanceTable performance={holdingPerformance} />
+      </section>
     </div>
   );
 }

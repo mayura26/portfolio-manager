@@ -23,6 +23,10 @@ export type PerformanceData = {
 
 type Flow = { date: Date; amount: number };
 
+export type ReturnPeriodKey = "day" | "week" | "month";
+
+export type ReturnPeriods = Record<ReturnPeriodKey, number | null>;
+
 type EntityInput = {
   key: string;
   label: string;
@@ -89,6 +93,26 @@ function bucketFlows(dates: Date[], flows: Flow[]): number[] {
     if (idx > 0) out[idx] += f.amount;
   }
   return out;
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCHours(0, 0, 0, 0);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function anchorIndexForPeriod(dates: Date[], latest: Date, days: number) {
+  const targetKey = dayKey(addUtcDays(latest, -days));
+  let anchorIndex = -1;
+  for (let i = 0; i < dates.length; i++) {
+    if (dayKey(dates[i]) <= targetKey) {
+      anchorIndex = i;
+    } else {
+      break;
+    }
+  }
+  return anchorIndex;
 }
 
 /** S&P 500 cumulative return %, rebased to 0 at the window's first date. */
@@ -256,6 +280,62 @@ export async function getGroupPortfolioReturns(
     );
     result.set(portfolioId, pct[pct.length - 1]);
   }
+  return result;
+}
+
+/**
+ * Final cumulative time-weighted return % for each portfolio across the
+ * short periods used by the group performance table.
+ */
+export async function getGroupPortfolioReturnPeriods(
+  groupId: string,
+): Promise<Map<string, ReturnPeriods>> {
+  const result = new Map<string, ReturnPeriods>();
+  const periods: Array<{ key: ReturnPeriodKey; days: number }> = [
+    { key: "day", days: 1 },
+    { key: "week", days: 7 },
+    { key: "month", days: 30 },
+  ];
+  const maxDays = Math.max(...periods.map((p) => p.days));
+  const history = await getGroupValueHistory(groupId, maxDays + 10);
+  const dates = history.points.map((p) => p.date);
+  if (dates.length < 2) return result;
+
+  const latest = dates[dates.length - 1];
+  const portfolioSeries = history.series.filter((s) => s.key.startsWith("p_"));
+  const flowsByPortfolio = await groupTradeFlows(groupId, history.baseCurrency);
+
+  for (const s of portfolioSeries) {
+    const portfolioId = s.key.slice(2);
+    const values = history.points.map((row) => {
+      const v = row[s.key];
+      return typeof v === "number" ? v : 0;
+    });
+    if (!values.some((v) => v !== 0)) continue;
+
+    const portfolioPeriods: ReturnPeriods = {
+      day: null,
+      week: null,
+      month: null,
+    };
+
+    for (const period of periods) {
+      const anchorIndex = anchorIndexForPeriod(dates, latest, period.days);
+      if (anchorIndex < 0 || anchorIndex >= dates.length - 1) continue;
+      if (values[anchorIndex] <= 0) continue;
+
+      const windowDates = dates.slice(anchorIndex);
+      const windowValues = values.slice(anchorIndex);
+      const pct = twrPercent(
+        windowValues,
+        bucketFlows(windowDates, flowsByPortfolio.get(portfolioId) ?? []),
+      );
+      portfolioPeriods[period.key] = pct[pct.length - 1] ?? null;
+    }
+
+    result.set(portfolioId, portfolioPeriods);
+  }
+
   return result;
 }
 

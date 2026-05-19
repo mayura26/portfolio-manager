@@ -6,6 +6,7 @@ import { CompositionPanel } from "@/components/composition/composition-panel";
 import { RunCompositionButton } from "@/components/composition/run-composition-button";
 import { AllocationChartClient } from "@/components/dashboard/allocation-chart-client";
 import { GroupAllocationTable } from "@/components/groups/group-allocation-table";
+import { GroupPerformanceTable } from "@/components/groups/group-performance-table";
 import {
   GroupValueChart,
   GroupValueChartSkeleton,
@@ -18,7 +19,7 @@ import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/format";
 import { computeGroupAllocation } from "@/lib/group-allocation";
-import { getGroupPortfolioReturns } from "@/lib/performance";
+import { getGroupPortfolioPerformance } from "@/lib/holding-performance";
 
 type Params = Promise<{ groupId: string }>;
 
@@ -37,9 +38,9 @@ async function GroupDetail({ params }: { params: Params }) {
   const group = await db.portfolioGroup.findUnique({ where: { id: groupId } });
   if (!group) notFound();
 
-  const [allocation, portfolioReturns] = await Promise.all([
+  const [allocation, portfolioPerformance] = await Promise.all([
     computeGroupAllocation(groupId),
-    getGroupPortfolioReturns(groupId, 90),
+    getGroupPortfolioPerformance(groupId),
   ]);
 
   const rowLabelMap = new Map<string, string>();
@@ -179,11 +180,15 @@ async function GroupDetail({ params }: { params: Params }) {
         </Link>
       </div>
       <div className="mt-3">
-        <GroupAllocationTable
-          allocation={allocation}
-          returns={portfolioReturns}
-        />
+        <GroupAllocationTable allocation={allocation} />
       </div>
+
+      <section className="mt-8 flex flex-col gap-3">
+        <h2 className="display text-2xl text-foreground">
+          Portfolio performance
+        </h2>
+        <GroupPerformanceTable performance={portfolioPerformance} />
+      </section>
 
       <div className="mt-8 flex items-center justify-between">
         <h2 className="display text-2xl text-foreground">AI composition</h2>
