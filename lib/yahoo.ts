@@ -74,9 +74,25 @@ export async function lookupInstrument(
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) return null;
 
-  const summary = await yahoo.quoteSummary(sym, {
-    modules: ["price", "summaryProfile", "assetProfile"],
-  });
+  // Some instruments (e.g. ASX gold ETFs) fail yahoo-finance2 schema validation
+  // because optional modules like summaryProfile are absent in Yahoo's response.
+  // Retry with validation suppressed so we can still read the price module.
+  const fetchSummary = () =>
+    yahoo.quoteSummary(sym, {
+      modules: ["price", "summaryProfile", "assetProfile"],
+    });
+  type Summary = Awaited<ReturnType<typeof fetchSummary>>;
+
+  let summary: Summary;
+  try {
+    summary = await fetchSummary();
+  } catch {
+    summary = (await yahoo.quoteSummary(
+      sym,
+      { modules: ["price"] },
+      { validateResult: false },
+    )) as Summary;
+  }
 
   const price = summary.price;
   const profile = summary.summaryProfile ?? summary.assetProfile;
