@@ -8,6 +8,7 @@ import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
 import { computeHoldings } from "@/lib/holdings";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 
@@ -66,7 +67,9 @@ export async function computeGroupAllocation(
     include: {
       portfolios: {
         orderBy: { name: "asc" },
-        include: { _count: { select: { trades: true } } },
+        include: {
+          _count: { select: { trades: { where: visibleTradeWhere } } },
+        },
       },
     },
   });

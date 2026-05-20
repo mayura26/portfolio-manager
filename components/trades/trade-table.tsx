@@ -1,8 +1,14 @@
 "use client";
 
+import { EyeOff, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { moveTrades, moveTradesBySymbol } from "@/actions/trades";
+import {
+  hideTrades,
+  moveTrades,
+  moveTradesBySymbol,
+  restoreTrades,
+} from "@/actions/trades";
 import { formatCurrency, formatDate, formatQuantity } from "@/lib/format";
 
 type TradeRow = {
@@ -31,15 +37,26 @@ type MoveTarget = {
 
 type Props = {
   portfolioId: string;
+  isUnassigned: boolean;
   trades: TradeRow[];
+  hiddenTrades?: TradeRow[];
   moveTargets: MoveTarget[];
 };
 
 type FeedbackTone = "info" | "error";
 type Feedback = { tone: FeedbackTone; message: string } | null;
 
-export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
+export function TradeTable({
+  portfolioId,
+  isUnassigned,
+  trades,
+  hiddenTrades = [],
+  moveTargets,
+}: Props) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [hiddenSelected, setHiddenSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [rowTargetId, setRowTargetId] = useState("");
   const [symbolInstrumentId, setSymbolInstrumentId] = useState("");
   const [symbolTargetId, setSymbolTargetId] = useState("");
@@ -65,10 +82,16 @@ export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
 
   const allSelected = trades.length > 0 && selected.size === trades.length;
   const someSelected = selected.size > 0 && !allSelected;
+  const allHiddenSelected =
+    hiddenTrades.length > 0 && hiddenSelected.size === hiddenTrades.length;
+  const someHiddenSelected = hiddenSelected.size > 0 && !allHiddenSelected;
   const canMoveSelected =
     !pending && selected.size > 0 && rowTargetId.length > 0;
   const canMoveSymbol =
     !pending && symbolInstrumentId.length > 0 && symbolTargetId.length > 0;
+  const canHideSelected = !pending && isUnassigned && selected.size > 0;
+  const canRestoreSelected =
+    !pending && isUnassigned && hiddenSelected.size > 0;
 
   function toggleRow(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -82,6 +105,20 @@ export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
   function toggleAll(checked: boolean) {
     if (checked) setSelected(new Set(trades.map((t) => t.id)));
     else setSelected(new Set());
+  }
+
+  function toggleHiddenRow(id: string, checked: boolean) {
+    setHiddenSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAllHidden(checked: boolean) {
+    if (checked) setHiddenSelected(new Set(hiddenTrades.map((t) => t.id)));
+    else setHiddenSelected(new Set());
   }
 
   function handleMoveSelected() {
@@ -128,9 +165,46 @@ export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
     });
   }
 
+  function handleHideSelected() {
+    if (selected.size === 0) return;
+    const ids = [...selected];
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await hideTrades(ids);
+      if (result.ok) {
+        setSelected(new Set());
+        setFeedback({
+          tone: "info",
+          message: `Hid ${result.changed} trade${result.changed === 1 ? "" : "s"} from Unassigned.`,
+        });
+      } else {
+        setFeedback({ tone: "error", message: result.error });
+      }
+    });
+  }
+
+  function handleRestoreSelected() {
+    if (hiddenSelected.size === 0) return;
+    const ids = [...hiddenSelected];
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await restoreTrades(ids);
+      if (result.ok) {
+        setHiddenSelected(new Set());
+        setFeedback({
+          tone: "info",
+          message: `Restored ${result.changed} trade${result.changed === 1 ? "" : "s"} to Unassigned.`,
+        });
+      } else {
+        setFeedback({ tone: "error", message: result.error });
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <MoveToolbar
+        isUnassigned={isUnassigned}
         selectedCount={selected.size}
         pending={pending}
         moveTargets={moveTargets}
@@ -145,6 +219,8 @@ export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
         onSymbolTargetChange={setSymbolTargetId}
         canMoveSymbol={canMoveSymbol}
         onMoveSymbol={handleMoveSymbol}
+        canHideSelected={canHideSelected}
+        onHideSelected={handleHideSelected}
       />
 
       {feedback ? (
@@ -161,123 +237,55 @@ export function TradeTable({ portfolioId, trades, moveTargets }: Props) {
         </div>
       ) : null}
 
-      <div className="hairline overflow-x-auto bg-surface-elevated">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <Th>
-                <input
-                  type="checkbox"
-                  aria-label="Select all trades"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
-                  onChange={(e) => toggleAll(e.target.checked)}
-                  className="cursor-pointer accent-accent"
-                />
-              </Th>
-              <Th>Date</Th>
-              <Th>Side</Th>
-              <Th>Instrument</Th>
-              <Th align="right">Quantity</Th>
-              <Th align="right">Price</Th>
-              <Th align="right">Fees</Th>
-              <Th align="right">FX rate</Th>
-              <Th align="right">{""}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {trades.map((trade) => {
-              const isSelected = selected.has(trade.id);
-              return (
-                <tr
-                  key={trade.id}
-                  className={[
-                    "border-b border-border last:border-b-0",
-                    isSelected ? "bg-surface" : "",
-                  ].join(" ")}
-                >
-                  <Td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select trade on ${formatDate(trade.date)}`}
-                      checked={isSelected}
-                      onChange={(e) => toggleRow(trade.id, e.target.checked)}
-                      className="cursor-pointer accent-accent"
-                    />
-                  </Td>
-                  <Td>
-                    <span className="tabular text-muted">
-                      {formatDate(trade.date)}
-                    </span>
-                  </Td>
-                  <Td>
-                    <span
-                      className={[
-                        "label inline-flex items-center px-2 py-0.5",
-                        trade.type === "BUY"
-                          ? "border border-gain/30 bg-gain-soft text-gain"
-                          : "border border-loss/30 bg-loss-soft text-loss",
-                      ].join(" ")}
-                    >
-                      {trade.type}
-                    </span>
-                  </Td>
-                  <Td>
-                    <Link
-                      href={`/stocks/${trade.instrument.yahooSymbol}`}
-                      className="text-foreground hover:text-accent"
-                    >
-                      <span className="tabular font-medium">
-                        {trade.instrument.symbol}
-                      </span>{" "}
-                      <span className="text-muted">
-                        {trade.instrument.name}
-                      </span>
-                    </Link>
-                  </Td>
-                  <Td align="right">
-                    <span className="tabular">
-                      {formatQuantity(trade.quantity.toString())}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <span className="tabular">
-                      {formatCurrency(trade.price.toString(), trade.currency)}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <span className="tabular text-muted">
-                      {formatCurrency(trade.fees.toString(), trade.currency)}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <span className="tabular text-muted">
-                      {trade.fxRate
-                        ? Number(trade.fxRate.toString()).toFixed(4)
-                        : "—"}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <Link
-                      href={`/portfolios/${portfolioId}/trades/${trade.id}`}
-                      className="text-xs text-accent hover:underline"
-                    >
-                      Edit
-                    </Link>
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {trades.length > 0 ? (
+        <TradeRowsTable
+          portfolioId={portfolioId}
+          trades={trades}
+          selected={selected}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onToggleAll={toggleAll}
+          onToggleRow={toggleRow}
+        />
+      ) : null}
+
+      {hiddenTrades.length > 0 ? (
+        <section className="mt-3 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div>
+              <p className="label text-muted">Hidden trades</p>
+              <p className="mt-1 text-xs text-subtle">
+                Ignored by assignment, holdings, cash, charts, and reports.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRestoreSelected}
+              disabled={!canRestoreSelected}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.5} />
+              {pending ? "Restoring..." : "Restore selected"}
+            </button>
+          </div>
+          <TradeRowsTable
+            portfolioId={portfolioId}
+            trades={hiddenTrades}
+            selected={hiddenSelected}
+            allSelected={allHiddenSelected}
+            someSelected={someHiddenSelected}
+            onToggleAll={toggleAllHidden}
+            onToggleRow={toggleHiddenRow}
+            muted
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
 
 type ToolbarProps = {
+  isUnassigned: boolean;
   selectedCount: number;
   pending: boolean;
   moveTargets: MoveTarget[];
@@ -292,9 +300,12 @@ type ToolbarProps = {
   onSymbolTargetChange: (value: string) => void;
   canMoveSymbol: boolean;
   onMoveSymbol: () => void;
+  canHideSelected: boolean;
+  onHideSelected: () => void;
 };
 
 function MoveToolbar({
+  isUnassigned,
   selectedCount,
   pending,
   moveTargets,
@@ -309,74 +320,230 @@ function MoveToolbar({
   onSymbolTargetChange,
   canMoveSymbol,
   onMoveSymbol,
+  canHideSelected,
+  onHideSelected,
 }: ToolbarProps) {
-  if (moveTargets.length === 0) return null;
+  if (moveTargets.length === 0 && !isUnassigned) return null;
 
   return (
     <div className="hairline flex flex-col gap-3 bg-surface-elevated p-3 md:flex-row md:items-end md:gap-6">
-      <div className="flex flex-col gap-1">
-        <span className="label text-muted">
-          Move selected{" "}
-          <span className="tabular text-foreground">({selectedCount})</span>
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          <PortfolioSelect
-            id="move-selected-target"
-            value={rowTargetId}
-            onChange={onRowTargetChange}
-            options={moveTargets}
-            placeholder="Choose target portfolio"
-            disabled={pending}
-          />
-          <button
-            type="button"
-            onClick={onMoveSelected}
-            disabled={!canMoveSelected}
-            className="inline-flex items-center bg-accent px-3 py-1.5 text-xs text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {pending ? "Moving…" : "Move selected"}
-          </button>
+      {moveTargets.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <span className="label text-muted">
+            Move selected{" "}
+            <span className="tabular text-foreground">({selectedCount})</span>
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <PortfolioSelect
+              id="move-selected-target"
+              value={rowTargetId}
+              onChange={onRowTargetChange}
+              options={moveTargets}
+              placeholder="Choose target portfolio"
+              disabled={pending}
+            />
+            <button
+              type="button"
+              onClick={onMoveSelected}
+              disabled={!canMoveSelected}
+              className="inline-flex items-center bg-accent px-3 py-1.5 text-xs text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? "Moving..." : "Move selected"}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="h-px w-full bg-border md:h-8 md:w-px" aria-hidden />
+      {isUnassigned ? (
+        <button
+          type="button"
+          onClick={onHideSelected}
+          disabled={!canHideSelected}
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 md:mb-0.5"
+        >
+          <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
+          {pending ? "Hiding..." : "Hide selected"}
+        </button>
+      ) : null}
 
-      <div className="flex flex-col gap-1">
-        <span className="label text-muted">Move all of symbol</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={symbolInstrumentId}
-            onChange={(e) => onSymbolInstrumentChange(e.target.value)}
-            disabled={pending || symbolOptions.length === 0}
-            className="hairline bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50"
-            aria-label="Symbol to move"
-          >
-            <option value="">Symbol…</option>
-            {symbolOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.symbol} — {s.name}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-muted">to</span>
-          <PortfolioSelect
-            id="move-symbol-target"
-            value={symbolTargetId}
-            onChange={onSymbolTargetChange}
-            options={moveTargets}
-            placeholder="Target portfolio"
-            disabled={pending}
-          />
-          <button
-            type="button"
-            onClick={onMoveSymbol}
-            disabled={!canMoveSymbol}
-            className="inline-flex items-center bg-accent px-3 py-1.5 text-xs text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {pending ? "Moving…" : "Move symbol"}
-          </button>
+      {moveTargets.length > 0 ? (
+        <div className="h-px w-full bg-border md:h-8 md:w-px" aria-hidden />
+      ) : null}
+
+      {moveTargets.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <span className="label text-muted">Move all of symbol</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={symbolInstrumentId}
+              onChange={(e) => onSymbolInstrumentChange(e.target.value)}
+              disabled={pending || symbolOptions.length === 0}
+              className="hairline bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50"
+              aria-label="Symbol to move"
+            >
+              <option value="">Symbol...</option>
+              {symbolOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.symbol} - {s.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted">to</span>
+            <PortfolioSelect
+              id="move-symbol-target"
+              value={symbolTargetId}
+              onChange={onSymbolTargetChange}
+              options={moveTargets}
+              placeholder="Target portfolio"
+              disabled={pending}
+            />
+            <button
+              type="button"
+              onClick={onMoveSymbol}
+              disabled={!canMoveSymbol}
+              className="inline-flex items-center bg-accent px-3 py-1.5 text-xs text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? "Moving..." : "Move symbol"}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TradeRowsTable({
+  portfolioId,
+  trades,
+  selected,
+  allSelected,
+  someSelected,
+  onToggleAll,
+  onToggleRow,
+  muted = false,
+}: {
+  portfolioId: string;
+  trades: TradeRow[];
+  selected: Set<string>;
+  allSelected: boolean;
+  someSelected: boolean;
+  onToggleAll: (checked: boolean) => void;
+  onToggleRow: (id: string, checked: boolean) => void;
+  muted?: boolean;
+}) {
+  return (
+    <div className="hairline overflow-x-auto bg-surface-elevated">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted">
+            <Th>
+              <input
+                type="checkbox"
+                aria-label={
+                  muted ? "Select all hidden trades" : "Select all trades"
+                }
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                onChange={(e) => onToggleAll(e.target.checked)}
+                className="cursor-pointer accent-accent"
+              />
+            </Th>
+            <Th>Date</Th>
+            <Th>Side</Th>
+            <Th>Instrument</Th>
+            <Th align="right">Quantity</Th>
+            <Th align="right">Price</Th>
+            <Th align="right">Fees</Th>
+            <Th align="right">FX rate</Th>
+            <Th align="right">{""}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {trades.map((trade) => {
+            const isSelected = selected.has(trade.id);
+            return (
+              <tr
+                key={trade.id}
+                className={[
+                  "border-b border-border last:border-b-0",
+                  isSelected ? "bg-surface" : "",
+                  muted ? "opacity-70" : "",
+                ].join(" ")}
+              >
+                <Td>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select trade on ${formatDate(trade.date)}`}
+                    checked={isSelected}
+                    onChange={(e) => onToggleRow(trade.id, e.target.checked)}
+                    className="cursor-pointer accent-accent"
+                  />
+                </Td>
+                <Td>
+                  <span className="tabular text-muted">
+                    {formatDate(trade.date)}
+                  </span>
+                </Td>
+                <Td>
+                  <span
+                    className={[
+                      "label inline-flex items-center px-2 py-0.5",
+                      trade.type === "BUY"
+                        ? "border border-gain/30 bg-gain-soft text-gain"
+                        : "border border-loss/30 bg-loss-soft text-loss",
+                    ].join(" ")}
+                  >
+                    {trade.type}
+                  </span>
+                </Td>
+                <Td>
+                  <Link
+                    href={`/stocks/${trade.instrument.yahooSymbol}`}
+                    className="text-foreground hover:text-accent"
+                  >
+                    <span className="tabular font-medium">
+                      {trade.instrument.symbol}
+                    </span>{" "}
+                    <span className="text-muted">{trade.instrument.name}</span>
+                  </Link>
+                </Td>
+                <Td align="right">
+                  <span className="tabular">
+                    {formatQuantity(trade.quantity.toString())}
+                  </span>
+                </Td>
+                <Td align="right">
+                  <span className="tabular">
+                    {formatCurrency(trade.price.toString(), trade.currency)}
+                  </span>
+                </Td>
+                <Td align="right">
+                  <span className="tabular text-muted">
+                    {formatCurrency(trade.fees.toString(), trade.currency)}
+                  </span>
+                </Td>
+                <Td align="right">
+                  <span className="tabular text-muted">
+                    {trade.fxRate
+                      ? Number(trade.fxRate.toString()).toFixed(4)
+                      : "-"}
+                  </span>
+                </Td>
+                <Td align="right">
+                  <Link
+                    href={`/portfolios/${portfolioId}/trades/${trade.id}`}
+                    className="text-xs text-accent hover:underline"
+                  >
+                    Edit
+                  </Link>
+                </Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -127,6 +127,8 @@ model Trade {
   fees         Decimal   @default(0) @db.Decimal(18, 4)
   date         DateTime
   notes        String?
+  isHidden     Boolean   @default(false)
+  hiddenAt     DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

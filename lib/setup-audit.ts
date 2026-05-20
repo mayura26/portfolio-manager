@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 export type AuditCategory =
   | "allocation"
@@ -80,6 +81,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
       orderBy: { createdAt: "desc" },
     }),
     db.trade.findMany({
+      where: visibleTradeWhere,
       orderBy: { date: "asc" },
       select: {
         id: true,

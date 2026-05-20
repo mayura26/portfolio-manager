@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -53,6 +54,7 @@ export async function computeHoldings(
     where: { id: portfolioId },
     include: {
       trades: {
+        where: visibleTradeWhere,
         orderBy: { date: "asc" },
         include: { instrument: true },
       },

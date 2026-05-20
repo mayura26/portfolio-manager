@@ -13,7 +13,10 @@ import {
   type FifoCostTradeInput,
   type Holding,
 } from "@/lib/holdings";
-import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
+import {
+  excludeEmptyUnassignedWhere,
+  visibleTradeWhere,
+} from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -416,6 +419,7 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
   if (groups.length === 0) return { baseCurrency, series: [], points: [] };
 
   const trades = await db.trade.findMany({
+    where: visibleTradeWhere,
     orderBy: { date: "asc" },
     include: {
       instrument: true,
@@ -636,7 +640,7 @@ export async function getPortfolioValueHistory(
   if (!portfolio) return { baseCurrency: "USD", points: [] };
 
   const trades = await db.trade.findMany({
-    where: { portfolioId },
+    where: { portfolioId, ...visibleTradeWhere },
     orderBy: { date: "asc" },
     include: {
       instrument: true,
@@ -712,7 +716,7 @@ export async function getGroupValueHistory(
   const portfolioMeta = group.portfolios;
 
   const trades = await db.trade.findMany({
-    where: { portfolio: { groupId } },
+    where: { ...visibleTradeWhere, portfolio: { groupId } },
     orderBy: { date: "asc" },
     include: {
       instrument: true,

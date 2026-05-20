@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { findOrCreateInstrument } from "@/lib/instruments";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import { tradeSchema } from "@/lib/validators";
 
 export type TradeActionState =
@@ -194,6 +195,10 @@ export type MoveTradesResult =
   | { ok: true; moved: number }
   | { ok: false; error: string };
 
+export type TradeVisibilityResult =
+  | { ok: true; changed: number }
+  | { ok: false; error: string };
+
 function revalidateAfterMove(portfolioIds: string[], groupIds: string[]) {
   for (const pid of new Set(portfolioIds)) {
     revalidatePath(`/portfolios/${pid}`);
@@ -207,6 +212,85 @@ function revalidateAfterMove(portfolioIds: string[], groupIds: string[]) {
   revalidatePath("/groups");
   revalidatePath("/dashboard");
   revalidatePath("/stocks");
+  revalidatePath("/reviews/audit");
+}
+
+async function loadTradesForVisibilityChange(tradeIds: string[]) {
+  const ids = [...new Set(tradeIds)];
+  if (ids.length === 0) {
+    return { ok: false as const, error: "Select at least one trade." };
+  }
+
+  const trades = await db.trade.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      portfolioId: true,
+      portfolio: { select: { name: true, groupId: true } },
+    },
+  });
+
+  if (trades.length !== ids.length) {
+    return {
+      ok: false as const,
+      error: "Some selected trades were not found.",
+    };
+  }
+
+  if (trades.some((t) => t.portfolio.name !== "Unassigned")) {
+    return {
+      ok: false as const,
+      error: "Only trades in an Unassigned portfolio can be hidden.",
+    };
+  }
+
+  return { ok: true as const, ids, trades };
+}
+
+export async function hideTrades(
+  tradeIds: string[],
+): Promise<TradeVisibilityResult> {
+  const loaded = await loadTradesForVisibilityChange(tradeIds);
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const result = await db.trade.updateMany({
+    where: {
+      id: { in: loaded.ids },
+      ...visibleTradeWhere,
+      portfolio: { name: "Unassigned" },
+    },
+    data: { isHidden: true, hiddenAt: new Date() },
+  });
+
+  revalidateAfterMove(
+    loaded.trades.map((t) => t.portfolioId),
+    loaded.trades.map((t) => t.portfolio.groupId),
+  );
+
+  return { ok: true, changed: result.count };
+}
+
+export async function restoreTrades(
+  tradeIds: string[],
+): Promise<TradeVisibilityResult> {
+  const loaded = await loadTradesForVisibilityChange(tradeIds);
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+
+  const result = await db.trade.updateMany({
+    where: {
+      id: { in: loaded.ids },
+      isHidden: true,
+      portfolio: { name: "Unassigned" },
+    },
+    data: { isHidden: false, hiddenAt: null },
+  });
+
+  revalidateAfterMove(
+    loaded.trades.map((t) => t.portfolioId),
+    loaded.trades.map((t) => t.portfolio.groupId),
+  );
+
+  return { ok: true, changed: result.count };
 }
 
 /**
@@ -230,7 +314,7 @@ export async function moveTrades(
   if (!target) return { ok: false, error: "Target portfolio not found." };
 
   const trades = await db.trade.findMany({
-    where: { id: { in: tradeIds } },
+    where: { id: { in: tradeIds }, ...visibleTradeWhere },
     select: {
       id: true,
       currency: true,
@@ -353,7 +437,11 @@ export async function moveTradesBySymbol(
   }
 
   const trades = await db.trade.findMany({
-    where: { portfolioId: sourcePortfolioId, instrumentId },
+    where: {
+      portfolioId: sourcePortfolioId,
+      instrumentId,
+      ...visibleTradeWhere,
+    },
     select: { id: true },
   });
 

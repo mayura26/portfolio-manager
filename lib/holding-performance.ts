@@ -6,6 +6,7 @@ import {
   getGroupPortfolioReturnPeriods,
   type ReturnPeriods,
 } from "@/lib/performance";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -145,7 +146,7 @@ export async function getPortfolioHoldingPerformance(
 
   const [trades, prices] = await Promise.all([
     db.trade.findMany({
-      where: { portfolioId },
+      where: { portfolioId, ...visibleTradeWhere },
       orderBy: { date: "asc" },
       select: {
         instrumentId: true,
@@ -222,7 +223,9 @@ export async function getGroupPortfolioPerformance(
     include: {
       portfolios: {
         orderBy: { name: "asc" },
-        include: { _count: { select: { trades: true } } },
+        include: {
+          _count: { select: { trades: { where: visibleTradeWhere } } },
+        },
       },
     },
   });

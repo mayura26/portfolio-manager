@@ -8,6 +8,7 @@ import "dotenv/config";
 import { db } from "@/lib/db";
 import { ensureTargetHitAlert } from "@/lib/forecast-alerts";
 import { analyzeStockForecast } from "@/lib/forecasts";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import {
   fetchDailyHistory,
   fetchFinancialSummary,
@@ -28,6 +29,7 @@ async function run() {
   // Union of relevant instruments: traded, watchlisted, or targeted.
   const [tradedRows, watchlistRows, targetRows] = await Promise.all([
     db.trade.findMany({
+      where: visibleTradeWhere,
       select: { instrumentId: true },
       distinct: ["instrumentId"],
     }),

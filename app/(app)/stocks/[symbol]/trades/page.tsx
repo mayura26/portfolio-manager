@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 import { formatCurrency, formatDate, formatQuantity } from "@/lib/format";
 import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 type Params = Promise<{ symbol: string }>;
 
@@ -26,6 +27,7 @@ async function StockTradesContent({ params }: { params: Params }) {
     where: { yahooSymbol },
     include: {
       trades: {
+        where: visibleTradeWhere,
         orderBy: { date: "desc" },
         include: { portfolio: true },
       },

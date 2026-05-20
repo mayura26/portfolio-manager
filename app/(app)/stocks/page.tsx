@@ -11,7 +11,10 @@ import {
 import { db } from "@/lib/db";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { computeHoldings } from "@/lib/holdings";
-import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
+import {
+  excludeEmptyUnassignedWhere,
+  visibleTradeWhere,
+} from "@/lib/portfolio-visibility";
 import { loadPriceChanges, type PriceChangeData } from "@/lib/price-changes";
 
 type PortfolioStockGroup = {
@@ -153,6 +156,7 @@ async function loadInstruments() {
     orderBy: { symbol: "asc" },
     include: {
       trades: {
+        where: visibleTradeWhere,
         select: { portfolioId: true },
       },
       targets: {

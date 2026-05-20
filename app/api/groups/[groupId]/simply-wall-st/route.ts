@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import {
   buildSimplyWallStExportRows,
   createSimplyWallStWorkbook,
@@ -22,7 +23,7 @@ export async function GET(
   }
 
   const trades = await db.trade.findMany({
-    where: { portfolio: { groupId } },
+    where: { ...visibleTradeWhere, portfolio: { groupId } },
     orderBy: [{ date: "asc" }, { createdAt: "asc" }],
     include: {
       instrument: {

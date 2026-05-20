@@ -1,8 +1,13 @@
 import type { Prisma } from "@/app/generated/prisma/client";
 
-/** Hide IBKR "Unassigned" bucket when it has no trades (still in DB for Flex routing). */
+/** Normal app views ignore hidden IBKR cleanup trades. */
+export const visibleTradeWhere: Prisma.TradeWhereInput = {
+  isHidden: false,
+};
+
+/** Hide IBKR "Unassigned" bucket when it has no visible trades. */
 export const excludeEmptyUnassignedWhere: Prisma.PortfolioWhereInput = {
   NOT: {
-    AND: [{ name: "Unassigned" }, { trades: { none: {} } }],
+    AND: [{ name: "Unassigned" }, { trades: { none: visibleTradeWhere } }],
   },
 };

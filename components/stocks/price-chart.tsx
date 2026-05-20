@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import {
   fetchPriceChartHistory,
   PRICE_CHART_RANGES,
@@ -39,7 +40,7 @@ export async function PriceChart({
       select: { intendedBuyPrice: true, intendedSellPrice: true },
     }),
     db.trade.findMany({
-      where: { instrumentId },
+      where: { instrumentId, ...visibleTradeWhere },
       select: { type: true, price: true, quantity: true, date: true },
       orderBy: { date: "asc" },
     }),

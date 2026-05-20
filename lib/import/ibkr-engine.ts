@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { findOrCreateInstrument } from "@/lib/instruments";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import type { ParsedCashTx, ParsedTrade } from "./ibkr-csv";
 
 export type ImportResult = {
@@ -66,7 +67,7 @@ export async function importToGroup(
   const ownershipMap = new Map<string, string>();
   if (portfolioIds.length > 0) {
     const existing = await db.trade.findMany({
-      where: { portfolioId: { in: portfolioIds } },
+      where: { portfolioId: { in: portfolioIds }, ...visibleTradeWhere },
       select: { portfolioId: true, instrumentId: true },
       distinct: ["portfolioId", "instrumentId"],
     });

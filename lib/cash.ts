@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 const ZERO = new Decimal(0);
 
@@ -32,7 +33,12 @@ export type GroupCash = {
 const groupCashInclude = {
   cashTransactions: { orderBy: { date: "asc" as const } },
   portfolios: {
-    include: { trades: { orderBy: { date: "asc" as const } } },
+    include: {
+      trades: {
+        where: visibleTradeWhere,
+        orderBy: { date: "asc" as const },
+      },
+    },
   },
 } satisfies Prisma.PortfolioGroupInclude;
 

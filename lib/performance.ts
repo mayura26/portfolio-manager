@@ -4,6 +4,7 @@ import { getGroupCashLedger } from "@/lib/cash";
 import { getGroupValueHistory, getValueHistoryByGroup } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 
 const BENCHMARK_KEY = "benchmark";
 
@@ -213,7 +214,7 @@ async function groupTradeFlows(
   groupBase: string,
 ): Promise<Map<string, Flow[]>> {
   const trades = await db.trade.findMany({
-    where: { portfolio: { groupId } },
+    where: { ...visibleTradeWhere, portfolio: { groupId } },
     orderBy: { date: "asc" },
     select: {
       portfolioId: true,

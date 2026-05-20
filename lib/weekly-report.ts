@@ -1,6 +1,7 @@
 import type { WeeklyReport } from "@/app/generated/prisma/client";
 import { getValueHistoryByGroup } from "@/lib/dashboard";
 import { db } from "@/lib/db";
+import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import { toIsoDate, weekEndExclusive } from "@/lib/week-range";
 import {
   generateWeeklyReportContent,
@@ -87,7 +88,10 @@ export async function gatherWeeklyData(
     db.settings.findUnique({ where: { id: "singleton" } }),
     getValueHistoryByGroup(40),
     db.trade.findMany({
-      where: { date: { gte: weekStart, lt: upperExclusive } },
+      where: {
+        ...visibleTradeWhere,
+        date: { gte: weekStart, lt: upperExclusive },
+      },
       orderBy: { date: "asc" },
       include: {
         instrument: { select: { symbol: true } },
@@ -134,6 +138,7 @@ export async function gatherWeeklyData(
       },
     }),
     db.trade.findMany({
+      where: visibleTradeWhere,
       select: {
         instrumentId: true,
         type: true,
