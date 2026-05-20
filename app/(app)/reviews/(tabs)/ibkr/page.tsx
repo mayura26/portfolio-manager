@@ -1,22 +1,24 @@
 import { CableIcon, KeyRound } from "lucide-react";
 import { Suspense } from "react";
 import { IbkrSyncPanel } from "@/components/reviews/ibkr-sync-panel";
+import { PriceRefreshPanel } from "@/components/reviews/price-refresh-panel";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
 
 const TREND_RUNS = 10;
 const STALE_HOURS = 36;
+const PRICE_STALE_HOURS = 36;
 
 export default function IbkrSyncPage() {
   return (
     <div>
       <div className="mb-6">
-        <p className="label">IBKR sync</p>
+        <p className="label">Data sync</p>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          Status of the Coolify scheduled Flex statement sync, per group.
-          Manually retry a sync after fixing credentials or to pull the latest
-          trades on demand.
+          Status of the Coolify scheduled jobs — global Yahoo Finance price
+          refresh and per-group IBKR Flex statement sync. Trigger either
+          manually to pull the latest data on demand.
         </p>
       </div>
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
@@ -27,22 +29,35 @@ export default function IbkrSyncPage() {
 }
 
 async function IbkrSyncContent() {
-  const groups = await db.portfolioGroup.findMany({
-    where: {
-      ibkrFlexToken: { not: null },
-      ibkrFlexQueryId: { not: null },
-    },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const [groups, priceRuns] = await Promise.all([
+    db.portfolioGroup.findMany({
+      where: {
+        ibkrFlexToken: { not: null },
+        ibkrFlexQueryId: { not: null },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.priceRefreshRun.findMany({
+      orderBy: { startedAt: "desc" },
+      take: TREND_RUNS,
+    }),
+  ]);
+
+  const priceSection = (
+    <PriceRefreshPanel runs={priceRuns} staleHours={PRICE_STALE_HOURS} />
+  );
 
   if (groups.length === 0) {
     return (
-      <EmptyState
-        icon={KeyRound}
-        title="No groups are wired to IBKR"
-        description="Add a Flex Query Token and Query ID to a portfolio group's settings to begin syncing trades from Interactive Brokers."
-      />
+      <div className="flex flex-col gap-6">
+        {priceSection}
+        <EmptyState
+          icon={KeyRound}
+          title="No groups are wired to IBKR"
+          description="Add a Flex Query Token and Query ID to a portfolio group's settings to begin syncing trades from Interactive Brokers."
+        />
+      </div>
     );
   }
 
@@ -85,6 +100,7 @@ async function IbkrSyncContent() {
 
   return (
     <div className="flex flex-col gap-6">
+      {priceSection}
       <div className="hairline grid grid-cols-2 gap-px overflow-hidden bg-border sm:grid-cols-4">
         <SummaryCell
           value={summary.ok}
@@ -130,10 +146,11 @@ async function IbkrSyncContent() {
 
       <p className="flex items-center gap-2 text-xs text-subtle">
         <CableIcon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-        Scheduled task:{" "}
-        <code className="font-mono">npm run cron:ibkr-sync</code> runs on
-        Coolify and writes one row to{" "}
-        <code className="font-mono">IbkrSyncRun</code> per group.
+        Scheduled tasks: <code className="font-mono">npm run cron:prices</code>{" "}
+        and <code className="font-mono">npm run cron:ibkr-sync</code> run on
+        Coolify and write one row each to{" "}
+        <code className="font-mono">PriceRefreshRun</code> /{" "}
+        <code className="font-mono">IbkrSyncRun</code>.
       </p>
     </div>
   );

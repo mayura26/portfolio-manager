@@ -440,6 +440,33 @@ model IbkrSyncRun {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Price refresh runs (global Yahoo Finance EOD pulls — cron or manual)
+// ─────────────────────────────────────────────────────────────
+
+model PriceRefreshRun {
+  id          String    @id @default(cuid())
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  ok          Boolean   @default(false)
+
+  // Instruments attempted in this run.
+  instruments Int       @default(0)
+  // PriceHistory rows newly inserted (skipDuplicates count).
+  bars        Int       @default(0)
+
+  // Array of { yahooSymbol, error } objects for instruments that threw.
+  failures    Json      @default("[]")
+
+  // Top-level fatal error (DB connection, etc.). Null even if some symbols failed.
+  error       String?
+
+  // "cron" | "manual"
+  trigger     String    @default("cron")
+
+  @@index([startedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
 // Cash Transactions (group-level deposits / withdrawals / seedings)
 // ─────────────────────────────────────────────────────────────
 
