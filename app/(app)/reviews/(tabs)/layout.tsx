@@ -1,4 +1,5 @@
 import { type ReactNode, Suspense } from "react";
+import { IbkrSyncAlertBar } from "@/components/reviews/ibkr-sync-alert-bar";
 import { ReviewSectionTabs } from "@/components/reviews/review-section-tabs";
 import { Skeleton } from "@/components/shared/skeleton";
 
@@ -13,6 +14,10 @@ export default function ReviewsLayout({ children }: { children: ReactNode }) {
           report — all in one deliberate place.
         </p>
       </header>
+
+      <Suspense fallback={null}>
+        <IbkrSyncAlertBar />
+      </Suspense>
 
       <Suspense fallback={<Skeleton className="h-9 w-80" />}>
         <ReviewSectionTabs />

@@ -5,8 +5,7 @@
  */
 import "dotenv/config";
 import { db } from "@/lib/db";
-import { importToGroup } from "@/lib/import/ibkr-engine";
-import { fetchFlexStatement } from "@/lib/import/ibkr-flex";
+import { runIbkrSyncForGroup } from "@/lib/import/ibkr-sync";
 
 async function run() {
   const groups = await db.portfolioGroup.findMany({
@@ -14,12 +13,7 @@ async function run() {
       ibkrFlexToken: { not: null },
       ibkrFlexQueryId: { not: null },
     },
-    select: {
-      id: true,
-      name: true,
-      ibkrFlexToken: true,
-      ibkrFlexQueryId: true,
-    },
+    select: { id: true, name: true },
   });
 
   if (groups.length === 0) {
@@ -35,24 +29,19 @@ async function run() {
   const results = [];
 
   for (const group of groups) {
-    const token = group.ibkrFlexToken;
-    const queryId = group.ibkrFlexQueryId;
-    if (!token || !queryId) continue;
-
-    try {
-      const statement = await fetchFlexStatement(token, queryId);
-      const result = await importToGroup(
-        statement.trades,
-        group.id,
-        statement.cashTxs,
-      );
-      results.push({ group: group.name, ok: true, ...result });
-    } catch (err) {
+    const outcome = await runIbkrSyncForGroup(group.id, "cron");
+    if (outcome.ok) {
       results.push({
         group: group.name,
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        ok: true,
+        inserted: outcome.inserted,
+        skipped: outcome.skipped,
+        cashInserted: outcome.cashInserted,
+        cashSkipped: outcome.cashSkipped,
+        failed: outcome.failed,
       });
+    } else {
+      results.push({ group: group.name, ok: false, error: outcome.error });
     }
   }
 
@@ -63,7 +52,7 @@ run()
   .then((results) => {
     console.log(JSON.stringify(results, null, 2));
     const anyFailed = results.some(
-      (r) => !r.ok || ("failed" in r && r.failed.length > 0),
+      (r) => !r.ok || ("failed" in r && (r.failed?.length ?? 0) > 0),
     );
     process.exit(anyFailed ? 1 : 0);
   })

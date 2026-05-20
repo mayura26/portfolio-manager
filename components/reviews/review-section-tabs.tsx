@@ -7,6 +7,7 @@ const TABS = [
   { href: "/reviews", label: "Action queue" },
   { href: "/reviews/audit", label: "Portfolio review" },
   { href: "/reviews/weekly", label: "Weekly report" },
+  { href: "/reviews/ibkr", label: "IBKR sync" },
 ] as const;
 
 export function ReviewSectionTabs() {

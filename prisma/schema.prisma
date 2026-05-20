@@ -403,8 +403,40 @@ model PortfolioGroup {
   portfolios       Portfolio[]
   cashTransactions CashTransaction[]
   cashStatementImports CashStatementImport[]
+  ibkrSyncRuns     IbkrSyncRun[]
 
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// IBKR Flex sync runs (one row per cron / manual sync per group)
+// ─────────────────────────────────────────────────────────────
+
+model IbkrSyncRun {
+  id            String         @id @default(cuid())
+  groupId       String
+  group         PortfolioGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  startedAt     DateTime       @default(now())
+  finishedAt    DateTime?
+  ok            Boolean        @default(false)
+
+  inserted      Int            @default(0)
+  skipped       Int            @default(0)
+  cashInserted  Int            @default(0)
+  cashSkipped   Int            @default(0)
+
+  // Array of { symbol, reason } objects for symbols that could not be resolved.
+  failedSymbols Json           @default("[]")
+
+  // Top-level failure (Flex unreachable, bad token, parse error, etc.).
+  // Null when the run completed even if individual symbols failed.
+  error         String?
+
+  // "cron" | "manual"
+  trigger       String         @default("cron")
+
+  @@index([groupId, startedAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────

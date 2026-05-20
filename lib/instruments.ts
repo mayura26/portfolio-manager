@@ -61,6 +61,9 @@ export function yahooSymbolCandidatesForRawSymbol(
         add(key, `${key}.HK`);
       }
     }
+    if (currencyHint === "AUD") {
+      add(`${key}.AX`, key);
+    }
     // US and other markets: bare ticker (AAPL, VOO, …).
     if (out.length === 0) add(key);
   } else {
