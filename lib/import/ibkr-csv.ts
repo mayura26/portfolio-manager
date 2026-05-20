@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 export type ParsedTrade = {
   symbol: string;
   currency: string;
+  conid?: string;
+  listingExchange?: string;
   date: Date;
   quantity: string;
   type: "BUY" | "SELL";
@@ -109,6 +111,8 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
       try {
         const symbol = fields[colIndex.Symbol ?? -1] ?? "";
         const currency = fields[colIndex.Currency ?? -1] ?? "";
+        const conid = fields[colIndex.Conid ?? -1] ?? "";
+        const listingExchange = fields[colIndex.ListingExchange ?? -1] ?? "";
         const rawDate = fields[colIndex["Date/Time"] ?? -1] ?? "";
         const rawQty = fields[colIndex.Quantity ?? -1] ?? "";
         const rawPrice = fields[colIndex["T. Price"] ?? -1] ?? "";
@@ -133,6 +137,8 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
         trades.push({
           symbol,
           currency,
+          conid: conid || undefined,
+          listingExchange: listingExchange || undefined,
           date,
           quantity,
           type,

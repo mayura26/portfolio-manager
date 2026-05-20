@@ -12,6 +12,7 @@
     "lint": "biome check",
     "format": "biome format --write",
     "test:external-cash": "tsx scripts/test-external-cash-parser.ts",
+    "test:ibkr-exchange-resolution": "tsx scripts/test-ibkr-exchange-resolution.ts",
     "test:simply-wall-st-export": "tsx scripts/test-simply-wall-st-export.ts",
     "cron:prices": "tsx scripts/cron-prices.ts",
     "cron:fx-rates": "tsx scripts/cron-fx-rates.ts",

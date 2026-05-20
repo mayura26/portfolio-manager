@@ -4,6 +4,7 @@ import { getFxRate } from "@/lib/fx";
 import { findOrCreateInstrument } from "@/lib/instruments";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
 import type { ParsedCashTx, ParsedTrade } from "./ibkr-csv";
+import { instrumentResolutionKeyForTrade } from "./ibkr-trade-key";
 
 export type ImportResult = {
   inserted: number;
@@ -76,22 +77,41 @@ export async function importToGroup(
     }
   }
 
-  // Pre-resolve all unique symbols
-  const symbolCurrencyHints = new Map<string, string>();
+  // Pre-resolve all unique instrument identities. IBKR can report the same
+  // local symbol on different markets, so do not key this by symbol alone.
+  const instrumentHints = new Map<
+    string,
+    {
+      symbol: string;
+      currencyHint: string;
+      listingExchange?: string;
+      ibkrConid?: string;
+    }
+  >();
   for (const trade of trades) {
-    if (!symbolCurrencyHints.has(trade.symbol)) {
-      symbolCurrencyHints.set(trade.symbol, trade.currency);
+    const key = instrumentResolutionKeyForTrade(trade);
+    if (!instrumentHints.has(key)) {
+      instrumentHints.set(key, {
+        symbol: trade.symbol,
+        currencyHint: trade.currency,
+        listingExchange: trade.listingExchange,
+        ibkrConid: trade.conid,
+      });
     }
   }
   const instrumentMap = new Map<string, { id: string }>();
 
-  for (const [symbol, currencyHint] of symbolCurrencyHints) {
+  for (const [key, hint] of instrumentHints) {
     try {
-      const inst = await findOrCreateInstrument(symbol, { currencyHint });
-      instrumentMap.set(symbol, inst);
+      const inst = await findOrCreateInstrument(hint.symbol, {
+        currencyHint: hint.currencyHint,
+        listingExchange: hint.listingExchange,
+        ibkrConid: hint.ibkrConid,
+      });
+      instrumentMap.set(key, inst);
     } catch (err) {
       failed.push({
-        symbol,
+        symbol: hint.symbol,
         reason: err instanceof Error ? err.message : String(err),
       });
     }
@@ -109,7 +129,9 @@ export async function importToGroup(
   const resolved: ResolvedTrade[] = [];
 
   for (const trade of trades) {
-    const instrument = instrumentMap.get(trade.symbol);
+    const instrument = instrumentMap.get(
+      instrumentResolutionKeyForTrade(trade),
+    );
     if (!instrument) continue;
 
     let portfolioId = ownershipMap.get(instrument.id);
@@ -262,21 +284,39 @@ export async function importTrades(
 
   const { baseCurrency } = portfolio;
 
-  const symbolCurrencyHints = new Map<string, string>();
+  const instrumentHints = new Map<
+    string,
+    {
+      symbol: string;
+      currencyHint: string;
+      listingExchange?: string;
+      ibkrConid?: string;
+    }
+  >();
   for (const trade of trades) {
-    if (!symbolCurrencyHints.has(trade.symbol)) {
-      symbolCurrencyHints.set(trade.symbol, trade.currency);
+    const key = instrumentResolutionKeyForTrade(trade);
+    if (!instrumentHints.has(key)) {
+      instrumentHints.set(key, {
+        symbol: trade.symbol,
+        currencyHint: trade.currency,
+        listingExchange: trade.listingExchange,
+        ibkrConid: trade.conid,
+      });
     }
   }
   const instrumentMap = new Map<string, { id: string }>();
 
-  for (const [symbol, currencyHint] of symbolCurrencyHints) {
+  for (const [key, hint] of instrumentHints) {
     try {
-      const inst = await findOrCreateInstrument(symbol, { currencyHint });
-      instrumentMap.set(symbol, inst);
+      const inst = await findOrCreateInstrument(hint.symbol, {
+        currencyHint: hint.currencyHint,
+        listingExchange: hint.listingExchange,
+        ibkrConid: hint.ibkrConid,
+      });
+      instrumentMap.set(key, inst);
     } catch (err) {
       failed.push({
-        symbol,
+        symbol: hint.symbol,
         reason: err instanceof Error ? err.message : String(err),
       });
     }
@@ -318,7 +358,9 @@ export async function importTrades(
   }[] = [];
 
   for (const trade of trades) {
-    const instrument = instrumentMap.get(trade.symbol);
+    const instrument = instrumentMap.get(
+      instrumentResolutionKeyForTrade(trade),
+    );
     if (!instrument) continue;
 
     const dateKey = `${trade.currency}|${trade.date.toISOString().split("T")[0]}`;

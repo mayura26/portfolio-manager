@@ -38,6 +38,14 @@ function extractAttr(element: string, attr: string): string {
   return match ? match[1] : "";
 }
 
+function extractFirstAttr(element: string, attrs: string[]): string {
+  for (const attr of attrs) {
+    const value = extractAttr(element, attr);
+    if (value) return value;
+  }
+  return "";
+}
+
 function parseFlexDate(raw: string): Date {
   // Format: "20240115;093000"
   const [datePart, timePart = "000000"] = raw.split(";");
@@ -149,7 +157,11 @@ export async function fetchFlexStatement(
     throw new Error(`IBKR Flex: report not ready after polling (last: ${msg})`);
   }
 
-  // Step 3: parse <Trade .../> elements
+  return parseFlexStatementXml(reportXml);
+}
+
+export function parseFlexStatementXml(reportXml: string): ParsedStatement {
+  // Parse <Trade .../> elements
   const trades: ParsedTrade[] = [];
   const tradeElements = reportXml.match(/<Trade\s[^>]*\/>/g) ?? [];
 
@@ -159,6 +171,11 @@ export async function fetchFlexStatement(
     try {
       const symbol = extractAttr(el, "symbol");
       const currency = extractAttr(el, "currency");
+      const conid = extractFirstAttr(el, ["conid", "Conid"]);
+      const listingExchange = extractFirstAttr(el, [
+        "listingExchange",
+        "ListingExchange",
+      ]);
       const rawDate = extractAttr(el, "dateTime");
       const rawQty = extractAttr(el, "quantity");
       const rawPrice = extractAttr(el, "tradePrice");
@@ -184,6 +201,8 @@ export async function fetchFlexStatement(
       trades.push({
         symbol,
         currency,
+        conid: conid || undefined,
+        listingExchange: listingExchange || undefined,
         date,
         quantity,
         type,
@@ -196,7 +215,7 @@ export async function fetchFlexStatement(
     }
   }
 
-  // Step 4: parse <CashTransaction .../> elements
+  // Parse <CashTransaction .../> elements
   const cashTxs: ParsedCashTx[] = [];
   const cashElements = reportXml.match(/<CashTransaction\s[^>]*\/>/g) ?? [];
 

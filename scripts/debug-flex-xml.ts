@@ -38,6 +38,9 @@ for (const el of tradeElements) {
   if (extractAttr(el, "assetCategory") !== "STK") continue;
   const symbol = extractAttr(el, "symbol");
   const currency = extractAttr(el, "currency");
+  const conid = extractAttr(el, "conid") || extractAttr(el, "Conid");
+  const listingExchange =
+    extractAttr(el, "listingExchange") || extractAttr(el, "ListingExchange");
   const rawDate = extractAttr(el, "dateTime");
   const rawQty = extractAttr(el, "quantity");
   const rawPrice = extractAttr(el, "tradePrice");
@@ -49,6 +52,8 @@ for (const el of tradeElements) {
   trades.push({
     symbol,
     currency,
+    conid: conid || undefined,
+    listingExchange: listingExchange || undefined,
     date,
     quantity: Math.abs(qty).toString(),
     type: qty > 0 ? "BUY" : "SELL",
@@ -94,7 +99,7 @@ for (const el of cashElements) {
 console.log(`\n=== TRADES (${trades.length}) ===`);
 for (const t of trades) {
   console.log(
-    `  ${t.type.padEnd(4)} ${t.symbol.padEnd(10)} qty=${t.quantity} @ ${t.price} ${t.currency}  ${t.date.toISOString().slice(0, 10)}`,
+    `  ${t.type.padEnd(4)} ${t.symbol.padEnd(10)} ${t.listingExchange ?? ""} ${t.conid ?? ""} qty=${t.quantity} @ ${t.price} ${t.currency}  ${t.date.toISOString().slice(0, 10)}`,
   );
 }
 

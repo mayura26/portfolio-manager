@@ -1,7 +1,17 @@
 import { db } from "@/lib/db";
+import {
+  type SymbolCandidateOptions,
+  shouldPreferMarketSpecificInstrument,
+  yahooSymbolCandidatesForRawSymbol,
+} from "@/lib/instrument-symbols";
 import { fetchDailyHistory, lookupInstrument } from "@/lib/yahoo";
 
 const BACKFILL_DAYS = 30;
+
+export {
+  shouldPreferMarketSpecificInstrument,
+  yahooSymbolCandidatesForRawSymbol,
+};
 
 /** Normalize `[symbol]` route param (decode + trim + upper-case). */
 export function normalizeStockUrlSymbol(raw: string): string {
@@ -10,71 +20,15 @@ export function normalizeStockUrlSymbol(raw: string): string {
 
 /**
  * Yahoo symbols to try for `/stocks/[symbol]` when the path omits the
- * exchange suffix (e.g. `000660` → `000660.KS` on Yahoo / in our DB).
+ * exchange suffix (e.g. `000660` -> `000660.KS` on Yahoo / in our DB).
  */
 export function yahooSymbolCandidatesForUrlPath(key: string): string[] {
   return yahooSymbolCandidatesForRawSymbol(key);
 }
 
-type SymbolCandidateOptions = {
-  currencyHint?: string;
-};
-
-/**
- * Yahoo symbols to try when an upstream source gives us a local exchange
- * symbol without Yahoo's market suffix.
- */
-export function yahooSymbolCandidatesForRawSymbol(
-  raw: string,
-  options: SymbolCandidateOptions = {},
-): string[] {
-  const key = raw.trim().toUpperCase();
-  const currencyHint = options.currencyHint?.trim().toUpperCase();
-  const out: string[] = [];
-  const add = (...symbols: string[]) => {
-    for (const symbol of symbols) {
-      if (symbol) out.push(symbol);
-    }
-  };
-
-  if (key && !key.includes(".")) {
-    if (/^\d{6}$/.test(key)) {
-      if (currencyHint === "KRW") {
-        add(`${key}.KS`, `${key}.KQ`, key);
-      } else {
-        add(key, `${key}.KS`, `${key}.KQ`);
-      }
-    }
-    if (/^\d{4}$/.test(key)) {
-      if (currencyHint === "HKD") {
-        add(`${key}.HK`, key, `${key}.T`);
-      } else if (currencyHint === "JPY") {
-        add(`${key}.T`, key, `${key}.HK`);
-      } else {
-        add(key, `${key}.T`, `${key}.HK`);
-      }
-    }
-    if (/^\d{5}$/.test(key)) {
-      if (currencyHint === "HKD") {
-        add(`${key}.HK`, key);
-      } else {
-        add(key, `${key}.HK`);
-      }
-    }
-    if (currencyHint === "AUD") {
-      add(`${key}.AX`, key);
-    }
-    // US and other markets: bare ticker (AAPL, VOO, …).
-    if (out.length === 0) add(key);
-  } else {
-    add(key);
-  }
-  return [...new Set(out)];
-}
-
 /**
  * Map a `/stocks/[symbol]` path segment to the canonical `Instrument.yahooSymbol`
- * stored in the DB (e.g. `000660` → `000660.KS`). Returns null if unknown.
+ * stored in the DB (e.g. `000660` -> `000660.KS`). Returns null if unknown.
  */
 export async function resolveInstrumentYahooSymbolFromUrlPath(
   rawSegment: string,
@@ -112,23 +66,38 @@ export async function findOrCreateInstrument(
   if (!sym) throw new Error("Symbol is required");
 
   const candidates = yahooSymbolCandidatesForRawSymbol(sym, options);
+  const preferMarketSpecific = shouldPreferMarketSpecificInstrument(
+    sym,
+    options,
+  );
+  const existingCandidateChecks = preferMarketSpecific
+    ? candidates.filter((candidate) => candidate !== sym)
+    : candidates;
 
-  for (const candidate of candidates) {
+  for (const candidate of existingCandidateChecks) {
     const existing = await db.instrument.findUnique({
       where: { yahooSymbol: candidate },
     });
     if (existing) return existing;
   }
 
-  const existingByLocalSymbol = await db.instrument.findMany({
-    where: { symbol: sym },
-    take: 2,
-  });
-  if (existingByLocalSymbol.length === 1) return existingByLocalSymbol[0];
+  if (!preferMarketSpecific) {
+    const existingByLocalSymbol = await db.instrument.findMany({
+      where: { symbol: sym },
+      take: 2,
+    });
+    if (existingByLocalSymbol.length === 1) return existingByLocalSymbol[0];
+  }
 
   let meta: Awaited<ReturnType<typeof lookupInstrument>> = null;
   for (const candidate of candidates) {
     try {
+      if (preferMarketSpecific && candidate === sym) {
+        const fallbackExisting = await db.instrument.findUnique({
+          where: { yahooSymbol: candidate },
+        });
+        if (fallbackExisting) return fallbackExisting;
+      }
       meta = await lookupInstrument(candidate, {
         currencyHint: options.currencyHint,
       });
