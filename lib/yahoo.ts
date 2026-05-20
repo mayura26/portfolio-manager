@@ -4,6 +4,25 @@ const yahoo = new YahooFinance({
   suppressNotices: ["yahooSurvey", "ripHistorical"],
 });
 
+type ChartOptions = Parameters<typeof yahoo.chart>[1];
+
+function isYahooSchemaValidationError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.includes("Failed Yahoo Schema validation")
+  );
+}
+
+/** Some ASX instruments (e.g. PMGOLD.AX) omit `meta.currency` and fail schema validation. */
+async function fetchChart(yahooSymbol: string, options: ChartOptions) {
+  try {
+    return await yahoo.chart(yahooSymbol, options);
+  } catch (err) {
+    if (!isYahooSchemaValidationError(err)) throw err;
+    return await yahoo.chart(yahooSymbol, options, { validateResult: false });
+  }
+}
+
 export type SearchHit = {
   yahooSymbol: string;
   symbol: string;
@@ -239,7 +258,7 @@ export async function fetchDailyHistory(
   from: Date,
   to: Date = new Date(),
 ): Promise<DailyBar[]> {
-  const result = await yahoo.chart(yahooSymbol, {
+  const result = await fetchChart(yahooSymbol, {
     period1: from,
     period2: to,
     interval: "1d",
@@ -278,7 +297,7 @@ export async function fetchPriceChartHistory(
 ): Promise<PriceChartBar[]> {
   const to = new Date();
   const from = getPriceChartStart(range, to);
-  const result = await yahoo.chart(yahooSymbol, {
+  const result = await fetchChart(yahooSymbol, {
     period1: from,
     period2: to,
     interval: range === "4h" ? "1h" : "1d",
