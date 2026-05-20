@@ -1,4 +1,5 @@
 import YahooFinance from "yahoo-finance2";
+import type { ChartResultArray } from "yahoo-finance2/modules/chart";
 
 const yahoo = new YahooFinance({
   suppressNotices: ["yahooSurvey", "ripHistorical"],
@@ -6,21 +7,18 @@ const yahoo = new YahooFinance({
 
 type ChartOptions = Parameters<typeof yahoo.chart>[1];
 
-function isYahooSchemaValidationError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    err.message.includes("Failed Yahoo Schema validation")
-  );
-}
-
-/** Some ASX instruments (e.g. PMGOLD.AX) omit `meta.currency` and fail schema validation. */
-async function fetchChart(yahooSymbol: string, options: ChartOptions) {
-  try {
-    return await yahoo.chart(yahooSymbol, options);
-  } catch (err) {
-    if (!isYahooSchemaValidationError(err)) throw err;
-    return await yahoo.chart(yahooSymbol, options, { validateResult: false });
-  }
+/**
+ * Yahoo chart responses for some ASX symbols (e.g. PMGOLD.AX) omit `meta.currency`
+ * and fail yahoo-finance2 schema validation. We coerce OHLC ourselves, so skip it.
+ */
+async function fetchChart(
+  yahooSymbol: string,
+  options: ChartOptions,
+): Promise<ChartResultArray> {
+  const result = await yahoo.chart(yahooSymbol, options, {
+    validateResult: false,
+  });
+  return result as ChartResultArray;
 }
 
 export type SearchHit = {
