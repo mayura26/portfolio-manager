@@ -68,8 +68,52 @@ export type InstrumentMeta = {
   instrumentType: string;
 };
 
+/** Yahoo exchange codes → ISO currency when the price module omits `currency`. */
+const YAHOO_EXCHANGE_CURRENCY: Record<string, string> = {
+  ASX: "AUD",
+  HKG: "HKD",
+  JPX: "JPY",
+  KSC: "KRW",
+  KOE: "KRW",
+  LSE: "GBP",
+  TOR: "CAD",
+  TSX: "CAD",
+};
+
+/** Yahoo symbol suffixes (after the dot) → ISO currency. */
+const YAHOO_SYMBOL_SUFFIX_CURRENCY: Record<string, string> = {
+  AX: "AUD",
+  HK: "HKD",
+  T: "JPY",
+  TO: "CAD",
+  L: "GBP",
+  KS: "KRW",
+  KQ: "KRW",
+};
+
+export function resolveInstrumentCurrency(
+  yahooSymbol: string,
+  exchange: string,
+  rawCurrency: string | undefined | null,
+  currencyHint?: string,
+): string | null {
+  if (rawCurrency) return rawCurrency.trim().toUpperCase();
+  const hint = currencyHint?.trim().toUpperCase();
+  if (hint) return hint;
+  const fromExchange = YAHOO_EXCHANGE_CURRENCY[exchange.trim().toUpperCase()];
+  if (fromExchange) return fromExchange;
+  const dotIdx = yahooSymbol.lastIndexOf(".");
+  if (dotIdx > 0 && dotIdx < yahooSymbol.length - 1) {
+    const suffix = yahooSymbol.slice(dotIdx + 1).toUpperCase();
+    const fromSuffix = YAHOO_SYMBOL_SUFFIX_CURRENCY[suffix];
+    if (fromSuffix) return fromSuffix;
+  }
+  return null;
+}
+
 export async function lookupInstrument(
   yahooSymbol: string,
+  options: { currencyHint?: string } = {},
 ): Promise<InstrumentMeta | null> {
   const sym = yahooSymbol.trim().toUpperCase();
   if (!sym) return null;
@@ -96,9 +140,17 @@ export async function lookupInstrument(
 
   const price = summary.price;
   const profile = summary.summaryProfile ?? summary.assetProfile;
-  if (!price?.symbol || !price.currency) return null;
+  if (!price?.symbol) return null;
 
   const exchange = price.exchange ?? price.exchangeName ?? "";
+  const currency = resolveInstrumentCurrency(
+    price.symbol,
+    exchange,
+    price.currency,
+    options.currencyHint,
+  );
+  if (!currency) return null;
+
   const dotIdx = price.symbol.indexOf(".");
   const symbol = dotIdx >= 0 ? price.symbol.slice(0, dotIdx) : price.symbol;
 
@@ -107,7 +159,7 @@ export async function lookupInstrument(
     symbol,
     exchange,
     name: price.longName ?? price.shortName ?? price.symbol,
-    currency: price.currency.toUpperCase(),
+    currency,
     sector: profile && "sector" in profile ? (profile.sector ?? null) : null,
     industry:
       profile && "industry" in profile ? (profile.industry ?? null) : null,

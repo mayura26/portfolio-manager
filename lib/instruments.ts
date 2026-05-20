@@ -129,7 +129,9 @@ export async function findOrCreateInstrument(
   let meta: Awaited<ReturnType<typeof lookupInstrument>> = null;
   for (const candidate of candidates) {
     try {
-      meta = await lookupInstrument(candidate);
+      meta = await lookupInstrument(candidate, {
+        currencyHint: options.currencyHint,
+      });
       if (meta) break;
     } catch {
       // Try the next exchange-specific candidate.
