@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { getSettings } from "@/actions/settings";
+import { utcDayKey } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { getValueHistoryByGroup } from "@/lib/dashboard";
 import { getFxRate } from "@/lib/fx";
@@ -131,27 +132,27 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     return rate;
   }
 
-  // Build a map of date → net external cash flow (SEED/DEPOSIT/WITHDRAWAL only —
+  // Build a sorted list of external cash flows (SEED/DEPOSIT/WITHDRAWAL only —
   // dividends are real investment income and should count as a gain).
+  // We store these as { dayKey, amount } and use a window-based lookup below so
+  // that deposits on weekends or non-trading days are correctly attributed to
+  // the next trading-day delta (matching how cashBalanceInGroupBaseThroughUtcDay works).
   const cashFlowRows = await db.cashTransaction.findMany({
     where: { type: { in: ["SEED", "DEPOSIT", "WITHDRAWAL"] } },
     include: { group: { select: { baseCurrency: true } } },
+    orderBy: { date: "asc" },
   });
 
-  const externalFlowByDate = new Map<string, Decimal>();
+  type ExternalFlow = { dayKey: string; amount: Decimal };
+  const externalFlows: ExternalFlow[] = [];
   for (const cf of cashFlowRows) {
-    const dateKey = cf.date.toISOString().slice(0, 10);
     const storedFx = cf.fxRate ? toDec(cf.fxRate) : ONE;
     const amountGroupBase = toDec(cf.amount).times(storedFx);
     const toGlobal = await cachedFx(cf.group.baseCurrency, baseCurrency);
     const amountGlobal = amountGroupBase.times(toGlobal);
-    // Withdrawals are negative (cash leaving the account)
     const signed =
       cf.type === "WITHDRAWAL" ? amountGlobal.negated() : amountGlobal;
-    externalFlowByDate.set(
-      dateKey,
-      (externalFlowByDate.get(dateKey) ?? ZERO).plus(signed),
-    );
+    externalFlows.push({ dayKey: utcDayKey(cf.date), amount: signed });
   }
 
   const history = await getValueHistoryByGroup(36500);
@@ -179,9 +180,16 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     if (i > 0) {
       const prev = totals[i - 1];
       if (prev.total.gt(0)) {
-        const dateKey = date.toISOString().slice(0, 10);
-        const netDeposit = externalFlowByDate.get(dateKey) ?? ZERO;
-        // Subtract deposits/withdrawals so only real price movement counts
+        // Sum deposits/withdrawals whose UTC day falls strictly after the previous
+        // history point and up to (inclusive of) the current one. This correctly
+        // handles deposits made on weekends or other non-trading days — their
+        // effect on the cash balance shows up in the next trading day's total.
+        const prevKey = utcDayKey(prev.date);
+        const currKey = utcDayKey(date);
+        const netDeposit = externalFlows
+          .filter((f) => f.dayKey > prevKey && f.dayKey <= currKey)
+          .reduce((s, f) => s.plus(f.amount), ZERO);
+
         const changeBase = total.minus(prev.total).minus(netDeposit);
         const changePercent = changeBase.dividedBy(prev.total).times(100);
         const dayStat: DayStat = {
