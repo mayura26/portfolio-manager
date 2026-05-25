@@ -4,12 +4,14 @@
  *   npm run cron:alerts
  */
 import "dotenv/config";
+import { checkAndUpdateAchievements } from "@/lib/achievement-checks";
 import { evaluateAllAlerts } from "@/lib/alerts";
 import { db } from "@/lib/db";
 
 async function run() {
-  const result = await evaluateAllAlerts();
-  return { ok: true, ...result };
+  const alertResult = await evaluateAllAlerts();
+  const achievementResult = await checkAndUpdateAchievements();
+  return { ok: true, ...alertResult, achievements: achievementResult };
 }
 
 run()

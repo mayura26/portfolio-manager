@@ -315,6 +315,7 @@ enum NotificationType {
   FORECAST_DEVIATION
   AUTO_WATCHER
   SYSTEM
+  ACHIEVEMENT
 }
 
 model Notification {
@@ -652,4 +653,18 @@ model WeeklyReport {
 
   @@unique([weekStart])
   @@index([weekStart(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Achievement Records — stores personal-best values so the cron
+// job can detect when a new record is set and fire a notification.
+// ─────────────────────────────────────────────────────────────
+
+model AchievementRecord {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  value      Decimal  @db.Decimal(18, 4)
+  achievedAt DateTime
+  metadata   Json?
+  updatedAt  DateTime @updatedAt
 }
