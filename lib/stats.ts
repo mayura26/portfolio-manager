@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
 import { getSettings } from "@/actions/settings";
-import { utcDayKey } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { getValueHistoryByGroup } from "@/lib/dashboard";
 import { getFxRate } from "@/lib/fx";
@@ -21,11 +20,21 @@ export type PositionStat = {
   percent: Decimal | null;
 };
 
+export type DayContributor = {
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  contributionBase: Decimal;
+  changePercent: Decimal | null;
+  sharePercent: Decimal | null;
+};
+
 export type DayStat = {
   date: Date;
   valueBase: Decimal;
   changeBase: Decimal;
   changePercent: Decimal;
+  contributors: DayContributor[];
 };
 
 export type ActivityStats = {
@@ -48,11 +57,207 @@ export type PortfolioStats = {
 };
 
 type SimpleLot = { qty: Decimal; unitCost: Decimal };
+type DayRecordTrade = {
+  date: Date;
+  instrumentId: string;
+  type: "BUY" | "SELL";
+  quantity: { toString(): string };
+  instrument: {
+    id: string;
+    symbol: string;
+    name: string;
+    currency: string;
+  };
+};
+type DayRecordPrice = {
+  instrumentId: string;
+  date: Date;
+  close: { toString(): string };
+};
+type PricePoint = { date: Date; close: Decimal };
+type FxLookup = (from: string, to: string, asOf: Date) => Promise<Decimal>;
 
 function toDec(v: unknown): Decimal {
   if (v === null || v === undefined) return ZERO;
   if (v instanceof Decimal) return v;
+  if (typeof v === "object" && "toString" in v) {
+    return new Decimal(v.toString());
+  }
   return new Decimal(v as Decimal.Value);
+}
+
+function utcDayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function utcDayStart(d: Date): Date {
+  const day = new Date(d);
+  day.setUTCHours(0, 0, 0, 0);
+  return day;
+}
+
+function uniqueSortedDates(dates: Date[]): Date[] {
+  const set = new Set<string>();
+  for (const d of dates) set.add(utcDayKey(d));
+  return Array.from(set)
+    .sort()
+    .map((key) => new Date(`${key}T00:00:00.000Z`));
+}
+
+function priceOnOrBefore(
+  series: PricePoint[] | undefined,
+  asOf: Date,
+): PricePoint | null {
+  if (!series || series.length === 0) return null;
+  const target = utcDayKey(asOf);
+  let result: PricePoint | null = null;
+  for (const point of series) {
+    if (utcDayKey(point.date) > target) break;
+    result = point;
+  }
+  return result;
+}
+
+function quantityHeldThroughDay(
+  trades: DayRecordTrade[],
+  throughDay: Date,
+): Decimal {
+  const through = utcDayKey(throughDay);
+  let qty = ZERO;
+  for (const trade of trades) {
+    if (utcDayKey(trade.date) > through) break;
+    const tradeQty = toDec(trade.quantity);
+    qty = trade.type === "BUY" ? qty.plus(tradeQty) : qty.minus(tradeQty);
+  }
+  return qty;
+}
+
+export async function computeMarketDayRecords({
+  trades,
+  prices,
+  baseCurrency,
+  fxOn,
+}: {
+  trades: DayRecordTrade[];
+  prices: DayRecordPrice[];
+  baseCurrency: string;
+  fxOn: FxLookup;
+}): Promise<{ bestDay: DayStat | null; worstDay: DayStat | null }> {
+  if (trades.length === 0 || prices.length === 0) {
+    return { bestDay: null, worstDay: null };
+  }
+
+  const tradesByInstrument = new Map<string, DayRecordTrade[]>();
+  const instrumentMeta = new Map<string, DayRecordTrade["instrument"]>();
+  for (const trade of trades) {
+    let bucket = tradesByInstrument.get(trade.instrumentId);
+    if (!bucket) {
+      bucket = [];
+      tradesByInstrument.set(trade.instrumentId, bucket);
+    }
+    bucket.push(trade);
+    instrumentMeta.set(trade.instrumentId, trade.instrument);
+  }
+  for (const bucket of tradesByInstrument.values()) {
+    bucket.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  const pricesByInstrument = new Map<string, PricePoint[]>();
+  for (const price of prices) {
+    let bucket = pricesByInstrument.get(price.instrumentId);
+    if (!bucket) {
+      bucket = [];
+      pricesByInstrument.set(price.instrumentId, bucket);
+    }
+    bucket.push({ date: utcDayStart(price.date), close: toDec(price.close) });
+  }
+  for (const bucket of pricesByInstrument.values()) {
+    bucket.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  const dates = uniqueSortedDates(prices.map((p) => p.date));
+  let bestDay: DayStat | null = null;
+  let worstDay: DayStat | null = null;
+
+  for (let i = 1; i < dates.length; i++) {
+    const prevDate = dates[i - 1];
+    const date = dates[i];
+    let changeBase = ZERO;
+    let previousExposureBase = ZERO;
+    let valueBase = ZERO;
+    const contributors: DayContributor[] = [];
+
+    for (const [instrumentId, instrumentTrades] of tradesByInstrument) {
+      const meta = instrumentMeta.get(instrumentId);
+      if (!meta) continue;
+
+      const qty = quantityHeldThroughDay(instrumentTrades, prevDate);
+      if (qty.lte(0)) continue;
+
+      const priceSeries = pricesByInstrument.get(instrumentId);
+      const prevPrice = priceOnOrBefore(priceSeries, prevDate);
+      const currPrice = priceOnOrBefore(priceSeries, date);
+      if (!prevPrice || !currPrice) continue;
+      if (utcDayKey(currPrice.date) === utcDayKey(prevPrice.date)) continue;
+
+      const prevFx = await fxOn(meta.currency, baseCurrency, prevDate);
+      const currFx = await fxOn(meta.currency, baseCurrency, date);
+      const prevValue = qty.times(prevPrice.close).times(prevFx);
+      const currValue = qty.times(currPrice.close).times(currFx);
+      if (prevValue.lte(0)) continue;
+
+      const contributionBase = currValue.minus(prevValue);
+      changeBase = changeBase.plus(contributionBase);
+      previousExposureBase = previousExposureBase.plus(prevValue);
+      valueBase = valueBase.plus(currValue);
+
+      if (!contributionBase.isZero()) {
+        contributors.push({
+          instrumentId,
+          symbol: meta.symbol,
+          name: meta.name,
+          contributionBase,
+          changePercent: contributionBase.dividedBy(prevValue).times(100),
+          sharePercent: null,
+        });
+      }
+    }
+
+    if (contributors.length === 0 || changeBase.isZero()) continue;
+
+    const grossContributionBase = contributors.reduce(
+      (sum, contributor) => sum.plus(contributor.contributionBase.abs()),
+      ZERO,
+    );
+    const dayContributors = contributors
+      .map((contributor) => ({
+        ...contributor,
+        sharePercent: grossContributionBase.gt(0)
+          ? contributor.contributionBase
+              .abs()
+              .dividedBy(grossContributionBase)
+              .times(100)
+          : null,
+      }))
+      .sort((a, b) =>
+        b.contributionBase.abs().comparedTo(a.contributionBase.abs()),
+      );
+
+    const dayStat: DayStat = {
+      date,
+      valueBase,
+      changeBase,
+      changePercent: previousExposureBase.gt(0)
+        ? changeBase.dividedBy(previousExposureBase).times(100)
+        : ZERO,
+      contributors: dayContributors,
+    };
+
+    if (!bestDay || changeBase.gt(bestDay.changeBase)) bestDay = dayStat;
+    if (!worstDay || changeBase.lt(worstDay.changeBase)) worstDay = dayStat;
+  }
+
+  return { bestDay, worstDay };
 }
 
 /** Inline FIFO realized P&L — mirrors the logic in computeHoldings. */
@@ -123,37 +328,31 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
   // ── 1. All-time high + best/worst day from full value history ──────────
   // Build a shared FX cache used across all sections
   const fxCache = new Map<string, Decimal>();
-  async function cachedFx(from: string, to: string): Promise<Decimal> {
+  async function cachedFx(
+    from: string,
+    to: string,
+    asOf?: Date,
+  ): Promise<Decimal> {
     if (from === to) return ONE;
-    const cached = fxCache.get(`${from}-${to}`);
+    const dateKey = asOf ? utcDayKey(asOf) : "spot";
+    const key = `${from}-${to}-${dateKey}`;
+    const cached = fxCache.get(key);
     if (cached) return cached;
-    const rate = await getFxRate(from, to);
-    fxCache.set(`${from}-${to}`, rate);
+    const rate = await getFxRate(from, to, asOf);
+    fxCache.set(key, rate);
     return rate;
   }
 
-  // Build a sorted list of external cash flows (SEED/DEPOSIT/WITHDRAWAL only —
-  // dividends are real investment income and should count as a gain).
-  // We store these as { dayKey, amount } and use a window-based lookup below so
-  // that deposits on weekends or non-trading days are correctly attributed to
-  // the next trading-day delta (matching how cashBalanceInGroupBaseThroughUtcDay works).
-  const cashFlowRows = await db.cashTransaction.findMany({
-    where: { type: { in: ["SEED", "DEPOSIT", "WITHDRAWAL"] } },
-    include: { group: { select: { baseCurrency: true } } },
-    orderBy: { date: "asc" },
+  // Daily records use market P&L only: prior-close quantity times the price/FX
+  // move to the current close. This excludes deposits, trades, and import jumps.
+  const allTrades = await db.trade.findMany({
+    where: visibleTradeWhere,
+    orderBy: [{ portfolioId: "asc" }, { instrumentId: "asc" }, { date: "asc" }],
+    include: {
+      instrument: { select: { id: true, symbol: true, name: true, currency: true } },
+      portfolio: { select: { baseCurrency: true } },
+    },
   });
-
-  type ExternalFlow = { dayKey: string; amount: Decimal };
-  const externalFlows: ExternalFlow[] = [];
-  for (const cf of cashFlowRows) {
-    const storedFx = cf.fxRate ? toDec(cf.fxRate) : ONE;
-    const amountGroupBase = toDec(cf.amount).times(storedFx);
-    const toGlobal = await cachedFx(cf.group.baseCurrency, baseCurrency);
-    const amountGlobal = amountGroupBase.times(toGlobal);
-    const signed =
-      cf.type === "WITHDRAWAL" ? amountGlobal.negated() : amountGlobal;
-    externalFlows.push({ dayKey: utcDayKey(cf.date), amount: signed });
-  }
 
   const history = await getValueHistoryByGroup(36500);
 
@@ -176,34 +375,37 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     if (!allTimeHigh || total.gt(allTimeHigh.value)) {
       allTimeHigh = { value: total, date };
     }
-
-    if (i > 0) {
-      const prev = totals[i - 1];
-      if (prev.total.gt(0)) {
-        // Sum deposits/withdrawals whose UTC day falls strictly after the previous
-        // history point and up to (inclusive of) the current one. This correctly
-        // handles deposits made on weekends or other non-trading days — their
-        // effect on the cash balance shows up in the next trading day's total.
-        const prevKey = utcDayKey(prev.date);
-        const currKey = utcDayKey(date);
-        const netDeposit = externalFlows
-          .filter((f) => f.dayKey > prevKey && f.dayKey <= currKey)
-          .reduce((s, f) => s.plus(f.amount), ZERO);
-
-        const changeBase = total.minus(prev.total).minus(netDeposit);
-        const changePercent = changeBase.dividedBy(prev.total).times(100);
-        const dayStat: DayStat = {
-          date,
-          valueBase: total,
-          changeBase,
-          changePercent,
-        };
-
-        if (!bestDay || changeBase.gt(bestDay.changeBase)) bestDay = dayStat;
-        if (!worstDay || changeBase.lt(worstDay.changeBase)) worstDay = dayStat;
-      }
-    }
   }
+
+  const instrumentIds = Array.from(
+    new Set(allTrades.map((trade) => trade.instrumentId)),
+  );
+  const earliestTradeDate =
+    allTrades.length > 0
+      ? allTrades
+          .map((trade) => utcDayStart(trade.date))
+          .reduce((earliest, date) =>
+            date.getTime() < earliest.getTime() ? date : earliest,
+          )
+      : null;
+  const dailyPriceRows =
+    instrumentIds.length > 0 && earliestTradeDate
+      ? await db.priceHistory.findMany({
+          where: {
+            instrumentId: { in: instrumentIds },
+            date: { gte: earliestTradeDate },
+          },
+          orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
+        })
+      : [];
+  const marketRecords = await computeMarketDayRecords({
+    trades: allTrades,
+    prices: dailyPriceRows,
+    baseCurrency,
+    fxOn: cachedFx,
+  });
+  bestDay = marketRecords.bestDay;
+  worstDay = marketRecords.worstDay;
 
   // ── 2. Per-position unrealized P&L (open positions) ───────────────────
   const portfolios = await db.portfolio.findMany({
@@ -295,15 +497,6 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
   }
 
   // ── 3. Per-instrument realized P&L (all instruments, open + closed) ────
-  const allTrades = await db.trade.findMany({
-    where: visibleTradeWhere,
-    orderBy: [{ portfolioId: "asc" }, { instrumentId: "asc" }, { date: "asc" }],
-    include: {
-      instrument: { select: { id: true, symbol: true, name: true } },
-      portfolio: { select: { baseCurrency: true } },
-    },
-  });
-
   type RealizedEntry = { instrumentId: string; symbol: string; name: string; realizedPnL: Decimal };
   const realizedMap = new Map<string, RealizedEntry>();
 

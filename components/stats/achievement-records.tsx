@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Trophy } from "lucide-react";
-import type { PortfolioStats } from "@/lib/stats";
+import Link from "next/link";
+import type { DayContributor, PortfolioStats } from "@/lib/stats";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 
 type Props = { stats: PortfolioStats };
@@ -14,6 +15,7 @@ export function AchievementRecords({ stats }: Props) {
     hint?: string;
     tone: "gain" | "loss" | "neutral";
     icon?: React.ReactNode;
+    contributors?: DayContributor[];
   }> = [];
 
   if (allTimeHigh) {
@@ -34,6 +36,7 @@ export function AchievementRecords({ stats }: Props) {
       hint: formatDate(bestDay.date),
       tone: "gain",
       icon: <ArrowUpRight className="h-4 w-4 text-gain" strokeWidth={1.5} />,
+      contributors: bestDay.contributors,
     });
   }
 
@@ -45,6 +48,7 @@ export function AchievementRecords({ stats }: Props) {
       hint: formatDate(worstDay.date),
       tone: "loss",
       icon: <ArrowDownRight className="h-4 w-4 text-loss" strokeWidth={1.5} />,
+      contributors: worstDay.contributors,
     });
   }
 
@@ -83,8 +87,72 @@ export function AchievementRecords({ stats }: Props) {
           {card.hint ? (
             <p className="mt-2 text-xs text-subtle">{card.hint}</p>
           ) : null}
+          {card.contributors && card.contributors.length > 0 ? (
+            <ContributionList
+              contributors={card.contributors.slice(0, 3)}
+              currency={baseCurrency}
+              tone={card.tone}
+            />
+          ) : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+function ContributionList({
+  contributors,
+  currency,
+  tone,
+}: {
+  contributors: DayContributor[];
+  currency: string;
+  tone: "gain" | "loss" | "neutral";
+}) {
+  const toneClass =
+    tone === "gain" ? "text-gain" : tone === "loss" ? "text-loss" : "text-muted";
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <p className="label text-[0.65rem]">Top contributors</p>
+      <ul className="mt-2 space-y-2">
+        {contributors.map((contributor) => (
+          <li
+            key={contributor.instrumentId}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3"
+          >
+            <Link
+              href={`/stocks/${encodeURIComponent(contributor.symbol)}`}
+              className="min-w-0 text-xs text-foreground hover:text-accent"
+            >
+              <span className="tabular font-medium">{contributor.symbol}</span>
+              <span className="ml-2 text-subtle">
+                {contributor.sharePercent
+                  ? formatPercent(contributor.sharePercent.dividedBy(100), {
+                      decimals: 0,
+                      signed: false,
+                    })
+                  : null}
+              </span>
+            </Link>
+            <div className="text-right">
+              <p className={`tabular text-xs ${toneClass}`}>
+                {formatCurrency(contributor.contributionBase, currency, {
+                  compact: true,
+                  signed: true,
+                })}
+              </p>
+              {contributor.changePercent ? (
+                <p className="tabular text-[0.65rem] text-subtle">
+                  {formatPercent(contributor.changePercent.dividedBy(100), {
+                    signed: true,
+                  })}
+                </p>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
