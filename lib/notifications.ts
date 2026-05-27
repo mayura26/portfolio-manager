@@ -28,6 +28,7 @@ export type CreateNotificationInput = {
   message: string;
   alertId?: string;
   metadata?: Record<string, unknown>;
+  push?: boolean;
 };
 
 export async function createNotification(input: CreateNotificationInput) {
@@ -41,11 +42,13 @@ export async function createNotification(input: CreateNotificationInput) {
     },
   });
 
-  await sendPush(input.title, input.message, {
-    notificationId: created.id,
-    alertId: input.alertId,
-    url: "/notifications",
-  });
+  if (input.push !== false) {
+    await sendPush(input.title, input.message, {
+      notificationId: created.id,
+      alertId: input.alertId,
+      url: "/notifications",
+    });
+  }
 
   return created;
 }

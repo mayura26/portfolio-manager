@@ -11,6 +11,7 @@ export type AutoWatcherItemResult = {
   symbol: string;
   pnlAlertFired: boolean;
   dailySummaryFired: boolean;
+  dailySummaryDeferred: boolean;
   error?: string;
 };
 
@@ -18,6 +19,7 @@ export type AutoWatcherRunResult = {
   processed: number;
   pnlFired: number;
   dailyFired: number;
+  dailyDeferred: number;
   skipped: number;
   failures: AutoWatcherItemResult[];
 };
@@ -56,6 +58,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
       processed: 0,
       pnlFired: 0,
       dailyFired: 0,
+      dailyDeferred: 0,
       skipped: 0,
       failures: [],
     };
@@ -68,6 +71,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
 
   let pnlFired = 0;
   let dailyFired = 0;
+  let dailyDeferred = 0;
   let skipped = 0;
   let processed = 0;
   const failures: AutoWatcherItemResult[] = [];
@@ -78,6 +82,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
       symbol: inst.symbol,
       pnlAlertFired: false,
       dailySummaryFired: false,
+      dailySummaryDeferred: false,
     };
 
     try {
@@ -172,20 +177,29 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
               newsHeadlines: recentHeadlines,
             });
 
+            const isImmediate = summary.urgency === "immediate";
+
             await createNotification({
               type: "AUTO_WATCHER",
               title: `${inst.symbol}: ${summary.headline}`,
               message: summary.summary,
+              push: isImmediate,
               metadata: {
                 kind: "daily",
                 sentiment: summary.sentiment,
+                urgency: summary.urgency,
                 dayChangePct,
                 generatedAt: summary.generatedAt,
               },
             });
 
-            result.dailySummaryFired = true;
-            dailyFired++;
+            if (isImmediate) {
+              result.dailySummaryFired = true;
+              dailyFired++;
+            } else {
+              result.dailySummaryDeferred = true;
+              dailyDeferred++;
+            }
           }
         }
 
@@ -200,5 +214,5 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
     }
   }
 
-  return { processed, pnlFired, dailyFired, skipped, failures };
+  return { processed, pnlFired, dailyFired, dailyDeferred, skipped, failures };
 }

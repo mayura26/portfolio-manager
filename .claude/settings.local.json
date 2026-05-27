@@ -50,7 +50,19 @@
       "Bash(cd *)",
       "Bash(Select-Object -First 40)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.scripts,null,1\\)\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.scripts,null,1\\)\\)\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\VSCode Projects\\\\portfolio-manager\" -Recurse -Directory -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "Bash(xargs cat)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); scripts={k:v for k,v in d.get\\('scripts',{}\\).items\\(\\) if 'cron' in k}; print\\(json.dumps\\(scripts, indent=2\\)\\)\")",
+      "Bash(grep -r \"import OpenAI\" --include=\"*.ts\" --include=\"*.tsx\" ! -path \"./node_modules/*\")",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,1\\)\\)\")",
+      "Skill(frontend-design:frontend-design)",
+      "Bash(NODE_PATH=C:/Users/kmviv/.claude/plugins/cache/playwright-skill/playwright-skill/4.1.0/skills/playwright-skill/node_modules node C:/Users/kmviv/AppData/Local/Temp/pm-reviews-test.js)",
+      "Bash(netstat -ano)",
+      "PowerShell(git add *)",
+      "PowerShell(git push *)",
+      "Bash(Get-ChildItem *)"
     ]
   }
 }

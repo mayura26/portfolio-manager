@@ -4,6 +4,7 @@ export type AutoWatcherDailySummary = {
   headline: string;
   summary: string;
   sentiment: "bullish" | "bearish" | "neutral";
+  urgency: "immediate" | "defer";
   generatedAt: string;
 };
 
@@ -25,6 +26,9 @@ Rules:
 - headline: one sentence (max 80 chars) summarising the most important thing that happened
 - summary: 2–3 plain-English sentences covering the day's move and any relevant news context
 - sentiment: "bullish", "bearish", or "neutral" based on the day's overall picture
+- urgency: "immediate" if the event warrants an alert right now; "defer" if it can wait for the weekly report
+  - Use "immediate" for: day move ≥ 5% in either direction; earnings/results/guidance; dividends declared or cut; analyst upgrades/downgrades; acquisitions, mergers, or takeover bids; CEO/CFO changes; regulatory actions, investigations, or legal proceedings; any company-specific event with clear direct price impact
+  - Use "defer" for: routine daily moves under 5%, broad market commentary, minor news with no clear immediate impact on the stock
 - No markdown, no JSON inside strings, no generic filler phrases`;
 
 function buildUserMessage(input: AutoWatcherSummaryInput): string {
@@ -80,8 +84,12 @@ export async function generateDailySummary(
               type: "string",
               enum: ["bullish", "bearish", "neutral"],
             },
+            urgency: {
+              type: "string",
+              enum: ["immediate", "defer"],
+            },
           },
-          required: ["headline", "summary", "sentiment"],
+          required: ["headline", "summary", "sentiment", "urgency"],
           additionalProperties: false,
         },
       },
@@ -103,7 +111,8 @@ export async function generateDailySummary(
     parsed === null ||
     typeof (parsed as Record<string, unknown>).headline !== "string" ||
     typeof (parsed as Record<string, unknown>).summary !== "string" ||
-    typeof (parsed as Record<string, unknown>).sentiment !== "string"
+    typeof (parsed as Record<string, unknown>).sentiment !== "string" ||
+    typeof (parsed as Record<string, unknown>).urgency !== "string"
   ) {
     throw new Error("AI response missing required fields");
   }
@@ -112,6 +121,7 @@ export async function generateDailySummary(
     headline: string;
     summary: string;
     sentiment: string;
+    urgency: string;
   };
 
   const validSentiments = ["bullish", "bearish", "neutral"] as const;
@@ -121,10 +131,13 @@ export async function generateDailySummary(
     ? (result.sentiment as "bullish" | "bearish" | "neutral")
     : "neutral";
 
+  const urgency = result.urgency === "defer" ? "defer" : "immediate";
+
   return {
     headline: result.headline.slice(0, 120),
     summary: result.summary,
     sentiment,
+    urgency,
     generatedAt: new Date().toISOString(),
   };
 }
