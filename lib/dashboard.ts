@@ -200,7 +200,7 @@ async function buildWorkingSet(): Promise<DashboardWorkingSet> {
   };
 }
 
-async function loadPreviousClose(
+export async function loadPreviousClose(
   instrumentId: string,
   latestDate: Date | null,
 ): Promise<Decimal | null> {
@@ -933,4 +933,223 @@ export async function getPortfolioSummaries(): Promise<PortfolioSummary[]> {
     });
   }
   return summaries;
+}
+
+export type GroupCardSummary = {
+  groupId: string;
+  baseCurrency: string;
+  totalValueBase: Decimal;
+  cashBase: Decimal;
+  cashPercent: Decimal | null;
+  costBase: Decimal;
+  unrealizedPnL: Decimal;
+  unrealizedPercent: Decimal | null;
+  dailyChange: Decimal | null;
+  dailyChangePercent: Decimal | null;
+  spark: number[];
+  hasMissingPrices: boolean;
+};
+
+export async function getGroupCardSummaries(): Promise<
+  Map<string, GroupCardSummary>
+> {
+  const groups = await db.portfolioGroup.findMany({
+    select: {
+      id: true,
+      baseCurrency: true,
+      portfolios: {
+        where: excludeEmptyUnassignedWhere,
+        select: { id: true, baseCurrency: true },
+      },
+    },
+  });
+
+  const history = await getValueHistoryByGroup(30);
+  const sparkByGroup = new Map<string, number[]>();
+  for (const g of groups) {
+    const series = history.points.map(
+      (p) => (p[`g_${g.id}_eq`] ?? 0) + (p[`g_${g.id}_cash`] ?? 0),
+    );
+    // Trim leading zeros (group started recently); keep at least 2 points
+    // so the sparkline can render a line.
+    let firstNonZero = series.findIndex((v) => v > 0);
+    if (firstNonZero < 0) firstNonZero = series.length;
+    const trimmed =
+      firstNonZero > 0 && series.length - firstNonZero >= 2
+        ? series.slice(firstNonZero)
+        : series;
+    sparkByGroup.set(g.id, trimmed);
+  }
+
+  const result = new Map<string, GroupCardSummary>();
+
+  for (const g of groups) {
+    let marketValueBase = ZERO;
+    let costBase = ZERO;
+    let unrealizedPnLBase = ZERO;
+    let dailyChange = ZERO;
+    let yesterdayValueBase = ZERO;
+    let hasMissingPrices = false;
+    let canComputeDaily = true;
+
+    for (const portfolio of g.portfolios) {
+      const data = await computeHoldings(portfolio.id);
+      if (data.hasMissingPrices) hasMissingPrices = true;
+
+      const fx =
+        portfolio.baseCurrency.toUpperCase() === g.baseCurrency.toUpperCase()
+          ? ONE
+          : await getFxRate(portfolio.baseCurrency, g.baseCurrency);
+
+      marketValueBase = marketValueBase.plus(
+        data.totalMarketValueBase.times(fx),
+      );
+      costBase = costBase.plus(data.totalCostBase.times(fx));
+      unrealizedPnLBase = unrealizedPnLBase.plus(
+        data.totalUnrealizedPnL.times(fx),
+      );
+
+      for (const h of data.holdings) {
+        if (!h.marketPrice || !h.priceAsOf) {
+          canComputeDaily = false;
+          continue;
+        }
+        const yesterday = await loadPreviousClose(h.instrumentId, h.priceAsOf);
+        if (!yesterday) {
+          canComputeDaily = false;
+          continue;
+        }
+        const priceDelta = h.marketPrice.minus(yesterday);
+        const instFx =
+          h.currency.toUpperCase() === g.baseCurrency.toUpperCase()
+            ? ONE
+            : await getFxRate(h.currency, g.baseCurrency);
+        dailyChange = dailyChange.plus(
+          priceDelta.times(h.quantity).times(instFx),
+        );
+        yesterdayValueBase = yesterdayValueBase.plus(
+          yesterday.times(h.quantity).times(instFx),
+        );
+      }
+    }
+
+    const cash = await computeGroupCash(g.id);
+    const cashBase = cash.currentCash;
+    const totalValueBase = marketValueBase.plus(cashBase);
+    const cashPercent = totalValueBase.gt(0)
+      ? cashBase.dividedBy(totalValueBase).times(100)
+      : null;
+    const unrealizedPercent = costBase.gt(0)
+      ? unrealizedPnLBase.dividedBy(costBase).times(100)
+      : null;
+    const dailyChangePercent =
+      canComputeDaily && yesterdayValueBase.gt(0)
+        ? dailyChange.dividedBy(yesterdayValueBase).times(100)
+        : null;
+
+    result.set(g.id, {
+      groupId: g.id,
+      baseCurrency: g.baseCurrency,
+      totalValueBase,
+      cashBase,
+      cashPercent,
+      costBase,
+      unrealizedPnL: unrealizedPnLBase,
+      unrealizedPercent,
+      dailyChange: canComputeDaily ? dailyChange : null,
+      dailyChangePercent,
+      spark: sparkByGroup.get(g.id) ?? [],
+      hasMissingPrices,
+    });
+  }
+
+  return result;
+}
+
+export type PortfolioCardSummary = {
+  portfolioId: string;
+  baseCurrency: string;
+  marketValue: Decimal;
+  unrealizedPnL: Decimal;
+  unrealizedPercent: Decimal | null;
+  dailyChange: Decimal | null;
+  dailyChangePercent: Decimal | null;
+  holdingCount: number;
+  spark: number[];
+  hasMissingPrices: boolean;
+};
+
+export async function getPortfolioCardSummaries(): Promise<
+  Map<string, PortfolioCardSummary>
+> {
+  const portfolios = await db.portfolio.findMany({
+    where: excludeEmptyUnassignedWhere,
+    select: { id: true, baseCurrency: true },
+  });
+
+  const entries = await Promise.all(
+    portfolios.map(async (p): Promise<[string, PortfolioCardSummary]> => {
+      const data = await computeHoldings(p.id);
+
+      let dailyChange = ZERO;
+      let yesterdayValue = ZERO;
+      let canComputeDaily = true;
+
+      for (const h of data.holdings) {
+        if (!h.marketPrice || !h.priceAsOf) {
+          canComputeDaily = false;
+          continue;
+        }
+        const yesterday = await loadPreviousClose(h.instrumentId, h.priceAsOf);
+        if (!yesterday) {
+          canComputeDaily = false;
+          continue;
+        }
+        const fx =
+          h.currency.toUpperCase() === p.baseCurrency.toUpperCase()
+            ? ONE
+            : await getFxRate(h.currency, p.baseCurrency);
+        const priceDelta = h.marketPrice.minus(yesterday);
+        dailyChange = dailyChange.plus(priceDelta.times(h.quantity).times(fx));
+        yesterdayValue = yesterdayValue.plus(
+          yesterday.times(h.quantity).times(fx),
+        );
+      }
+
+      const unrealizedPercent = data.totalCostBase.gt(0)
+        ? data.totalUnrealizedPnL.dividedBy(data.totalCostBase).times(100)
+        : null;
+      const dailyChangePercent =
+        canComputeDaily && yesterdayValue.gt(0)
+          ? dailyChange.dividedBy(yesterdayValue).times(100)
+          : null;
+
+      const history = await getPortfolioValueHistory(p.id, 30);
+      const sparkRaw = history.points.map((pt) => pt.equities);
+      let firstNonZero = sparkRaw.findIndex((v) => v > 0);
+      if (firstNonZero < 0) firstNonZero = sparkRaw.length;
+      const spark =
+        firstNonZero > 0 && sparkRaw.length - firstNonZero >= 2
+          ? sparkRaw.slice(firstNonZero)
+          : sparkRaw;
+
+      return [
+        p.id,
+        {
+          portfolioId: p.id,
+          baseCurrency: p.baseCurrency,
+          marketValue: data.totalMarketValueBase,
+          unrealizedPnL: data.totalUnrealizedPnL,
+          unrealizedPercent,
+          dailyChange: canComputeDaily ? dailyChange : null,
+          dailyChangePercent,
+          holdingCount: data.holdings.length,
+          spark,
+          hasMissingPrices: data.hasMissingPrices,
+        },
+      ];
+    }),
+  );
+
+  return new Map(entries);
 }

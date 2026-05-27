@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { PortfolioCard } from "@/components/portfolios/portfolio-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { getPortfolioCardSummaries } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { excludeEmptyUnassignedWhere } from "@/lib/portfolio-visibility";
 
@@ -36,10 +37,13 @@ export default function PortfoliosPage() {
 }
 
 async function PortfolioList() {
-  const portfolios = await db.portfolio.findMany({
-    where: excludeEmptyUnassignedWhere,
-    orderBy: { createdAt: "desc" },
-  });
+  const [portfolios, summaries] = await Promise.all([
+    db.portfolio.findMany({
+      where: excludeEmptyUnassignedWhere,
+      orderBy: { createdAt: "desc" },
+    }),
+    getPortfolioCardSummaries(),
+  ]);
 
   if (portfolios.length === 0) {
     return (
@@ -55,7 +59,10 @@ async function PortfolioList() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {portfolios.map((p) => (
-        <PortfolioCard key={p.id} portfolio={p} />
+        <PortfolioCard
+          key={p.id}
+          portfolio={{ ...p, summary: summaries.get(p.id) }}
+        />
       ))}
     </div>
   );
@@ -65,7 +72,7 @@ function PortfolioListSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-40" />
+        <Skeleton key={i} className="h-56" />
       ))}
     </div>
   );

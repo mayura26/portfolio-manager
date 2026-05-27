@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { GroupCard } from "@/components/groups/group-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import { getGroupCardSummaries } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 
 export default function GroupsPage() {
@@ -37,10 +38,13 @@ export default function GroupsPage() {
 }
 
 async function GroupList() {
-  const groups = await db.portfolioGroup.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { portfolios: { select: { id: true } } },
-  });
+  const [groups, summaries] = await Promise.all([
+    db.portfolioGroup.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { portfolios: { select: { id: true } } },
+    }),
+    getGroupCardSummaries(),
+  ]);
 
   if (groups.length === 0) {
     return (
@@ -56,7 +60,7 @@ async function GroupList() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {groups.map((g) => (
-        <GroupCard key={g.id} group={g} />
+        <GroupCard key={g.id} group={{ ...g, summary: summaries.get(g.id) }} />
       ))}
     </div>
   );
@@ -66,7 +70,7 @@ function GroupListSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-40" />
+        <Skeleton key={i} className="h-56" />
       ))}
     </div>
   );
