@@ -29,6 +29,12 @@ export type AllocationRow = {
   intendedBuyPrice: Decimal | null;
   intendedSellPrice: Decimal | null;
   trimAtGainPercent: Decimal | null;
+  recommendationAction: "BUY" | "SELL" | "TRIM" | null;
+  recommendationSource: "MANUAL" | "AI" | null;
+  recommendationRationale: string | null;
+  recommendationGeneratedAt: Date | null;
+  recommendationModel: string | null;
+  recommendationReasoningEffort: string | null;
   notes: string | null;
   hasTarget: boolean;
   isHeld: boolean;
@@ -115,6 +121,13 @@ export async function computePortfolioAllocation(
       trimAtGainPercent: target?.trimAtGainPercent
         ? new Decimal(target.trimAtGainPercent.toString())
         : null,
+      recommendationAction: target?.recommendationAction ?? null,
+      recommendationSource: target?.recommendationSource ?? null,
+      recommendationRationale: target?.recommendationRationale ?? null,
+      recommendationGeneratedAt: target?.recommendationGeneratedAt ?? null,
+      recommendationModel: target?.recommendationModel ?? null,
+      recommendationReasoningEffort:
+        target?.recommendationReasoningEffort ?? null,
       notes: target?.notes ?? null,
       hasTarget: !!target,
       isHeld: true,
@@ -157,6 +170,12 @@ export async function computePortfolioAllocation(
       trimAtGainPercent: t.trimAtGainPercent
         ? new Decimal(t.trimAtGainPercent.toString())
         : null,
+      recommendationAction: t.recommendationAction ?? null,
+      recommendationSource: t.recommendationSource ?? null,
+      recommendationRationale: t.recommendationRationale ?? null,
+      recommendationGeneratedAt: t.recommendationGeneratedAt ?? null,
+      recommendationModel: t.recommendationModel ?? null,
+      recommendationReasoningEffort: t.recommendationReasoningEffort ?? null,
       notes: t.notes,
       hasTarget: true,
       isHeld: false,

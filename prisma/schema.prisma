@@ -543,6 +543,17 @@ model CashTransaction {
 // for owned and not-yet-owned instruments alike.
 // ─────────────────────────────────────────────────────────────
 
+enum PortfolioRecommendationAction {
+  BUY
+  SELL
+  TRIM
+}
+
+enum PortfolioRecommendationSource {
+  MANUAL
+  AI
+}
+
 model PortfolioTarget {
   id                 String   @id @default(cuid())
   portfolioId        String
@@ -554,6 +565,12 @@ model PortfolioTarget {
   intendedSellPrice  Decimal? @db.Decimal(18, 4)
   trimAtGainPercent  Decimal? @db.Decimal(8, 4)
   notes              String?
+  recommendationAction          PortfolioRecommendationAction?
+  recommendationSource          PortfolioRecommendationSource?
+  recommendationRationale       String?
+  recommendationGeneratedAt     DateTime?
+  recommendationModel           String?
+  recommendationReasoningEffort String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

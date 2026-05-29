@@ -172,6 +172,31 @@ export const portfolioTargetsSchema = z
             intendedBuyPrice: positiveDecimal.optional().nullable(),
             intendedSellPrice: positiveDecimal.optional().nullable(),
             trimAtGainPercent: nonNegativeDecimal.optional().nullable(),
+            recommendationAction: z.enum(["BUY", "SELL", "TRIM"]),
+            recommendationSource: z.enum(["MANUAL", "AI"]).optional(),
+            recommendationRationale: z
+              .string()
+              .trim()
+              .max(1000)
+              .optional()
+              .transform((v) => (v?.length ? v : null)),
+            recommendationGeneratedAt: z
+              .string()
+              .trim()
+              .optional()
+              .transform((v) => (v?.length ? v : null)),
+            recommendationModel: z
+              .string()
+              .trim()
+              .max(100)
+              .optional()
+              .transform((v) => (v?.length ? v : null)),
+            recommendationReasoningEffort: z
+              .string()
+              .trim()
+              .max(30)
+              .optional()
+              .transform((v) => (v?.length ? v : null)),
             notes: z
               .string()
               .trim()

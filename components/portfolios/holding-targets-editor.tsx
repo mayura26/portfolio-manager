@@ -1,9 +1,10 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import {
+  generatePortfolioTargetRecommendation,
   type PortfolioTargetsActionState,
   setPortfolioTargets,
 } from "@/actions/portfolio-targets";
@@ -20,6 +21,12 @@ type Row = {
   intendedBuyPrice: string;
   intendedSellPrice: string;
   trimAtGainPercent: string;
+  recommendationAction: string;
+  recommendationSource: string;
+  recommendationRationale: string;
+  recommendationGeneratedAt: string;
+  recommendationModel: string;
+  recommendationReasoningEffort: string;
   notes: string;
   isHeld: boolean;
 };
@@ -52,6 +59,11 @@ export function HoldingTargetsEditor({
 
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [pickerValue, setPickerValue] = useState("");
+  const [aiPending, startAiTransition] = useTransition();
+  const [aiPendingInstrumentId, setAiPendingInstrumentId] = useState<
+    string | null
+  >(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const minSum = useMemo(
     () => rows.reduce((acc, r) => acc + Number(r.targetMinPercent || 0), 0),
@@ -97,6 +109,12 @@ export function HoldingTargetsEditor({
         intendedBuyPrice: watchlistBuyPrices[found.id] ?? "",
         intendedSellPrice: "",
         trimAtGainPercent: "",
+        recommendationAction: "BUY",
+        recommendationSource: "MANUAL",
+        recommendationRationale: "Target-only instrument to consider buying.",
+        recommendationGeneratedAt: "",
+        recommendationModel: "",
+        recommendationReasoningEffort: "",
         notes: "",
         isHeld: false,
       },
@@ -108,6 +126,49 @@ export function HoldingTargetsEditor({
     setRows((prev) => prev.filter((r) => r.instrumentId !== id));
   };
 
+  const markManual = (id: string, patch: Partial<Row>) => {
+    updateRow(id, {
+      ...patch,
+      recommendationSource: "MANUAL",
+      recommendationGeneratedAt: "",
+      recommendationModel: "",
+      recommendationReasoningEffort: "",
+    });
+  };
+
+  const generateRecommendation = (row: Row) => {
+    setAiError(null);
+    setAiPendingInstrumentId(row.instrumentId);
+    startAiTransition(async () => {
+      const result = await generatePortfolioTargetRecommendation(
+        portfolioId,
+        row.instrumentId,
+        {
+          targetMinPercent: row.targetMinPercent,
+          targetMaxPercent: row.targetMaxPercent,
+          intendedBuyPrice: row.intendedBuyPrice,
+          intendedSellPrice: row.intendedSellPrice,
+          trimAtGainPercent: row.trimAtGainPercent,
+          notes: row.notes,
+        },
+      );
+      if (!result.ok) {
+        setAiError(result.error);
+        setAiPendingInstrumentId(null);
+        return;
+      }
+      updateRow(row.instrumentId, {
+        recommendationAction: result.recommendation.action,
+        recommendationSource: result.recommendation.source,
+        recommendationRationale: result.recommendation.rationale,
+        recommendationGeneratedAt: result.recommendation.generatedAt,
+        recommendationModel: result.recommendation.model,
+        recommendationReasoningEffort: result.recommendation.reasoningEffort,
+      });
+      setAiPendingInstrumentId(null);
+    });
+  };
+
   return (
     <form action={formAction} className="flex flex-col gap-5">
       {state && !state.ok ? (
@@ -116,6 +177,14 @@ export function HoldingTargetsEditor({
           role="alert"
         >
           {state.error}
+        </div>
+      ) : null}
+      {aiError ? (
+        <div
+          className="hairline border-loss/40 bg-loss-soft px-4 py-3 text-sm text-loss"
+          role="alert"
+        >
+          {aiError}
         </div>
       ) : null}
 
@@ -129,6 +198,7 @@ export function HoldingTargetsEditor({
               <th className="label px-3 py-3 text-right">Buy price</th>
               <th className="label px-3 py-3 text-right">Sell price</th>
               <th className="label px-3 py-3 text-right">Trim at %</th>
+              <th className="label px-3 py-3">Recommendation</th>
               <th className="label px-3 py-3">Notes</th>
               <th className="label px-3 py-3" />
             </tr>
@@ -137,7 +207,7 @@ export function HoldingTargetsEditor({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-3 py-8 text-center text-sm text-muted"
                 >
                   No targets yet. Add an instrument below to start.
@@ -253,6 +323,83 @@ export function HoldingTargetsEditor({
                       }
                       className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
                     />
+                  </td>
+                  <td className="min-w-72 px-3 py-3">
+                    <input
+                      type="hidden"
+                      name="recommendationSource"
+                      value={r.recommendationSource}
+                    />
+                    <input
+                      type="hidden"
+                      name="recommendationGeneratedAt"
+                      value={r.recommendationGeneratedAt}
+                    />
+                    <input
+                      type="hidden"
+                      name="recommendationModel"
+                      value={r.recommendationModel}
+                    />
+                    <input
+                      type="hidden"
+                      name="recommendationReasoningEffort"
+                      value={r.recommendationReasoningEffort}
+                    />
+                    <div className="flex items-center gap-2">
+                      <select
+                        name="recommendationAction"
+                        required
+                        value={r.recommendationAction}
+                        onChange={(e) =>
+                          markManual(r.instrumentId, {
+                            recommendationAction: e.target.value,
+                          })
+                        }
+                        className="hairline bg-surface px-2 py-1 text-sm"
+                      >
+                        <option value="">Select</option>
+                        <option value="BUY">Buy</option>
+                        <option value="SELL">Sell</option>
+                        <option value="TRIM">Trim</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => generateRecommendation(r)}
+                        disabled={
+                          aiPending && aiPendingInstrumentId === r.instrumentId
+                        }
+                        className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-accent transition-colors hover:text-accent-hover disabled:opacity-50"
+                      >
+                        <Sparkles
+                          className="h-3.5 w-3.5"
+                          strokeWidth={1.5}
+                          aria-hidden
+                        />
+                        {aiPending && aiPendingInstrumentId === r.instrumentId
+                          ? "Generating"
+                          : "AI"}
+                      </button>
+                    </div>
+                    <textarea
+                      name="recommendationRationale"
+                      rows={2}
+                      maxLength={1000}
+                      placeholder="Why this is the next action"
+                      value={r.recommendationRationale}
+                      onChange={(e) =>
+                        markManual(r.instrumentId, {
+                          recommendationRationale: e.target.value,
+                        })
+                      }
+                      className="hairline mt-2 w-full resize-y bg-surface px-2 py-1 text-sm"
+                    />
+                    {r.recommendationSource ? (
+                      <div className="label mt-1 text-subtle">
+                        {r.recommendationSource === "AI"
+                          ? "AI generated"
+                          : "Manual"}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-3">
                     <input

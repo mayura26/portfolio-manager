@@ -37,9 +37,9 @@ const CATEGORY_META: Record<AuditCategory, { label: string; blurb: string }> = {
       "Without target bands, drift alerts and rebalancing have nothing to measure against.",
   },
   "price-targets": {
-    label: "Buy & sell prices",
+    label: "Buy / sell / trim stance",
     blurb:
-      "Intended prices and trim triggers turn a holding into a plan you can act on.",
+      "Each target needs one clear action so the review stays decision-oriented.",
   },
   watchlist: {
     label: "Watchlist completeness",
@@ -193,31 +193,13 @@ export async function runSetupAudit(): Promise<AuditResult> {
       });
     }
 
-    // ── Buy & sell prices ────────────────────────────────────
-    if (target.intendedBuyPrice === null) {
+    // ── Buy / sell / trim recommendation ─────────────────────
+    if (target.recommendationAction === null) {
       gaps.push({
-        key: `target-buy:${target.id}`,
+        key: `target-recommendation:${target.id}`,
         category: "price-targets",
-        title: `No intended buy price — ${target.instrument.symbol}`,
-        detail: `${label} has no buy price, so the buy calculator can't tell you when to add.`,
-        fixHref: `/portfolios/${target.portfolioId}/targets`,
-      });
-    }
-    if (target.intendedSellPrice === null) {
-      gaps.push({
-        key: `target-sell:${target.id}`,
-        category: "price-targets",
-        title: `No intended sell price — ${target.instrument.symbol}`,
-        detail: `${label} has no sell price, so there's no defined exit for the position.`,
-        fixHref: `/portfolios/${target.portfolioId}/targets`,
-      });
-    }
-    if (target.trimAtGainPercent === null) {
-      gaps.push({
-        key: `target-trim:${target.id}`,
-        category: "price-targets",
-        title: `No trim trigger — ${target.instrument.symbol}`,
-        detail: `${label} has no trim-at-gain %, so winners won't surface a trim signal.`,
+        title: `No buy/sell/trim stance - ${target.instrument.symbol}`,
+        detail: `${label} needs one actionable stance: buy, sell, or trim. Use AI generation or set it manually on the Targets tab.`,
         fixHref: `/portfolios/${target.portfolioId}/targets`,
       });
     }

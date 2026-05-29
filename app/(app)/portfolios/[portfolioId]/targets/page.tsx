@@ -109,6 +109,12 @@ function rowFromAllocation(r: {
   intendedBuyPrice: { toString(): string } | null;
   intendedSellPrice: { toString(): string } | null;
   trimAtGainPercent: { toString(): string } | null;
+  recommendationAction: "BUY" | "SELL" | "TRIM" | null;
+  recommendationSource: "MANUAL" | "AI" | null;
+  recommendationRationale: string | null;
+  recommendationGeneratedAt: Date | null;
+  recommendationModel: string | null;
+  recommendationReasoningEffort: string | null;
   notes: string | null;
   isHeld: boolean;
   hasTarget: boolean;
@@ -128,6 +134,14 @@ function rowFromAllocation(r: {
     trimAtGainPercent: r.trimAtGainPercent
       ? r.trimAtGainPercent.toString()
       : "",
+    recommendationAction: r.recommendationAction ?? "",
+    recommendationSource: r.recommendationSource ?? "",
+    recommendationRationale: r.recommendationRationale ?? "",
+    recommendationGeneratedAt: r.recommendationGeneratedAt
+      ? r.recommendationGeneratedAt.toISOString()
+      : "",
+    recommendationModel: r.recommendationModel ?? "",
+    recommendationReasoningEffort: r.recommendationReasoningEffort ?? "",
     notes: r.notes ?? "",
     isHeld: r.isHeld,
   };

@@ -27,6 +27,7 @@ export function AllocationTable({
             <Th align="right">Target range</Th>
             <Th align="right">Actual %</Th>
             <Th align="right">Drift</Th>
+            <Th>Recommendation</Th>
             <Th align="right">Buy plan</Th>
           </tr>
         </thead>
@@ -34,7 +35,7 @@ export function AllocationTable({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={7}
+                colSpan={8}
                 className="px-3 py-8 text-center text-sm text-muted"
               >
                 No holdings or targets yet.
@@ -95,6 +96,13 @@ export function AllocationTable({
                     status={r.rangeStatus}
                   />
                 </Td>
+                <Td>
+                  <RecommendationCell
+                    action={r.recommendationAction}
+                    source={r.recommendationSource}
+                    rationale={r.recommendationRationale}
+                  />
+                </Td>
                 <Td align="right">
                   {r.hasTarget ? (
                     <BuyPlanCell
@@ -128,6 +136,45 @@ export function AllocationTable({
       </table>
     </div>
   );
+}
+
+function RecommendationCell({
+  action,
+  source,
+  rationale,
+}: {
+  action: "BUY" | "SELL" | "TRIM" | null;
+  source: "MANUAL" | "AI" | null;
+  rationale: string | null;
+}) {
+  if (!action) {
+    return <span className="text-xs text-warning">needs stance</span>;
+  }
+
+  const tone =
+    action === "BUY"
+      ? "text-gain"
+      : action === "SELL"
+        ? "text-loss"
+        : "text-warning";
+
+  return (
+    <div className="max-w-72">
+      <div className="flex items-center gap-2">
+        <span className={`label ${tone}`}>{recommendationLabel(action)}</span>
+        {source ? <span className="label text-subtle">{source}</span> : null}
+      </div>
+      {rationale ? (
+        <p className="mt-1 line-clamp-2 text-xs text-muted">{rationale}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function recommendationLabel(action: "BUY" | "SELL" | "TRIM") {
+  if (action === "BUY") return "Buy";
+  if (action === "SELL") return "Sell";
+  return "Trim";
 }
 
 function formatTargetRange(min: string, max: string) {
