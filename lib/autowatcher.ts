@@ -184,6 +184,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
               title: `${inst.symbol}: ${summary.headline}`,
               message: summary.summary,
               push: isImmediate,
+              visibleInInbox: isImmediate,
               metadata: {
                 kind: "daily",
                 sentiment: summary.sentiment,

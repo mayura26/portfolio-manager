@@ -29,14 +29,19 @@ export type CreateNotificationInput = {
   alertId?: string;
   metadata?: Record<string, unknown>;
   push?: boolean;
+  visibleInInbox?: boolean;
 };
 
 export async function createNotification(input: CreateNotificationInput) {
+  const visibleInInbox = input.visibleInInbox ?? true;
+
   const created = await db.notification.create({
     data: {
       type: input.type,
       title: input.title,
       message: input.message,
+      read: !visibleInInbox,
+      dismissed: !visibleInInbox,
       alertId: input.alertId,
       metadata: input.metadata ? (input.metadata as object) : undefined,
     },
