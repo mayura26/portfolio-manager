@@ -42,6 +42,9 @@ export type RecommendationAiInput = RecommendationRuleInput & {
 export type RecommendationAiResult = {
   action: PortfolioRecommendationAction;
   rationale: string;
+  intendedBuyPrice: number | null;
+  intendedSellPrice: number | null;
+  trimAtGainPercent: number | null;
   generatedAt: string;
 };
 
@@ -170,7 +173,14 @@ export async function analyzePortfolioRecommendation(
       {
         role: "system",
         content:
-          "You are an investment-review assistant. Recommend exactly one action: BUY, SELL, or TRIM. Respect any hardLocked SELL or TRIM action. Write a concise private rationale in plain English, no markdown.",
+          "You are an investment-review assistant. Draft a simple trading plan for one holding. " +
+          "Recommend exactly one headline action: BUY, SELL, or TRIM (respect any hardLocked SELL or TRIM action). " +
+          "Then set the plan levels — set EVERY level that is part of a sensible plan and AT LEAST ONE: " +
+          "intendedBuyPrice (a price to accumulate at/below, else null), " +
+          "trimAtGainPercent (a gain % at which to trim into strength, else null), " +
+          "intendedSellPrice (a price to exit at/above, else null). " +
+          "Ground the levels in the current price, forecasts, analyst targets, and the user's notes; prefer concrete realistic numbers in the instrument's own currency rather than round guesses. " +
+          "Write a concise private rationale in plain English, no markdown, explaining the levels you set.",
       },
       {
         role: "user",
@@ -219,8 +229,17 @@ export async function analyzePortfolioRecommendation(
           properties: {
             action: { type: "string", enum: ["BUY", "SELL", "TRIM"] },
             rationale: { type: "string" },
+            intendedBuyPrice: { type: ["number", "null"] },
+            trimAtGainPercent: { type: ["number", "null"] },
+            intendedSellPrice: { type: ["number", "null"] },
           },
-          required: ["action", "rationale"],
+          required: [
+            "action",
+            "rationale",
+            "intendedBuyPrice",
+            "trimAtGainPercent",
+            "intendedSellPrice",
+          ],
           additionalProperties: false,
         },
       },
@@ -248,10 +267,16 @@ export async function analyzePortfolioRecommendation(
     throw new Error("AI response missing required fields");
   }
 
-  const action = (parsed as { action: PortfolioRecommendationAction }).action;
+  const obj = parsed as Record<string, unknown>;
+  const action = obj.action as PortfolioRecommendationAction;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
   return {
     action: input.ruleResult.hardLocked ? input.ruleResult.action : action,
-    rationale: (parsed as { rationale: string }).rationale,
+    rationale: obj.rationale as string,
+    intendedBuyPrice: num(obj.intendedBuyPrice),
+    intendedSellPrice: num(obj.intendedSellPrice),
+    trimAtGainPercent: num(obj.trimAtGainPercent),
     generatedAt: new Date().toISOString(),
   };
 }

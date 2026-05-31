@@ -25,6 +25,9 @@ export type GenerateTargetRecommendationState =
         action: PortfolioRecommendationAction;
         source: PortfolioRecommendationSource;
         rationale: string;
+        intendedBuyPrice: string;
+        intendedSellPrice: string;
+        trimAtGainPercent: string;
         generatedAt: string;
         model: string;
         reasoningEffort: string;
@@ -292,6 +295,9 @@ export async function generatePortfolioTargetRecommendation(
   let recommendation: {
     action: PortfolioRecommendationAction;
     rationale: string;
+    intendedBuyPrice: number | null;
+    intendedSellPrice: number | null;
+    trimAtGainPercent: number | null;
     generatedAt: string;
   };
   try {
@@ -319,6 +325,9 @@ export async function generatePortfolioTargetRecommendation(
     recommendation = {
       action: ruleResult.action,
       rationale: fallbackRecommendationRationale(ruleResult),
+      intendedBuyPrice: null,
+      intendedSellPrice: null,
+      trimAtGainPercent: null,
       generatedAt: new Date().toISOString(),
     };
   }
@@ -346,10 +355,17 @@ export async function generatePortfolioTargetRecommendation(
   revalidatePath(`/portfolios/${portfolioId}/composition`);
   revalidatePath("/reviews/audit");
 
+  const numToStr = (n: number | null): string => (n != null ? String(n) : "");
+
   return {
     ok: true,
     recommendation: {
-      ...recommendation,
+      action: recommendation.action,
+      rationale: recommendation.rationale,
+      generatedAt: recommendation.generatedAt,
+      intendedBuyPrice: numToStr(recommendation.intendedBuyPrice),
+      intendedSellPrice: numToStr(recommendation.intendedSellPrice),
+      trimAtGainPercent: numToStr(recommendation.trimAtGainPercent),
       source: "AI",
       model,
       reasoningEffort,
