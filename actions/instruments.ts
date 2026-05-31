@@ -43,6 +43,45 @@ export async function setAutoWatcher(
   return { ok: true };
 }
 
+function profileText(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export async function updateInstrumentProfile(
+  instrumentId: string,
+  formData: FormData,
+): Promise<void> {
+  const instrument = await db.instrument.findUnique({
+    where: { id: instrumentId },
+    select: { id: true, yahooSymbol: true },
+  });
+  if (!instrument) throw new Error("Instrument not found");
+
+  const sector = profileText(formData.get("sector"));
+  const industry = profileText(formData.get("industry"));
+  const instrumentType =
+    profileText(formData.get("instrumentType"))?.toUpperCase() ?? "EQUITY";
+
+  if (sector && sector.length > 100) throw new Error("Sector is too long");
+  if (industry && industry.length > 150)
+    throw new Error("Industry is too long");
+  if (instrumentType.length > 50) {
+    throw new Error("Instrument type is too long");
+  }
+
+  await db.instrument.update({
+    where: { id: instrument.id },
+    data: { sector, industry, instrumentType },
+  });
+
+  revalidatePath("/stocks");
+  revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  revalidatePath("/reviews/audit");
+  revalidatePath("/dashboard");
+}
+
 export type NoteActionState =
   | { ok: true; noteId?: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };

@@ -99,6 +99,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
             yahooSymbol: true,
             name: true,
             sector: true,
+            instrumentType: true,
           },
         },
       },
@@ -115,6 +116,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
     yahooSymbol: string;
     name: string;
     sector: string | null;
+    instrumentType: string;
   };
   const heldQty = new Map<string, number>();
   const portfolioName = new Map<string, string>();
@@ -130,6 +132,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
       yahooSymbol: t.instrument.yahooSymbol,
       name: t.instrument.name,
       sector: t.instrument.sector,
+      instrumentType: t.instrument.instrumentType,
     });
   }
 
@@ -266,6 +269,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
         yahooSymbol: item.instrument.yahooSymbol,
         name: item.instrument.name,
         sector: item.instrument.sector,
+        instrumentType: item.instrument.instrumentType,
       });
     }
   }
@@ -284,9 +288,8 @@ export async function runSetupAudit(): Promise<AuditResult> {
     gaps.push({
       key: `instrument-sector:${instrumentId}`,
       category: "hygiene",
-      title: `Sector data missing — ${meta.symbol}`,
-      detail:
-        "Sector exposure won't include this name until its sector is filled in.",
+      title: `Sector / exposure bucket missing — ${meta.symbol}`,
+      detail: `${meta.instrumentType} profile has no sector saved. Yahoo profile data can be blank for ETFs, funds, commodity products, or sparse exchange profiles; set a sector or custom bucket so exposure includes it.`,
       fixHref: `/stocks/${encodeURIComponent(meta.yahooSymbol)}`,
     });
   }
