@@ -42,7 +42,7 @@ export function InstrumentProfileForm({ instrument }: Props) {
   return (
     <form
       action={saveProfile}
-      className="hairline mt-5 grid gap-4 bg-surface p-4 md:grid-cols-[1fr_1fr_12rem_auto]"
+      className="hairline grid gap-4 bg-surface p-4 md:grid-cols-[1fr_1fr_12rem_auto]"
     >
       <div className="md:col-span-4">
         <h2 className="label text-foreground">Profile data</h2>

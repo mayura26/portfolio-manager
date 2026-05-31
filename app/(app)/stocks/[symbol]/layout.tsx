@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/shared/skeleton";
-import { InstrumentProfileForm } from "@/components/stocks/instrument-profile-form";
 import { StockTabs } from "@/components/stocks/stock-tabs";
 import { db } from "@/lib/db";
 import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
@@ -55,14 +54,6 @@ async function StockHeader({ params }: { params: Params }) {
           </h1>
           <p className="mt-1 text-sm text-muted">{instrument.name}</p>
         </div>
-        <InstrumentProfileForm
-          instrument={{
-            id: instrument.id,
-            sector: instrument.sector,
-            industry: instrument.industry,
-            instrumentType: instrument.instrumentType,
-          }}
-        />
       </header>
     </>
   );

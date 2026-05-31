@@ -16,6 +16,7 @@ export function StockTabs({ yahooSymbol }: Props) {
     { href: `${base}/trades`, label: "Trades" },
     { href: `${base}/alerts`, label: "Alerts" },
     { href: `${base}/notes`, label: "Notes" },
+    { href: `${base}/profile`, label: "Profile" },
   ];
 
   return (
