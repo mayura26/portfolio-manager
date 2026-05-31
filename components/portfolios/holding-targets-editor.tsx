@@ -36,6 +36,11 @@ type Row = {
   recommendationReasoningEffort: string;
   notes: string;
   isHeld: boolean;
+  // Pre-formatted, read-only display metrics from the server.
+  lastPrice: string;
+  positionQuantity: string;
+  positionValue: string;
+  currentPercent: string;
 };
 
 type Instrument = {
@@ -144,6 +149,10 @@ export function HoldingTargetsEditor({
         recommendationReasoningEffort: "",
         notes: "",
         isHeld: false,
+        lastPrice: "",
+        positionQuantity: "",
+        positionValue: "",
+        currentPercent: "",
       },
     ]);
     setPickerValue("");
@@ -310,7 +319,14 @@ export function HoldingTargetsEditor({
                     <div className="label mt-0.5 text-subtle">
                       {r.currency}
                       {!r.isHeld ? " · target only" : ""}
+                      {r.lastPrice ? ` · Last ${r.lastPrice}` : ""}
                     </div>
+                    {r.positionQuantity ? (
+                      <div className="label mt-0.5 text-subtle">
+                        Position {r.positionQuantity} · {r.positionValue} ·{" "}
+                        {r.currentPercent} of portfolio
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     <button

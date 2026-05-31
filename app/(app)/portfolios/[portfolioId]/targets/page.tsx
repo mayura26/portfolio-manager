@@ -3,7 +3,11 @@ import { Suspense } from "react";
 import { HoldingTargetsEditor } from "@/components/portfolios/holding-targets-editor";
 import { Skeleton } from "@/components/shared/skeleton";
 import { db } from "@/lib/db";
-import { computePortfolioAllocation } from "@/lib/portfolio-allocation";
+import { formatCurrency, formatPercent, formatQuantity } from "@/lib/format";
+import {
+  type AllocationRow,
+  computePortfolioAllocation,
+} from "@/lib/portfolio-allocation";
 
 type Params = Promise<{ portfolioId: string }>;
 
@@ -45,7 +49,7 @@ async function PortfolioTargets({ params }: { params: Params }) {
   >();
   for (const r of allocation.rows) {
     if (r.hasTarget || r.isHeld) {
-      const base = rowFromAllocation(r);
+      const base = rowFromAllocation(r, allocation.baseCurrency);
       initialRowsMap.set(r.instrumentId, {
         ...base,
         intendedBuyPrice:
@@ -98,27 +102,8 @@ async function PortfolioTargets({ params }: { params: Params }) {
   );
 }
 
-function rowFromAllocation(r: {
-  instrumentId: string;
-  symbol: string;
-  name: string;
-  currency: string;
-  targetPercent: { toString(): string };
-  targetMinPercent: { toString(): string };
-  targetMaxPercent: { toString(): string };
-  intendedBuyPrice: { toString(): string } | null;
-  intendedSellPrice: { toString(): string } | null;
-  trimAtGainPercent: { toString(): string } | null;
-  recommendationAction: "BUY" | "SELL" | "TRIM" | null;
-  recommendationSource: "MANUAL" | "AI" | null;
-  recommendationRationale: string | null;
-  recommendationGeneratedAt: Date | null;
-  recommendationModel: string | null;
-  recommendationReasoningEffort: string | null;
-  notes: string | null;
-  isHeld: boolean;
-  hasTarget: boolean;
-}) {
+function rowFromAllocation(r: AllocationRow, baseCurrency: string) {
+  const held = r.isHeld && !r.quantity.isZero();
   return {
     instrumentId: r.instrumentId,
     symbol: r.symbol,
@@ -144,5 +129,10 @@ function rowFromAllocation(r: {
     recommendationReasoningEffort: r.recommendationReasoningEffort ?? "",
     notes: r.notes ?? "",
     isHeld: r.isHeld,
+    // Pre-formatted display metrics (instrument currency for price, base for value).
+    lastPrice: r.marketPrice ? formatCurrency(r.marketPrice, r.currency) : "",
+    positionQuantity: held ? formatQuantity(r.quantity) : "",
+    positionValue: held ? formatCurrency(r.marketValueBase, baseCurrency) : "",
+    currentPercent: held ? formatPercent(r.actualPercent.dividedBy(100)) : "",
   };
 }
