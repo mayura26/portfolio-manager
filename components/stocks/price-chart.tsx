@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
+import { aggregateOpenPositions } from "@/lib/signals";
 import {
   fetchPriceChartHistory,
   PRICE_CHART_RANGES,
@@ -37,7 +38,11 @@ export async function PriceChart({
     resolveActiveForecast(instrumentId),
     db.portfolioTarget.findMany({
       where: { instrumentId },
-      select: { intendedBuyPrice: true, intendedSellPrice: true },
+      select: {
+        intendedBuyPrice: true,
+        intendedSellPrice: true,
+        trimAtGainPercent: true,
+      },
     }),
     db.trade.findMany({
       where: { instrumentId, ...visibleTradeWhere },
@@ -70,6 +75,21 @@ export async function PriceChart({
   const userBuy = maxDecimal(targets.map((t) => t.intendedBuyPrice));
   const userSell = maxDecimal(targets.map((t) => t.intendedSellPrice));
 
+  // Trim is a % gain on cost — convert to a price line using the blended
+  // average cost across every position in this instrument.
+  const trimGainPercent = maxDecimal(targets.map((t) => t.trimAtGainPercent));
+  const position = (await aggregateOpenPositions()).find(
+    (p) => p.instrumentId === instrumentId,
+  );
+  const avgCost =
+    position && !position.quantity.isZero()
+      ? position.costBase.dividedBy(position.quantity).toNumber()
+      : null;
+  const userTrim =
+    trimGainPercent != null && avgCost != null
+      ? avgCost * (1 + trimGainPercent / 100)
+      : null;
+
   const tradeMarkers: ChartTradeMarker[] = trades.map((t) => ({
     time: Math.floor(t.date.getTime() / 1000),
     type: t.type,
@@ -93,6 +113,7 @@ export async function PriceChart({
       forecast={forecast}
       userBuyPrice={userBuy}
       userSellPrice={userSell}
+      userTrimPrice={userTrim}
       trades={tradeMarkers}
       priceTargets={priceTargets}
     />

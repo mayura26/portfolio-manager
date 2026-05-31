@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
 import { computeHoldings } from "@/lib/holdings";
+import { syncPlanAlerts } from "@/lib/plan-alerts";
 import { computePortfolioAllocation } from "@/lib/portfolio-allocation";
 import {
   analyzePortfolioRecommendation,
@@ -156,7 +157,7 @@ export async function setPortfolioTargets(
     }
 
     for (const row of parsed.data.targets) {
-      await tx.portfolioTarget.upsert({
+      const saved = await tx.portfolioTarget.upsert({
         where: {
           portfolioId_instrumentId: {
             portfolioId,
@@ -199,6 +200,18 @@ export async function setPortfolioTargets(
           recommendationModel: row.recommendationModel,
           recommendationReasoningEffort: row.recommendationReasoningEffort,
         },
+        include: { instrument: { select: { symbol: true } } },
+      });
+
+      // Keep auto-created buy/sell price alerts in sync with the plan levels.
+      // Deleted targets cascade their alerts away via the FK, so only surviving
+      // rows need reconciling here.
+      await syncPlanAlerts(tx, {
+        portfolioTargetId: saved.id,
+        instrumentId: saved.instrumentId,
+        symbol: saved.instrument.symbol,
+        intendedBuyPrice: row.intendedBuyPrice ?? null,
+        intendedSellPrice: row.intendedSellPrice ?? null,
       });
     }
   });

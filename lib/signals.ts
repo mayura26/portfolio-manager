@@ -11,9 +11,11 @@ export type SignalKind =
   | "STREET_TARGET_HIT"
   | "SELF_SELL_HIT"
   | "GAIN_THRESHOLD"
+  | "BUY_ZONE_HIT"
   | "APPROACHING_TARGET"
   | "APPROACHING_BULL"
-  | "APPROACHING_SELF_SELL";
+  | "APPROACHING_SELF_SELL"
+  | "APPROACHING_BUY";
 
 export type SellSignal = {
   kind: SignalKind;
@@ -67,6 +69,7 @@ export async function computeSellSignals(opts?: {
       where: { instrumentId: { in: instrumentIds } },
       select: {
         instrumentId: true,
+        intendedBuyPrice: true,
         intendedSellPrice: true,
         trimAtGainPercent: true,
       },
@@ -80,10 +83,17 @@ export async function computeSellSignals(opts?: {
   );
   const targetsByInstrument = new Map<
     string,
-    { sellPrice: Decimal | null; trimGain: Decimal | null }
+    {
+      buyPrice: Decimal | null;
+      sellPrice: Decimal | null;
+      trimGain: Decimal | null;
+    }
   >();
   for (const t of targets) {
     const prev = targetsByInstrument.get(t.instrumentId);
+    const buyPrice = t.intendedBuyPrice
+      ? new Decimal(t.intendedBuyPrice.toString())
+      : null;
     const sellPrice = t.intendedSellPrice
       ? new Decimal(t.intendedSellPrice.toString())
       : null;
@@ -91,6 +101,8 @@ export async function computeSellSignals(opts?: {
       ? new Decimal(t.trimAtGainPercent.toString())
       : null;
     targetsByInstrument.set(t.instrumentId, {
+      // Buy below the highest of any portfolio's buy price → triggers earliest.
+      buyPrice: maxDec(prev?.buyPrice ?? null, buyPrice),
       sellPrice: maxDec(prev?.sellPrice ?? null, sellPrice),
       trimGain: maxDec(prev?.trimGain ?? null, trimGain),
     });
@@ -202,6 +214,27 @@ export async function computeSellSignals(opts?: {
         reason: `Up ${pos.unrealizedPnLPercent.toFixed(1)}% (threshold ${gainThreshold.toFixed(0)}%)`,
       });
     }
+
+    if (targetsForPos?.buyPrice) {
+      const buyPrice = targetsForPos.buyPrice;
+      if (price.lte(buyPrice)) {
+        signals.push({
+          ...base,
+          kind: "BUY_ZONE_HIT",
+          thresholdPrice: buyPrice.toNumber(),
+          priority: 4,
+          reason: `At or below your buy price ${buyPrice.toFixed(2)}`,
+        });
+      } else if (withinBandAbove(price, buyPrice)) {
+        signals.push({
+          ...base,
+          kind: "APPROACHING_BUY",
+          thresholdPrice: buyPrice.toNumber(),
+          priority: 2,
+          reason: `Within 3% of your buy price ${buyPrice.toFixed(2)}`,
+        });
+      }
+    }
   }
 
   return signals.sort((a, b) => b.priority - a.priority);
@@ -211,6 +244,13 @@ function withinBand(price: Decimal, threshold: Decimal): boolean {
   if (threshold.lte(0)) return false;
   const distance = threshold.minus(price).abs().dividedBy(threshold).times(100);
   return price.lt(threshold) && distance.lte(APPROACHING_BAND);
+}
+
+// Like withinBand, but for a buy level the price approaches from above.
+function withinBandAbove(price: Decimal, threshold: Decimal): boolean {
+  if (threshold.lte(0)) return false;
+  const distance = price.minus(threshold).abs().dividedBy(threshold).times(100);
+  return price.gt(threshold) && distance.lte(APPROACHING_BAND);
 }
 
 function maxDec(a: Decimal | null, b: Decimal | null): Decimal | null {

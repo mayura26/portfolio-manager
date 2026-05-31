@@ -60,11 +60,15 @@ function labelFor(kind: SellSignal["kind"]): string {
       return "your sell hit";
     case "GAIN_THRESHOLD":
       return "gain threshold";
+    case "BUY_ZONE_HIT":
+      return "buy zone hit";
     case "APPROACHING_TARGET":
       return "near target";
     case "APPROACHING_BULL":
       return "near bull case";
     case "APPROACHING_SELF_SELL":
       return "near your sell";
+    case "APPROACHING_BUY":
+      return "near your buy";
   }
 }

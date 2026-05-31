@@ -43,6 +43,7 @@ type Props = {
   forecast: ChartForecast | null;
   userBuyPrice: number | null;
   userSellPrice: number | null;
+  userTrimPrice: number | null;
   trades: ChartTradeMarker[];
   priceTargets: ChartPriceTarget[];
 };
@@ -64,6 +65,7 @@ export function PriceChartClient({
   forecast,
   userBuyPrice,
   userSellPrice,
+  userTrimPrice,
   trades,
   priceTargets,
 }: Props) {
@@ -207,6 +209,16 @@ export function PriceChartClient({
           title: "My buy",
         });
       }
+      if (userTrimPrice != null) {
+        series.createPriceLine({
+          price: userTrimPrice,
+          color: "#eab308",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "My trim",
+        });
+      }
     }
 
     if (overlays.priceTargets) {
@@ -257,6 +269,7 @@ export function PriceChartClient({
     overlays,
     userBuyPrice,
     userSellPrice,
+    userTrimPrice,
     trades,
     priceTargets,
   ]);
@@ -279,7 +292,8 @@ export function PriceChartClient({
 
   const hasTargets = Boolean(forecast);
   const hasStreet = Boolean(forecast?.streetTargetMean != null);
-  const hasUserTargets = userBuyPrice != null || userSellPrice != null;
+  const hasUserTargets =
+    userBuyPrice != null || userSellPrice != null || userTrimPrice != null;
   const hasPriceTargets = priceTargets.length > 0;
   const hasTrades = trades.length > 0;
 
@@ -353,7 +367,7 @@ export function PriceChartClient({
               active={overlays.userTargets}
               onClick={() => toggle("userTargets")}
               swatch="bg-[#f97316]"
-              label="My buy / sell"
+              label="My buy / trim / sell"
             />
           ) : null}
           {hasPriceTargets ? (

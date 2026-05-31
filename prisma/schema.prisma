@@ -224,6 +224,10 @@ model Alert {
   forecastId         String?
   deviationThreshold Decimal? @db.Decimal(8, 4)
 
+  // Plan-level linkage: when set, this alert was auto-created from a
+  // PortfolioTarget buy/sell level and is kept in sync with it.
+  portfolioTargetId String?
+
   // Snooze fields
   snoozedUntil DateTime?
 
@@ -232,17 +236,19 @@ model Alert {
   updatedAt   DateTime  @updatedAt
   triggeredAt DateTime?
 
-  portfolio     Portfolio?          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  instrument    Instrument?         @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
-  forecast      InstrumentForecast? @relation(fields: [forecastId], references: [id], onDelete: SetNull)
-  reviews       Review[]
-  notifications Notification[]
-  watchlistItem WatchlistItem?
+  portfolio       Portfolio?          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument      Instrument?         @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  forecast        InstrumentForecast? @relation(fields: [forecastId], references: [id], onDelete: SetNull)
+  portfolioTarget PortfolioTarget?    @relation(fields: [portfolioTargetId], references: [id], onDelete: Cascade)
+  reviews         Review[]
+  notifications   Notification[]
+  watchlistItem   WatchlistItem?
 
   @@index([status, type])
   @@index([instrumentId, status])
   @@index([portfolioId, status])
   @@index([forecastId])
+  @@index([portfolioTargetId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -576,6 +582,7 @@ model PortfolioTarget {
 
   portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  alerts     Alert[]
 
   @@unique([portfolioId, instrumentId])
   @@index([portfolioId])
