@@ -55,7 +55,14 @@ async function StockHeader({ params }: { params: Params }) {
           </h1>
           <p className="mt-1 text-sm text-muted">{instrument.name}</p>
         </div>
-        <InstrumentProfileForm instrument={instrument} />
+        <InstrumentProfileForm
+          instrument={{
+            id: instrument.id,
+            sector: instrument.sector,
+            industry: instrument.industry,
+            instrumentType: instrument.instrumentType,
+          }}
+        />
       </header>
     </>
   );

@@ -1,5 +1,11 @@
-import { Save } from "lucide-react";
-import { updateInstrumentProfile } from "@/actions/instruments";
+"use client";
+
+import { Save, Sparkles } from "lucide-react";
+import { useState, useTransition } from "react";
+import {
+  generateInstrumentProfile,
+  updateInstrumentProfile,
+} from "@/actions/instruments";
 
 type Props = {
   instrument: {
@@ -25,7 +31,13 @@ const INSTRUMENT_TYPE_OPTIONS = [
 export function InstrumentProfileForm({ instrument }: Props) {
   const saveProfile = updateInstrumentProfile.bind(null, instrument.id);
   const currentType = instrument.instrumentType || "EQUITY";
-  const hasCustomType = !INSTRUMENT_TYPE_OPTIONS.includes(currentType);
+  const [sector, setSector] = useState(instrument.sector ?? "");
+  const [industry, setIndustry] = useState(instrument.industry ?? "");
+  const [instrumentType, setInstrumentType] = useState(currentType);
+  const [rationale, setRationale] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const hasCustomType = !INSTRUMENT_TYPE_OPTIONS.includes(instrumentType);
 
   return (
     <form
@@ -45,7 +57,8 @@ export function InstrumentProfileForm({ instrument }: Props) {
         <span className="label text-[10px]">Sector / bucket</span>
         <input
           name="sector"
-          defaultValue={instrument.sector ?? ""}
+          value={sector}
+          onChange={(event) => setSector(event.target.value)}
           maxLength={100}
           placeholder="Technology"
           className="h-10 border border-border bg-surface-elevated px-3 text-sm text-foreground placeholder:text-subtle"
@@ -56,7 +69,8 @@ export function InstrumentProfileForm({ instrument }: Props) {
         <span className="label text-[10px]">Industry</span>
         <input
           name="industry"
-          defaultValue={instrument.industry ?? ""}
+          value={industry}
+          onChange={(event) => setIndustry(event.target.value)}
           maxLength={150}
           placeholder="Semiconductors"
           className="h-10 border border-border bg-surface-elevated px-3 text-sm text-foreground placeholder:text-subtle"
@@ -67,11 +81,12 @@ export function InstrumentProfileForm({ instrument }: Props) {
         <span className="label text-[10px]">Type</span>
         <select
           name="instrumentType"
-          defaultValue={currentType}
+          value={instrumentType}
+          onChange={(event) => setInstrumentType(event.target.value)}
           className="h-10 border border-border bg-surface-elevated px-3 text-sm text-foreground"
         >
           {hasCustomType ? (
-            <option value={currentType}>{currentType}</option>
+            <option value={instrumentType}>{instrumentType}</option>
           ) : null}
           {INSTRUMENT_TYPE_OPTIONS.map((type) => (
             <option key={type} value={type}>
@@ -81,13 +96,49 @@ export function InstrumentProfileForm({ instrument }: Props) {
         </select>
       </label>
 
-      <button
-        type="submit"
-        className="inline-flex h-10 items-center justify-center gap-2 self-end border border-accent bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover"
-      >
-        <Save className="h-4 w-4" strokeWidth={1.5} aria-hidden />
-        Save
-      </button>
+      <div className="flex items-center gap-2 self-end">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setAiError(null);
+            setRationale(null);
+            startTransition(async () => {
+              const result = await generateInstrumentProfile(instrument.id);
+              if (!result.ok) {
+                setAiError(result.error);
+                return;
+              }
+              setSector(result.draft.sector);
+              setIndustry(result.draft.industry);
+              setInstrumentType(result.draft.instrumentType);
+              setRationale(result.draft.rationale);
+            });
+          }}
+          className="inline-flex h-10 items-center justify-center gap-2 border border-border bg-surface-elevated px-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong disabled:opacity-50"
+        >
+          <Sparkles className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+          {pending ? "Generating" : "Generate"}
+        </button>
+
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center justify-center gap-2 border border-accent bg-accent px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover"
+        >
+          <Save className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+          Save
+        </button>
+      </div>
+
+      {rationale || aiError ? (
+        <p
+          className={`md:col-span-4 text-xs ${
+            aiError ? "text-loss" : "text-muted"
+          }`}
+        >
+          {aiError ?? `AI draft: ${rationale}`}
+        </p>
+      ) : null}
     </form>
   );
 }

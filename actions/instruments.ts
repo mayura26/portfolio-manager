@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { generateInstrumentProfileDraft } from "@/lib/instrument-profile-ai";
 import { stockNoteSchema } from "@/lib/validators";
 
 export type AutoWatcherActionState =
@@ -80,6 +81,58 @@ export async function updateInstrumentProfile(
   revalidatePath(`/stocks/${instrument.yahooSymbol}`);
   revalidatePath("/reviews/audit");
   revalidatePath("/dashboard");
+}
+
+export type InstrumentProfileDraftActionState =
+  | {
+      ok: true;
+      draft: {
+        sector: string;
+        industry: string;
+        instrumentType: string;
+        rationale: string;
+      };
+    }
+  | { ok: false; error: string };
+
+export async function generateInstrumentProfile(
+  instrumentId: string,
+): Promise<InstrumentProfileDraftActionState> {
+  const instrument = await db.instrument.findUnique({
+    where: { id: instrumentId },
+    select: {
+      id: true,
+      symbol: true,
+      yahooSymbol: true,
+      name: true,
+      exchange: true,
+      currency: true,
+      sector: true,
+      industry: true,
+      instrumentType: true,
+    },
+  });
+  if (!instrument) return { ok: false, error: "Instrument not found" };
+
+  try {
+    const draft = await generateInstrumentProfileDraft({
+      symbol: instrument.symbol,
+      yahooSymbol: instrument.yahooSymbol,
+      name: instrument.name,
+      exchange: instrument.exchange,
+      currency: instrument.currency,
+      currentSector: instrument.sector,
+      currentIndustry: instrument.industry,
+      currentInstrumentType: instrument.instrumentType,
+    });
+    return { ok: true, draft };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Could not generate profile data",
+    };
+  }
 }
 
 export type NoteActionState =
