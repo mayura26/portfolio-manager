@@ -49,6 +49,24 @@ async function GroupCash({ params }: { params: Params }) {
         <h1 className="display mt-2 text-4xl text-foreground">
           {formatCurrency(cash.currentCash.toString(), cash.baseCurrency)}
         </h1>
+        {cash.byCurrency.length > 0 && (
+          <p className="mt-2 text-sm text-muted">
+            {cash.byCurrency.map((b, i) => (
+              <span key={b.currency}>
+                {i > 0 && <span className="text-subtle"> · </span>}
+                {formatCurrency(b.balance.toString(), b.currency)}
+                {b.currency !== cash.baseCurrency && (
+                  <span className="text-subtle">
+                    {" "}
+                    ≈{" "}
+                    {formatCurrency(b.baseValue.toString(), cash.baseCurrency)}
+                  </span>
+                )}
+              </span>
+            ))}
+            <span className="text-subtle"> · @ today's FX</span>
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
           <span>
             Seeded + deposits:{" "}

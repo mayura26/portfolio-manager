@@ -13,11 +13,23 @@ export type ParsedTrade = {
   externalRef: string;
 };
 
+export type ParsedCashTxType =
+  | "DEPOSIT"
+  | "WITHDRAWAL"
+  | "DIVIDEND"
+  | "INTEREST"
+  | "FEE"
+  | "WITHHOLDING"
+  | "FX_IN"
+  | "FX_OUT";
+
 export type ParsedCashTx = {
   currency: string;
   date: Date;
+  // For FEE/INTEREST/WITHHOLDING the sign is meaningful and preserved on import;
+  // for all other types the magnitude is used and direction comes from the type.
   amount: string;
-  type: "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND";
+  type: ParsedCashTxType;
   description: string;
   externalRef: string;
 };
@@ -87,6 +99,9 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
       "Trades",
       "Deposits & Withdrawals",
       "Dividends",
+      "Interest",
+      "Withholding Tax",
+      "Fees",
     ]);
     if (!trackedSections.has(section)) continue;
 
@@ -106,6 +121,15 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
     // ── Trades ────────────────────────────────────────────────────────────────
     if (section === "Trades") {
       const assetCategory = fields[colIndex["Asset Category"] ?? -1] ?? "";
+
+      // Forex (currency conversion) — capture as FX_IN/FX_OUT cash legs.
+      if (assetCategory === "Forex") {
+        for (const leg of parseCsvForexLegs(fields, colIndex)) {
+          cashTxs.push(leg);
+        }
+        continue;
+      }
+
       if (assetCategory !== "Stocks") continue;
 
       try {
@@ -225,8 +249,120 @@ export function parseIbkrCsv(raw: string): ParsedStatement {
       } catch {
         // Skip unparseable rows
       }
+      continue;
+    }
+
+    // ── Interest / Withholding Tax / Fees ──────────────────────────────────────
+    // Signed amounts are preserved (fees/withholding are typically negative) so
+    // the cash balance reconciles with IBKR.
+    if (
+      section === "Interest" ||
+      section === "Withholding Tax" ||
+      section === "Fees"
+    ) {
+      try {
+        const currency = fields[colIndex.Currency ?? -1] ?? "";
+        const rawDate =
+          fields[colIndex.Date ?? -1] ??
+          fields[colIndex["Date/Time"] ?? -1] ??
+          "";
+        const description = fields[colIndex.Description ?? -1] ?? "";
+        const rawAmount = fields[colIndex.Amount ?? -1] ?? "";
+
+        if (!currency || !rawDate || !rawAmount) continue;
+        if (/^total/i.test(description)) continue; // skip subtotal rows
+
+        const amount = Number.parseFloat(rawAmount);
+        if (Number.isNaN(amount) || amount === 0) continue;
+
+        const date = parseIbkrDate(rawDate);
+        const type: ParsedCashTxType =
+          section === "Interest"
+            ? "INTEREST"
+            : section === "Withholding Tax"
+              ? "WITHHOLDING"
+              : "FEE";
+
+        cashTxs.push({
+          currency,
+          date,
+          amount: amount.toString(),
+          type,
+          description,
+          externalRef: fingerprint(
+            type,
+            currency,
+            date.toISOString(),
+            rawAmount,
+            description,
+          ),
+        });
+      } catch {
+        // Skip unparseable rows
+      }
     }
   }
 
   return { trades, cashTxs };
+}
+
+/** Build FX_IN/FX_OUT (+ FEE) legs from a Forex Trades row. */
+function parseCsvForexLegs(
+  fields: string[],
+  colIndex: Record<string, number>,
+): ParsedCashTx[] {
+  const symbol = fields[colIndex.Symbol ?? -1] ?? "";
+  const [baseCcy, symQuote] = symbol.split(".");
+  const quoteCcy = fields[colIndex.Currency ?? -1] || symQuote;
+  const rawDate = fields[colIndex["Date/Time"] ?? -1] ?? "";
+  if (!baseCcy || !quoteCcy || !rawDate) return [];
+
+  const qty = Number.parseFloat(fields[colIndex.Quantity ?? -1] ?? "");
+  if (Number.isNaN(qty) || qty === 0) return [];
+
+  let date: Date;
+  try {
+    date = parseIbkrDate(rawDate);
+  } catch {
+    return [];
+  }
+
+  let proceeds = Number.parseFloat(fields[colIndex.Proceeds ?? -1] ?? "");
+  if (Number.isNaN(proceeds)) {
+    const price = Number.parseFloat(fields[colIndex["T. Price"] ?? -1] ?? "");
+    proceeds = Number.isNaN(price) ? 0 : -qty * price;
+  }
+
+  const idSeed = fingerprint("fx", symbol, date.toISOString(), `${qty}`);
+  const legs: ParsedCashTx[] = [];
+  legs.push({
+    currency: baseCcy,
+    date,
+    amount: Math.abs(qty).toString(),
+    type: qty > 0 ? "FX_IN" : "FX_OUT",
+    description: `FX ${symbol}`,
+    externalRef: `${idSeed}:BASE`,
+  });
+  if (proceeds !== 0) {
+    legs.push({
+      currency: quoteCcy,
+      date,
+      amount: Math.abs(proceeds).toString(),
+      type: proceeds > 0 ? "FX_IN" : "FX_OUT",
+      description: `FX ${symbol}`,
+      externalRef: `${idSeed}:QUOTE`,
+    });
+  }
+  const comm = Number.parseFloat(fields[colIndex["Comm/Fee"] ?? -1] ?? "");
+  if (!Number.isNaN(comm) && comm !== 0) {
+    legs.push({
+      currency: quoteCcy,
+      date,
+      amount: comm.toString(),
+      type: "FEE",
+      description: `FX commission ${symbol}`,
+      externalRef: `${idSeed}:COMM`,
+    });
+  }
+  return legs;
 }

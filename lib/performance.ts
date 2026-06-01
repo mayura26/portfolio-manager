@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { BENCHMARK_LABEL, getBenchmarkCloses } from "@/lib/benchmark";
-import { getGroupCashLedger } from "@/lib/cash";
+import { getGroupCashLedger, isExternalCashFlow } from "@/lib/cash";
 import { getGroupValueHistory, getValueHistoryByGroup } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
@@ -200,7 +200,7 @@ export async function getGroupPerformance(
 
   const { ledger } = await getGroupCashLedger(groupId);
   const flows: Flow[] = ledger
-    .filter((e) => e.kind === "transaction" && e.type !== "DIVIDEND")
+    .filter(isExternalCashFlow)
     .map((e) => ({ date: e.date, amount: Number(e.amountBase) }));
 
   return buildPerformance(dates, [
@@ -356,7 +356,7 @@ export async function getAccountPerformance(
   for (const g of groups) {
     const { baseCurrency, ledger } = await getGroupCashLedger(g.id);
     for (const e of ledger) {
-      if (e.kind !== "transaction" || e.type === "DIVIDEND") continue;
+      if (!isExternalCashFlow(e)) continue;
       const amount =
         baseCurrency === globalBase
           ? e.amountBase

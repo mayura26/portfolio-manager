@@ -12,23 +12,63 @@ export type CashLedgerEntry = {
   date: Date;
   type: string;
   amountBase: Decimal;
+  /** Display magnitude in the entry's own currency (always >= 0). */
   amountCurrency: Decimal;
+  /** Signed cash effect in the entry's own currency (+ in, − out). */
+  amountCurrencySigned: Decimal;
   currency: string;
   notes: string | null;
   source: string | null;
   sourceAccountKey: string | null;
 };
 
+export type CurrencyBalance = {
+  currency: string;
+  /** Net balance in the currency itself. */
+  balance: Decimal;
+  /** That balance valued in the group base currency at today's FX rate. */
+  baseValue: Decimal;
+};
+
 export type GroupCash = {
   groupId: string;
   baseCurrency: string;
+  /** Total cash in base currency, valued at today's FX rate. */
   currentCash: Decimal;
+  /** Per-currency balances (current-rate valuation). */
+  byCurrency: CurrencyBalance[];
   seededAndDeposits: Decimal;
   withdrawals: Decimal;
   tradeOutflows: Decimal;
   tradeInflows: Decimal;
   ledger: CashLedgerEntry[];
 };
+
+// Cash transaction types whose stored `amount` is a positive magnitude that
+// represents an OUTFLOW (must be negated to get the signed cash effect).
+const OUTFLOW_MAGNITUDE_TYPES = new Set(["WITHDRAWAL", "FX_OUT"]);
+// Cash transaction types whose stored `amount` is already signed (IBKR sign
+// preserved on import) — used directly without re-deriving the sign.
+const SIGNED_TYPES = new Set(["INTEREST", "FEE", "WITHHOLDING"]);
+// Everything else (SEED, DEPOSIT, DIVIDEND, FX_IN) is a positive-magnitude inflow.
+
+// Cash movements treated as EXTERNAL flows for time-weighted return: they are
+// removed from the return so they neither help nor hurt performance. Fees and
+// withholding tax are included here so they don't unfairly drag performance,
+// while still affecting the cash balance. DIVIDEND/INTEREST are income (counted
+// in return, not flows); FX_IN/FX_OUT are internal conversions (net ~0).
+const EXTERNAL_FLOW_TYPES = new Set([
+  "DEPOSIT",
+  "WITHDRAWAL",
+  "SEED",
+  "FEE",
+  "WITHHOLDING",
+]);
+
+/** True if a ledger entry is an external cash flow (excluded from TWR return). */
+export function isExternalCashFlow(e: CashLedgerEntry): boolean {
+  return e.kind === "transaction" && EXTERNAL_FLOW_TYPES.has(e.type);
+}
 
 const groupCashInclude = {
   cashTransactions: { orderBy: { date: "asc" as const } },
@@ -64,15 +104,29 @@ async function materializeLedgerForGroup(
   const ledger: CashLedgerEntry[] = [];
 
   for (const ct of group.cashTransactions) {
-    const amount = new Decimal(ct.amount.toString());
-    const inBase = await toBase(amount, ct.currency, baseCurrency, ct.date);
+    const stored = new Decimal(ct.amount.toString());
+    let nativeSigned: Decimal;
+    if (SIGNED_TYPES.has(ct.type)) {
+      nativeSigned = stored; // already signed (IBKR sign preserved)
+    } else if (OUTFLOW_MAGNITUDE_TYPES.has(ct.type)) {
+      nativeSigned = stored.abs().negated();
+    } else {
+      nativeSigned = stored.abs(); // inflow magnitude
+    }
+    const baseSigned = await toBase(
+      nativeSigned,
+      ct.currency,
+      baseCurrency,
+      ct.date,
+    );
     ledger.push({
       id: ct.id,
       kind: "transaction",
       date: ct.date,
       type: ct.type,
-      amountBase: ct.type === "WITHDRAWAL" ? inBase.negated() : inBase,
-      amountCurrency: amount,
+      amountBase: baseSigned,
+      amountCurrency: nativeSigned.abs(),
+      amountCurrencySigned: nativeSigned,
       currency: ct.currency,
       notes: ct.notes,
       source: ct.source,
@@ -100,13 +154,15 @@ async function materializeLedgerForGroup(
       );
       if (trade.type === "BUY") {
         const cost = grossBase.plus(feesBase);
+        const nativeCost = grossLocal.plus(fees);
         ledger.push({
           id: trade.id,
           kind: "trade",
           date: trade.date,
           type: "BUY",
           amountBase: cost.negated(),
-          amountCurrency: grossLocal.plus(fees),
+          amountCurrency: nativeCost,
+          amountCurrencySigned: nativeCost.negated(),
           currency: trade.currency,
           notes: null,
           source: null,
@@ -114,13 +170,15 @@ async function materializeLedgerForGroup(
         });
       } else {
         const proceeds = grossBase.minus(feesBase);
+        const nativeProceeds = grossLocal.minus(fees);
         ledger.push({
           id: trade.id,
           kind: "trade",
           date: trade.date,
           type: "SELL",
           amountBase: proceeds,
-          amountCurrency: grossLocal.minus(fees),
+          amountCurrency: nativeProceeds,
+          amountCurrencySigned: nativeProceeds,
           currency: trade.currency,
           notes: null,
           source: null,
@@ -152,9 +210,15 @@ function aggregatesFromLedger(ledger: CashLedgerEntry[]): {
     if (e.kind === "transaction") {
       if (e.type === "WITHDRAWAL") {
         withdrawals = withdrawals.plus(e.amountBase.abs());
-      } else {
+      } else if (
+        e.type === "SEED" ||
+        e.type === "DEPOSIT" ||
+        e.type === "DIVIDEND"
+      ) {
         seededAndDeposits = seededAndDeposits.plus(e.amountBase);
       }
+      // FEE / INTEREST / WITHHOLDING / FX_IN / FX_OUT affect the balance only,
+      // not the seeded/deposit/withdrawal breakdown.
     } else if (e.type === "BUY") {
       tradeOutflows = tradeOutflows.plus(e.amountBase.abs());
     } else {
@@ -195,16 +259,46 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
   const ledger = await materializeLedgerForGroup(group);
   const agg = aggregatesFromLedger(ledger);
 
+  // Headline cash is valued per-currency at TODAY's FX rate (matching what the
+  // broker shows), not the historical-cost sum of transaction-date conversions.
+  const base = group.baseCurrency;
+  const now = new Date();
+  const byCurrency: CurrencyBalance[] = [];
+  let currentCash = ZERO;
+  for (const [currency, balance] of balancesByCurrency(ledger)) {
+    if (balance.isZero()) continue;
+    const baseValue = await convert(balance, currency, base, now);
+    byCurrency.push({ currency, balance, baseValue });
+    currentCash = currentCash.plus(baseValue);
+  }
+  byCurrency.sort((a, b) => b.baseValue.abs().comparedTo(a.baseValue.abs()));
+
   return {
     groupId,
-    baseCurrency: group.baseCurrency,
-    currentCash: agg.currentCash,
+    baseCurrency: base,
+    currentCash,
+    byCurrency,
     seededAndDeposits: agg.seededAndDeposits,
     withdrawals: agg.withdrawals,
     tradeOutflows: agg.tradeOutflows,
     tradeInflows: agg.tradeInflows,
     ledger,
   };
+}
+
+/**
+ * Net cash balance per currency (in each currency's own units), summed from the
+ * signed ledger. Drives the current-rate valuation and per-currency display.
+ */
+export function balancesByCurrency(
+  ledger: CashLedgerEntry[],
+): Map<string, Decimal> {
+  const map = new Map<string, Decimal>();
+  for (const e of ledger) {
+    const ccy = e.currency.toUpperCase();
+    map.set(ccy, (map.get(ccy) ?? ZERO).plus(e.amountCurrencySigned));
+  }
+  return map;
 }
 
 export function cashBalanceInGroupBaseThroughUtcDay(

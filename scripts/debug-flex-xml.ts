@@ -34,6 +34,17 @@ function parseFlexDate(raw: string): Date {
 
 const trades: ParsedTrade[] = [];
 const tradeElements = xml.match(/<Trade\s[^>]*\/>/g) ?? [];
+
+// Tally every Trade by assetCategory, and capture the non-STK (e.g. forex
+// CASH) elements verbatim so we can see how currency conversions are reported.
+const assetCategoryTally = new Map<string, number>();
+const nonStkTrades: string[] = [];
+for (const el of tradeElements) {
+  const cat = extractAttr(el, "assetCategory") || "(none)";
+  assetCategoryTally.set(cat, (assetCategoryTally.get(cat) ?? 0) + 1);
+  if (cat !== "STK") nonStkTrades.push(el);
+}
+
 for (const el of tradeElements) {
   if (extractAttr(el, "assetCategory") !== "STK") continue;
   const symbol = extractAttr(el, "symbol");
@@ -65,6 +76,15 @@ for (const el of tradeElements) {
 
 const cashTxs: (ParsedCashTx & { rawType: string })[] = [];
 const cashElements = xml.match(/<CashTransaction\s[^>]*\/>/g) ?? [];
+
+// Tally every CashTransaction by its raw IBKR `type` so we can see what is
+// dropped (Interest, Withholding Tax, Fees, …) vs imported.
+const cashTypeTally = new Map<string, number>();
+for (const el of cashElements) {
+  const t = extractAttr(el, "type") || "(none)";
+  cashTypeTally.set(t, (cashTypeTally.get(t) ?? 0) + 1);
+}
+
 for (const el of cashElements) {
   const txType = extractAttr(el, "type");
   let mappedType: ParsedCashTx["type"] | null = null;
@@ -109,6 +129,31 @@ for (const c of cashTxs) {
   console.log(
     `  ${action.padEnd(20)} ${c.amount.padStart(12)} ${c.currency}  ${c.date.toISOString().slice(0, 10)}  rawType="${c.rawType}"`,
   );
+}
+
+console.log(`\n=== TRADE assetCategory TALLY ===`);
+for (const [cat, n] of [...assetCategoryTally].sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${cat.padEnd(12)} ${n}`);
+}
+
+console.log(`\n=== NON-STK TRADES (forex / other) — raw elements ===`);
+if (nonStkTrades.length === 0) {
+  console.log("  (none)");
+} else {
+  for (const el of nonStkTrades) {
+    console.log(
+      `  cat=${extractAttr(el, "assetCategory")} symbol=${extractAttr(el, "symbol")} ` +
+        `qty=${extractAttr(el, "quantity")} price=${extractAttr(el, "tradePrice")} ` +
+        `proceeds=${extractAttr(el, "proceeds")} comm=${extractAttr(el, "ibCommission")} ` +
+        `ccy=${extractAttr(el, "currency")} date=${extractAttr(el, "dateTime")}`,
+    );
+    console.log(`    ${el}`);
+  }
+}
+
+console.log(`\n=== CASH TRANSACTION type TALLY (raw IBKR types) ===`);
+for (const [t, n] of [...cashTypeTally].sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${t.padEnd(24)} ${n}`);
 }
 
 const wouldImport = cashTxs.filter((c) => !c.rawType.startsWith("[SKIPPED]"));

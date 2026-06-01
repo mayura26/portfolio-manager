@@ -482,6 +482,11 @@ enum CashTransactionType {
   DEPOSIT
   WITHDRAWAL
   DIVIDEND
+  INTEREST
+  FEE
+  WITHHOLDING
+  FX_IN
+  FX_OUT
 }
 
 enum CashTransactionSource {

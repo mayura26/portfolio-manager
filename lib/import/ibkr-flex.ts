@@ -58,6 +58,83 @@ function parseFlexDate(raw: string): Date {
   return new Date(`${year}-${month}-${day}T${hh}:${mm}:${ss}`);
 }
 
+/**
+ * Map an IBKR Flex CashTransaction `type` to our cash type. Returns "DEPWITH"
+ * when the direction must be derived from the amount sign, a fixed type, or
+ * null for types we don't track. FEE/INTEREST/WITHHOLDING keep their raw sign.
+ */
+function mapFlexCashType(
+  txType: string,
+): ParsedCashTx["type"] | "DEPWITH" | null {
+  if (txType === "Deposits/Withdrawals") return "DEPWITH";
+  if (txType === "Dividends" || txType === "Payment In Lieu Of Dividends") {
+    return "DIVIDEND";
+  }
+  if (txType === "Withholding Tax") return "WITHHOLDING";
+  if (/interest/i.test(txType)) return "INTEREST";
+  if (/fee/i.test(txType) || txType === "Commission Adjustments") return "FEE";
+  return null;
+}
+
+/**
+ * Turn a forex (assetCategory="CASH") trade into two-legged cash movements:
+ * one leg in the base currency of the pair and one in the quote currency, plus
+ * a FEE leg for any commission. Symbol is "BASE.QUOTE" (e.g. "AUD.CAD").
+ */
+function parseFlexForexLegs(el: string): ParsedCashTx[] {
+  const symbol = extractAttr(el, "symbol");
+  const [baseCcy, symQuote] = symbol.split(".");
+  const quoteCcy = extractAttr(el, "currency") || symQuote;
+  const rawDate = extractAttr(el, "dateTime");
+  const tradeId =
+    extractAttr(el, "tradeID") || extractAttr(el, "transactionID") || symbol;
+  if (!baseCcy || !quoteCcy || !rawDate) return [];
+
+  const qty = Number.parseFloat(extractAttr(el, "quantity"));
+  if (Number.isNaN(qty) || qty === 0) return [];
+  const date = parseFlexDate(rawDate);
+
+  // proceeds is in the quote currency and signed opposite to qty; fall back to
+  // qty * tradePrice when absent.
+  let proceeds = Number.parseFloat(extractAttr(el, "proceeds"));
+  if (Number.isNaN(proceeds)) {
+    const price = Number.parseFloat(extractAttr(el, "tradePrice"));
+    proceeds = Number.isNaN(price) ? 0 : -qty * price;
+  }
+
+  const legs: ParsedCashTx[] = [];
+  legs.push({
+    currency: baseCcy,
+    date,
+    amount: Math.abs(qty).toString(),
+    type: qty > 0 ? "FX_IN" : "FX_OUT",
+    description: `FX ${symbol}`,
+    externalRef: `${tradeId}:BASE`,
+  });
+  if (proceeds !== 0) {
+    legs.push({
+      currency: quoteCcy,
+      date,
+      amount: Math.abs(proceeds).toString(),
+      type: proceeds > 0 ? "FX_IN" : "FX_OUT",
+      description: `FX ${symbol}`,
+      externalRef: `${tradeId}:QUOTE`,
+    });
+  }
+  const comm = Number.parseFloat(extractAttr(el, "ibCommission"));
+  if (!Number.isNaN(comm) && comm !== 0) {
+    legs.push({
+      currency: extractAttr(el, "ibCommissionCurrency") || quoteCcy,
+      date,
+      amount: comm.toString(), // signed (usually negative) — FEE keeps the sign
+      type: "FEE",
+      description: `FX commission ${symbol}`,
+      externalRef: `${tradeId}:COMM`,
+    });
+  }
+  return legs;
+}
+
 async function fetchXml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/xml" },
@@ -164,6 +241,9 @@ export function parseFlexStatementXml(reportXml: string): ParsedStatement {
   // Parse <Trade .../> elements
   const trades: ParsedTrade[] = [];
   const tradeElements = reportXml.match(/<Trade\s[^>]*\/>/g) ?? [];
+  const forexTradeElements = tradeElements.filter(
+    (el) => extractAttr(el, "assetCategory") === "CASH",
+  );
 
   for (const el of tradeElements) {
     if (extractAttr(el, "assetCategory") !== "STK") continue;
@@ -220,16 +300,8 @@ export function parseFlexStatementXml(reportXml: string): ParsedStatement {
   const cashElements = reportXml.match(/<CashTransaction\s[^>]*\/>/g) ?? [];
 
   for (const el of cashElements) {
-    const txType = extractAttr(el, "type");
-
-    let mappedType: ParsedCashTx["type"] | null = null;
-    if (txType === "Deposits/Withdrawals") {
-      mappedType = null; // determined by amount sign below
-    } else if (txType === "Dividends") {
-      mappedType = "DIVIDEND";
-    } else {
-      continue; // skip Interest, Withholding Tax, Fees, etc.
-    }
+    const mapped = mapFlexCashType(extractAttr(el, "type"));
+    if (!mapped) continue; // unrecognized type — surfaced by debug-flex-xml.ts
 
     try {
       const currency = extractAttr(el, "currency");
@@ -245,7 +317,7 @@ export function parseFlexStatementXml(reportXml: string): ParsedStatement {
 
       const date = parseFlexDate(rawDate);
       const finalType: ParsedCashTx["type"] =
-        mappedType ?? (amount > 0 ? "DEPOSIT" : "WITHDRAWAL");
+        mapped === "DEPWITH" ? (amount > 0 ? "DEPOSIT" : "WITHDRAWAL") : mapped;
 
       cashTxs.push({
         currency,
@@ -258,6 +330,13 @@ export function parseFlexStatementXml(reportXml: string): ParsedStatement {
     } catch {
       // Skip unparseable elements
     }
+  }
+
+  // Currency conversions are reported as forex (assetCategory="CASH") trades,
+  // not CashTransaction rows. Capture them as FX_IN/FX_OUT legs so per-currency
+  // balances reconcile.
+  for (const el of forexTradeElements) {
+    for (const leg of parseFlexForexLegs(el)) cashTxs.push(leg);
   }
 
   return { trades, cashTxs };

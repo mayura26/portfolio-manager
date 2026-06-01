@@ -461,13 +461,18 @@ async function importCashTransactions(
     }
   }
 
+  // FEE / INTEREST / WITHHOLDING carry a meaningful sign (e.g. fees and tax are
+  // negative); store it as-is. All other types are stored as a magnitude and
+  // their direction is derived from the type at read time (see lib/cash.ts).
+  const SIGNED_TYPES = new Set(["INTEREST", "FEE", "WITHHOLDING"]);
   const rows = cashTxs.map((tx) => {
     const dateKey = `${tx.currency}|${tx.date.toISOString().split("T")[0]}`;
     const fxRate = fxCache.get(dateKey) ?? new Decimal(1);
-    const amount = new Decimal(tx.amount).abs();
+    const raw = new Decimal(tx.amount);
+    const amount = SIGNED_TYPES.has(tx.type) ? raw : raw.abs();
     return {
       groupId,
-      type: tx.type as "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND",
+      type: tx.type,
       amount: amount.toString(),
       currency: tx.currency,
       fxRate: fxRate.toString(),
