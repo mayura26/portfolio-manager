@@ -99,6 +99,7 @@ export async function importExternalCashStatement(
     const knownBalance = existingAccountTxs.reduce((sum, row) => {
       if (row.currency !== parsed.currency) return sum;
       const amount = new Decimal(row.amount.toString());
+      // INTEREST and DEPOSIT/SEED are all inflows; only WITHDRAWAL is an outflow.
       return row.type === "WITHDRAWAL" ? sum.minus(amount) : sum.plus(amount);
     }, new Decimal(0));
 

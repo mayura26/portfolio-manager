@@ -32,4 +32,29 @@ assert.deepEqual(
 );
 
 assert.ok(parsed.transactions.every((tx) => tx.externalRef.length === 64));
+
+// Interest entries (Credit Interest, Bonus Interest) should map to INTEREST type.
+const interestFixture = `
+Created 01/06/26 09:01pm (Sydney/Melbourne time)
+CommBank Transaction Summary v1.0.5
+Account Number 067873 23841332
+Here is your account information and a list of transactions from 01/05/26-01/06/26.
+Account type GoalSaver
+Date Transaction details Amount Balance
+16 May 2026 Transfer from xx2394 NetBank $10,000.00 $10,000.00
+01 Jun 2026 Credit Interest $4.13 $10,004.13
+01 Jun 2026 Bonus Interest $78.38 $10,082.51
+`;
+
+const parsedInterest = parseCommBankTransactionSummaryText(interestFixture);
+assert.equal(parsedInterest.transactions.length, 3);
+assert.deepEqual(
+  parsedInterest.transactions.map((tx) => [tx.type, tx.amount]),
+  [
+    ["DEPOSIT", "10000.0000"],
+    ["INTEREST", "4.1300"],
+    ["INTEREST", "78.3800"],
+  ],
+);
+
 console.log("external cash parser tests passed");

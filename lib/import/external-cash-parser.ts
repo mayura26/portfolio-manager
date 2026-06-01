@@ -6,7 +6,7 @@ export type ParsedExternalCashTransaction = {
   date: Date;
   description: string;
   amount: string;
-  type: "DEPOSIT" | "WITHDRAWAL";
+  type: "DEPOSIT" | "WITHDRAWAL" | "INTEREST";
   balance: string;
   externalRef: string;
 };
@@ -114,11 +114,20 @@ function parseTransactionRows(
     const date = parseLongDate(rawDate);
     const description = rawDescription.trim().replace(/\s+/g, " ");
 
+    // Detect interest entries by description before falling back to sign.
+    // CommBank uses "Credit Interest" and "Bonus Interest"; catch any variant.
+    const isInterest = /\binterest\b/i.test(description);
+    const type: ParsedExternalCashTransaction["type"] = isInterest
+      ? "INTEREST"
+      : amount.isNegative()
+        ? "WITHDRAWAL"
+        : "DEPOSIT";
+
     rows.push({
       date,
       description,
       amount: amount.abs().toFixed(4),
-      type: amount.isNegative() ? "WITHDRAWAL" : "DEPOSIT",
+      type,
       balance: balance.toFixed(4),
       externalRef: fingerprint(
         PROVIDER,
@@ -195,7 +204,7 @@ function parseCreatedAt(raw: string | null): Date | null {
 }
 
 function monthNumber(month: string): number {
-  const index = [
+  const full = [
     "january",
     "february",
     "march",
@@ -208,7 +217,23 @@ function monthNumber(month: string): number {
     "october",
     "november",
     "december",
-  ].indexOf(month.toLowerCase());
+  ];
+  const abbr = [
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+  ];
+  const key = month.toLowerCase();
+  const index = full.indexOf(key) !== -1 ? full.indexOf(key) : abbr.indexOf(key);
   if (index === -1) throw new Error(`Invalid month: ${month}`);
   return index + 1;
 }
