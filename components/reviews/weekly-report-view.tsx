@@ -41,6 +41,67 @@ export function WeeklyReportView({
         </p>
       </Section>
 
+      {content.groups && content.groups.length > 0 ? (
+        <Section title="Portfolio groups">
+          <div className="grid gap-px overflow-hidden border border-border bg-border">
+            {content.groups.map((group) => (
+              <section
+                key={group.groupName}
+                className="bg-surface-elevated px-4 py-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h4 className="display text-xl text-foreground">
+                      {group.groupName}
+                    </h4>
+                    <p className="mt-1 max-w-prose text-sm text-muted">
+                      {group.headline}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-4 max-w-prose text-sm text-foreground">
+                  {group.performance}
+                </p>
+
+                {group.notableMovers.length > 0 ? (
+                  <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {group.notableMovers.map((mover) => (
+                      <li
+                        key={`${group.groupName}-${mover.symbol}-${mover.note}`}
+                        className="border-t border-border pt-2 text-sm"
+                      >
+                        <span className="tabular font-medium text-foreground">
+                          {mover.symbol}
+                        </span>{" "}
+                        <span className="text-muted">{mover.note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <p className="mt-4 max-w-prose text-sm text-foreground">
+                  {group.activity}
+                </p>
+
+                {group.watchpoints.length > 0 ? (
+                  <ul className="mt-3 flex flex-col gap-1.5">
+                    {group.watchpoints.map((point) => (
+                      <li
+                        key={`${group.groupName}-${point}`}
+                        className="text-sm text-muted"
+                      >
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+
       {content.notableMovers.length > 0 ? (
         <Section title="Notable movers">
           <ul className="flex flex-col divide-y divide-border">
