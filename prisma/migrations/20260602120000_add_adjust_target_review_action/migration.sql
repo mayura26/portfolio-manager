@@ -1,0 +1,1 @@
+ALTER TYPE "ReviewAction" ADD VALUE 'ADJUST_TARGET';

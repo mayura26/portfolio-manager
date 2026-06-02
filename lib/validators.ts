@@ -378,15 +378,21 @@ export type PriceTargetInput = z.infer<typeof priceTargetSchema>;
 
 // ─── Review ───────────────────────────────────────────────────
 
-export const reviewActionSchema = z.object({
-  action: z.enum(["HOLD", "BUY", "SELL", "WATCH", "OTHER"]),
-  notes: z
-    .string()
-    .trim()
-    .max(2000)
-    .optional()
-    .transform((v) => (v?.length ? v : null)),
-});
+export const reviewActionSchema = z
+  .object({
+    action: z.enum(["HOLD", "BUY", "SELL", "WATCH", "ADJUST_TARGET", "OTHER"]),
+    adjustedTargetPrice: positiveDecimal.optional().nullable(),
+    notes: z
+      .string()
+      .trim()
+      .max(2000)
+      .optional()
+      .transform((v) => (v?.length ? v : null)),
+  })
+  .refine((d) => d.action !== "ADJUST_TARGET" || !!d.adjustedTargetPrice, {
+    message: "New target price is required",
+    path: ["adjustedTargetPrice"],
+  });
 
 export type ReviewActionInput = z.infer<typeof reviewActionSchema>;
 

@@ -35,10 +35,33 @@ async function ReviewDetailContent({ params }: { params: Params }) {
     include: {
       instrument: true,
       portfolio: true,
-      alert: true,
+      alert: {
+        include: {
+          portfolioTarget: true,
+        },
+      },
     },
   });
   if (!review) notFound();
+
+  const targetAdjustment =
+    review.alert?.portfolioTarget &&
+    (review.alert.type === "PRICE_BELOW" || review.alert.type === "PRICE_ABOVE")
+      ? {
+          direction:
+            review.alert.type === "PRICE_BELOW"
+              ? ("buy" as const)
+              : ("sell" as const),
+          currentPrice:
+            review.alert.type === "PRICE_BELOW"
+              ? (review.alert.portfolioTarget.intendedBuyPrice?.toString() ??
+                review.alert.priceTarget?.toString() ??
+                "")
+              : (review.alert.portfolioTarget.intendedSellPrice?.toString() ??
+                review.alert.priceTarget?.toString() ??
+                ""),
+        }
+      : undefined;
 
   return (
     <article className="flex flex-col gap-8">
@@ -83,6 +106,7 @@ async function ReviewDetailContent({ params }: { params: Params }) {
       <ReviewActionForm
         reviewId={review.id}
         status={review.status}
+        targetAdjustment={targetAdjustment}
         defaults={{
           action: review.action ?? undefined,
           notes: review.notes ?? undefined,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import type { ReviewActionState } from "@/actions/reviews";
 import {
   completeReview,
@@ -14,17 +14,28 @@ type Props = {
   reviewId: string;
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
   defaults?: { action?: string; notes?: string };
+  targetAdjustment?: {
+    direction: "buy" | "sell";
+    currentPrice: string;
+  };
 };
 
-export function ReviewActionForm({ reviewId, status, defaults }: Props) {
+export function ReviewActionForm({
+  reviewId,
+  status,
+  defaults,
+  targetAdjustment,
+}: Props) {
   const completeAction = completeReview.bind(null, reviewId);
   const [state, formAction, pending] = useActionState<
     ReviewActionState | undefined,
     FormData
   >(completeAction, undefined);
   const [transitioning, startTransition] = useTransition();
+  const [action, setAction] = useState(defaults?.action ?? "");
 
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
+  const adjustingTarget = action === "ADJUST_TARGET" && targetAdjustment;
 
   if (status === "PENDING") {
     return (
@@ -108,7 +119,8 @@ export function ReviewActionForm({ reviewId, status, defaults }: Props) {
           id="action"
           name="action"
           required
-          defaultValue={defaults?.action ?? ""}
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
           className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
         >
           <option value="">— Select —</option>
@@ -116,12 +128,38 @@ export function ReviewActionForm({ reviewId, status, defaults }: Props) {
           <option value="BUY">Buy more</option>
           <option value="SELL">Sell / trim</option>
           <option value="WATCH">Watch and reassess</option>
+          {targetAdjustment ? (
+            <option value="ADJUST_TARGET">Adjust target</option>
+          ) : null}
           <option value="OTHER">Other</option>
         </select>
         {fieldErrors?.action?.[0] ? (
           <p className="text-xs text-loss">{fieldErrors.action[0]}</p>
         ) : null}
       </div>
+
+      {adjustingTarget ? (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="adjustedTargetPrice" className="label">
+            New {targetAdjustment.direction} target
+          </label>
+          <input
+            id="adjustedTargetPrice"
+            name="adjustedTargetPrice"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            required
+            defaultValue={targetAdjustment.currentPrice}
+            className="hairline tabular w-full bg-surface px-3 py-2 text-sm text-foreground"
+          />
+          {fieldErrors?.adjustedTargetPrice?.[0] ? (
+            <p className="text-xs text-loss">
+              {fieldErrors.adjustedTargetPrice[0]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <label htmlFor="notes" className="label">

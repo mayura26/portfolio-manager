@@ -48,7 +48,9 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
           </h3>
           <p className="mt-1 text-sm text-muted">{review.triggerReason}</p>
           {review.action ? (
-            <p className="mt-2 label">Decision: {review.action}</p>
+            <p className="mt-2 label">
+              Decision: {decisionLabel(review.action)}
+            </p>
           ) : null}
         </div>
         <ArrowUpRight
@@ -66,4 +68,23 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
       </div>
     </Link>
   );
+}
+
+function decisionLabel(action: string): string {
+  switch (action) {
+    case "HOLD":
+      return "Hold";
+    case "BUY":
+      return "Buy more";
+    case "SELL":
+      return "Sell / trim";
+    case "WATCH":
+      return "Watch and reassess";
+    case "ADJUST_TARGET":
+      return "Adjusted target";
+    case "OTHER":
+      return "Other";
+    default:
+      return action;
+  }
 }
