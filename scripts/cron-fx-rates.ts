@@ -4,6 +4,7 @@
  *   npm run cron:fx-rates
  */
 import "dotenv/config";
+import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { fetchFxHistory } from "@/lib/yahoo";
 
@@ -73,10 +74,21 @@ async function run() {
   return { ok: true, pairs: pairs.length, bars: totalBars, failures };
 }
 
-run()
-  .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
-    process.exit(result.failures.length > 0 ? 1 : 0);
+recordCronRun({
+  job: "fx-rates",
+  command: "npm run cron:fx-rates",
+  run,
+  warnings: (r) => r.failures.length,
+  summary: (r) => ({
+    pairs: r.pairs,
+    bars: r.bars,
+    failures: r.failures.length,
+  }),
+})
+  .then((recorded) => {
+    const { result } = recorded;
+    console.log(JSON.stringify({ runId: recorded.runId, ...result }, null, 2));
+    process.exit(0);
   })
   .catch((err) => {
     console.error("[cron-fx-rates] fatal", err);

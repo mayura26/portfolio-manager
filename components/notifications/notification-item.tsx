@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import Link from "next/link";
 import { useTransition } from "react";
 import {
   dismissNotification,
@@ -15,8 +16,18 @@ type Notification = {
   message: string;
   read: boolean;
   dismissed: boolean;
+  metadata: unknown;
   createdAt: Date;
 };
+
+function notificationUrl(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || !("url" in metadata)) {
+    return null;
+  }
+
+  const url = (metadata as { url?: unknown }).url;
+  return typeof url === "string" && url.startsWith("/") ? url : null;
+}
 
 export function NotificationItem({
   notification,
@@ -24,6 +35,15 @@ export function NotificationItem({
   notification: Notification;
 }) {
   const [pending, startTransition] = useTransition();
+  const url = notificationUrl(notification.metadata);
+
+  const content = (
+    <>
+      <p className="text-sm text-foreground">{notification.title}</p>
+      <p className="mt-1 text-sm text-muted">{notification.message}</p>
+      <p className="label mt-2">{formatRelative(notification.createdAt)}</p>
+    </>
+  );
 
   return (
     <li
@@ -33,9 +53,13 @@ export function NotificationItem({
       ].join(" ")}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-foreground">{notification.title}</p>
-        <p className="mt-1 text-sm text-muted">{notification.message}</p>
-        <p className="label mt-2">{formatRelative(notification.createdAt)}</p>
+        {url ? (
+          <Link href={url} className="block hover:opacity-80">
+            {content}
+          </Link>
+        ) : (
+          content
+        )}
       </div>
       <div className="flex flex-col items-end gap-1">
         {!notification.read ? (

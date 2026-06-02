@@ -30,6 +30,7 @@ export type CreateNotificationInput = {
   metadata?: Record<string, unknown>;
   push?: boolean;
   visibleInInbox?: boolean;
+  url?: string;
 };
 
 export async function createNotification(input: CreateNotificationInput) {
@@ -51,7 +52,7 @@ export async function createNotification(input: CreateNotificationInput) {
     await sendPush(input.title, input.message, {
       notificationId: created.id,
       alertId: input.alertId,
-      url: "/notifications",
+      url: input.url ?? "/notifications",
     });
   }
 

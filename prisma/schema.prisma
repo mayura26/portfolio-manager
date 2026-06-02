@@ -474,6 +474,25 @@ model PriceRefreshRun {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Cron job runs (one row per scheduled command invocation)
+// ─────────────────────────────────────────────────────────────
+
+model CronJobRun {
+  id         String    @id @default(cuid())
+  job        String
+  command    String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean   @default(false)
+  warnings   Int       @default(0)
+  summary    Json?
+  error      String?
+
+  @@index([job, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
 // Cash Transactions (group-level deposits / withdrawals / seedings)
 // ─────────────────────────────────────────────────────────────
 

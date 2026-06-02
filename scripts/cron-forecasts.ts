@@ -5,6 +5,7 @@
  *   npm run cron:forecasts
  */
 import "dotenv/config";
+import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { ensureTargetHitAlert } from "@/lib/forecast-alerts";
 import { analyzeStockForecast } from "@/lib/forecasts";
@@ -134,10 +135,21 @@ async function run() {
   };
 }
 
-run()
-  .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
-    process.exit(result.failures.length > 0 ? 1 : 0);
+recordCronRun({
+  job: "forecasts",
+  command: "npm run cron:forecasts",
+  run,
+  warnings: (r) => r.failures.length,
+  summary: (r) => ({
+    instruments: r.instruments,
+    generated: r.generated,
+    failures: r.failures.length,
+  }),
+})
+  .then((recorded) => {
+    const { result } = recorded;
+    console.log(JSON.stringify({ runId: recorded.runId, ...result }, null, 2));
+    process.exit(0);
   })
   .catch((err) => {
     console.error("[cron-forecasts] fatal", err);

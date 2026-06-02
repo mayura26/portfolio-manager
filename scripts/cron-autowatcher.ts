@@ -5,6 +5,7 @@
  *   npm run cron:autowatcher
  */
 import "dotenv/config";
+import { recordCronRun } from "@/lib/cron-runs";
 import { runAutoWatcher } from "@/lib/autowatcher";
 import { db } from "@/lib/db";
 
@@ -13,10 +14,24 @@ async function run() {
   return { ok: true, ...result };
 }
 
-run()
-  .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
-    process.exit(result.failures.length > 0 ? 1 : 0);
+recordCronRun({
+  job: "autowatcher",
+  command: "npm run cron:autowatcher",
+  run,
+  warnings: (r) => r.failures.length,
+  summary: (r) => ({
+    processed: r.processed,
+    pnlFired: r.pnlFired,
+    dailyFired: r.dailyFired,
+    dailyDeferred: r.dailyDeferred,
+    skipped: r.skipped,
+    failures: r.failures.length,
+  }),
+})
+  .then((recorded) => {
+    const { result } = recorded;
+    console.log(JSON.stringify({ runId: recorded.runId, ...result }, null, 2));
+    process.exit(0);
   })
   .catch((err) => {
     console.error("[cron-autowatcher] fatal", err);

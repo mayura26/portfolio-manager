@@ -4,6 +4,7 @@
  * Run via: npm run cron:ibkr-sync
  */
 import "dotenv/config";
+import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { runIbkrSyncForGroup } from "@/lib/import/ibkr-sync";
 
@@ -48,13 +49,33 @@ async function run() {
   return results;
 }
 
-run()
-  .then((results) => {
-    console.log(JSON.stringify(results, null, 2));
-    const anyFailed = results.some(
-      (r) => !r.ok || ("failed" in r && (r.failed?.length ?? 0) > 0),
+recordCronRun({
+  job: "ibkr-sync",
+  command: "npm run cron:ibkr-sync",
+  run,
+  warnings: (r) =>
+    r.reduce(
+      (total, item) =>
+        total +
+        (item.ok ? ("failed" in item ? (item.failed?.length ?? 0) : 0) : 1),
+      0,
+    ),
+  summary: (r) => ({
+    groups: r.length,
+    failedGroups: r.filter((item) => !item.ok).length,
+    unresolvedSymbols: r.reduce(
+      (total, item) =>
+        total +
+        (item.ok && "failed" in item ? (item.failed?.length ?? 0) : 0),
+      0,
+    ),
+  }),
+})
+  .then((recorded) => {
+    console.log(
+      JSON.stringify({ runId: recorded.runId, results: recorded.result }, null, 2),
     );
-    process.exit(anyFailed ? 1 : 0);
+    process.exit(0);
   })
   .catch((err) => {
     console.error("[cron-ibkr-sync] fatal", err);

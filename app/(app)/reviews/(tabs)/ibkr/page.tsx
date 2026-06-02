@@ -1,5 +1,9 @@
 import { CableIcon, KeyRound } from "lucide-react";
 import { Suspense } from "react";
+import {
+  CronStatusPanel,
+  type CronJobConfig,
+} from "@/components/reviews/cron-status-panel";
 import { IbkrSyncPanel } from "@/components/reviews/ibkr-sync-panel";
 import { PriceRefreshPanel } from "@/components/reviews/price-refresh-panel";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -9,6 +13,57 @@ import { db } from "@/lib/db";
 const TREND_RUNS = 10;
 const STALE_HOURS = 36;
 const PRICE_STALE_HOURS = 36;
+const CRON_JOBS: CronJobConfig[] = [
+  {
+    job: "prices",
+    label: "Price refresh",
+    command: "npm run cron:prices",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "fx-rates",
+    label: "FX rates",
+    command: "npm run cron:fx-rates",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "alerts",
+    label: "Alerts",
+    command: "npm run cron:alerts",
+    cadence: "Daily or more often",
+    staleHours: 36,
+  },
+  {
+    job: "ibkr-sync",
+    label: "IBKR sync",
+    command: "npm run cron:ibkr-sync",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "autowatcher",
+    label: "AutoWatcher",
+    command: "npm run cron:autowatcher",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "forecasts",
+    label: "Forecast refresh",
+    command: "npm run cron:forecasts",
+    cadence: "Weekly",
+    staleHours: 8 * 24,
+  },
+  {
+    job: "weekly-report",
+    label: "Weekly report",
+    command: "npm run cron:weekly-report",
+    cadence: "Weekly",
+    staleHours: 8 * 24,
+  },
+];
 
 export default function IbkrSyncPage() {
   return (
@@ -29,7 +84,7 @@ export default function IbkrSyncPage() {
 }
 
 async function IbkrSyncContent() {
-  const [groups, priceRuns] = await Promise.all([
+  const [groups, priceRuns, cronRuns] = await Promise.all([
     db.portfolioGroup.findMany({
       where: {
         ibkrFlexToken: { not: null },
@@ -42,7 +97,28 @@ async function IbkrSyncContent() {
       orderBy: { startedAt: "desc" },
       take: TREND_RUNS,
     }),
+    db.cronJobRun.findMany({
+      where: { job: { in: CRON_JOBS.map((job) => job.job) } },
+      orderBy: { startedAt: "desc" },
+      take: TREND_RUNS * CRON_JOBS.length,
+    }),
   ]);
+
+  const cronRunsByJob = new Map<string, typeof cronRuns>();
+  for (const job of CRON_JOBS) cronRunsByJob.set(job.job, []);
+  for (const run of cronRuns) {
+    const bucket = cronRunsByJob.get(run.job);
+    if (bucket && bucket.length < TREND_RUNS) bucket.push(run);
+  }
+
+  const cronSection = (
+    <CronStatusPanel
+      jobs={CRON_JOBS.map((config) => ({
+        config,
+        runs: cronRunsByJob.get(config.job) ?? [],
+      }))}
+    />
+  );
 
   const priceSection = (
     <PriceRefreshPanel runs={priceRuns} staleHours={PRICE_STALE_HOURS} />
@@ -51,6 +127,7 @@ async function IbkrSyncContent() {
   if (groups.length === 0) {
     return (
       <div className="flex flex-col gap-6">
+        {cronSection}
         {priceSection}
         <EmptyState
           icon={KeyRound}
@@ -100,6 +177,7 @@ async function IbkrSyncContent() {
 
   return (
     <div className="flex flex-col gap-6">
+      {cronSection}
       {priceSection}
       <div className="hairline grid grid-cols-2 gap-px overflow-hidden bg-border sm:grid-cols-4">
         <SummaryCell
@@ -146,11 +224,9 @@ async function IbkrSyncContent() {
 
       <p className="flex items-center gap-2 text-xs text-subtle">
         <CableIcon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-        Scheduled tasks: <code className="font-mono">npm run cron:prices</code>{" "}
-        and <code className="font-mono">npm run cron:ibkr-sync</code> run on
-        Coolify and write one row each to{" "}
-        <code className="font-mono">PriceRefreshRun</code> /{" "}
-        <code className="font-mono">IbkrSyncRun</code>.
+        Scheduled tasks write one row to{" "}
+        <code className="font-mono">CronJobRun</code> per command. Price and
+        IBKR jobs also keep detailed run tables for drill-down.
       </p>
     </div>
   );

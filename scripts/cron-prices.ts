@@ -8,13 +8,41 @@
  * and is shared with the manual "Refresh now" server action.
  */
 import "dotenv/config";
+import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { runPriceRefresh } from "@/lib/price-refresh";
 
-runPriceRefresh("cron")
-  .then(({ runId, outcome }) => {
-    console.log(JSON.stringify({ runId, ...outcome }, null, 2));
-    process.exit(outcome.ok && outcome.failures.length === 0 ? 0 : 1);
+recordCronRun({
+  job: "prices",
+  command: "npm run cron:prices",
+  run: async () => {
+    const { runId, outcome } = await runPriceRefresh("cron");
+    return { priceRefreshRunId: runId, ...outcome };
+  },
+  ok: (r) => r.ok,
+  warnings: (r) => r.failures.length + (r.ok ? 0 : 1),
+  summary: (r) => ({
+    priceRefreshRunId: r.priceRefreshRunId,
+    instruments: r.instruments,
+    bars: r.bars,
+    failures: r.failures.length,
+    ok: r.ok,
+  }),
+})
+  .then((recorded) => {
+    const { result } = recorded;
+    console.log(
+      JSON.stringify(
+        {
+          runId: result.priceRefreshRunId,
+          cronRunId: recorded.runId,
+          ...result,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(result.ok ? 0 : 1);
   })
   .catch((err) => {
     console.error("[cron-prices] fatal", err);
