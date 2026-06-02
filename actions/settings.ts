@@ -22,6 +22,7 @@ export async function updateSettings(
     pushEnabled: formData.get("pushEnabled") === "on",
     watchlistAiModel: formData.get("watchlistAiModel") ?? undefined,
     watchlistAiReasoning: formData.get("watchlistAiReasoning") ?? undefined,
+    minTradePercent: formData.get("minTradePercent") ?? undefined,
   });
 
   if (!parsed.success) {

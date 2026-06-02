@@ -9,6 +9,7 @@ type Props = {
     defaultBaseCurrency: string;
     watchlistAiModel: string;
     watchlistAiReasoning: string;
+    minTradePercent: number;
   };
 };
 
@@ -101,6 +102,30 @@ export function SettingsForm({ defaults }: Props) {
           <p className="text-xs text-loss">
             {fieldErrors.watchlistAiReasoning[0]}
           </p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="minTradePercent" className="label">
+          Minimum trade size (%)
+        </label>
+        <input
+          id="minTradePercent"
+          name="minTradePercent"
+          type="number"
+          step="0.01"
+          min="0"
+          max="100"
+          defaultValue={defaults.minTradePercent}
+          className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground"
+        />
+        <p className="text-xs text-subtle">
+          Smallest allocation as a percentage of total group value. The AI
+          invest tool won&apos;t suggest any single trade below this threshold,
+          preventing lots of tiny positions.
+        </p>
+        {fieldErrors?.minTradePercent?.[0] ? (
+          <p className="text-xs text-loss">{fieldErrors.minTradePercent[0]}</p>
         ) : null}
       </div>
 

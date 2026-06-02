@@ -64,6 +64,7 @@ async function GeneralSettings() {
         defaultBaseCurrency: settings.defaultBaseCurrency,
         watchlistAiModel: settings.watchlistAiModel,
         watchlistAiReasoning: settings.watchlistAiReasoning,
+        minTradePercent: Number(settings.minTradePercent),
       }}
     />
   );
