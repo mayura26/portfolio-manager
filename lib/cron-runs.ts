@@ -8,7 +8,8 @@ export type CronJobName =
   | "forecasts"
   | "ibkr-sync"
   | "autowatcher"
-  | "weekly-report";
+  | "weekly-report"
+  | "congress-trades";
 
 type RecordCronRunOptions<T> = {
   job: CronJobName;

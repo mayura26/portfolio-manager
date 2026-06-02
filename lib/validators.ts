@@ -390,6 +390,18 @@ export const reviewActionSchema = z.object({
 
 export type ReviewActionInput = z.infer<typeof reviewActionSchema>;
 
+// ─── Congress trades filters ──────────────────────────────────
+
+export const congressFiltersSchema = z.object({
+  days: z.coerce.number().int().positive().default(90),
+  sector: z.string().optional(),
+  ticker: z.string().trim().toUpperCase().optional(),
+  transaction: z.enum(["Purchase", "Sale"]).optional(),
+  page: z.coerce.number().int().positive().default(1),
+});
+
+export type CongressFilters = z.infer<typeof congressFiltersSchema>;
+
 // ─── Stock Note ───────────────────────────────────────────────
 
 export const stockNoteSchema = z.object({

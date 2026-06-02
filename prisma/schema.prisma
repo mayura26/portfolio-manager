@@ -101,6 +101,7 @@ model Instrument {
   watchlistItems WatchlistItem[]
   forecasts      InstrumentForecast[]
   targets        PortfolioTarget[]
+  congressTrades CongressTrade[]
 
   @@index([symbol, exchange])
   @@index([yahooSymbol])
@@ -715,4 +716,41 @@ model AchievementRecord {
   achievedAt DateTime
   metadata   Json?
   updatedAt  DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Congressional Trades (STOCK Act / House PTR disclosures)
+// ─────────────────────────────────────────────────────────────
+
+model CongressTrade {
+  id              String    @id @default(cuid())
+  politician      String
+  stateDist       String?
+  chamber         String    @default("House")
+  party           String?
+  ticker          String
+  assetName       String?
+  transaction     String
+  transactionDate DateTime  @db.Date
+  reportDate      DateTime? @db.Date
+  rangeRaw        String?
+  amountLow       Int?
+  amountHigh      Int?
+  amountMid       Int?
+
+  instrumentId    String?
+  sector          String?
+  industry        String?
+
+  externalKey     String    @unique
+
+  createdAt       DateTime  @default(now())
+
+  instrument Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+
+  @@index([ticker, transactionDate(sort: Desc)])
+  @@index([transactionDate(sort: Desc)])
+  @@index([transaction, transactionDate(sort: Desc)])
+  @@index([sector, transactionDate(sort: Desc)])
+  @@index([instrumentId])
 }

@@ -3,6 +3,7 @@ import {
   Bookmark,
   Briefcase,
   ClipboardCheck,
+  Landmark,
   Layers,
   LayoutDashboard,
   LineChart,
@@ -56,6 +57,11 @@ export const PRIMARY_NAV: NavItem[] = [
     href: "/watchlist",
     label: "Watchlist",
     icon: <Bookmark className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
+  },
+  {
+    href: "/congress",
+    label: "Congress",
+    icon: <Landmark className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
   },
   {
     href: "/stats",
