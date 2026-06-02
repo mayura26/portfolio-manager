@@ -1,5 +1,6 @@
 import type { CronJobRun } from "@/app/generated/prisma/client";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { RunCronJobButton } from "./run-cron-job-button";
 
 type Severity = "ok" | "warning" | "loss" | "info" | "muted" | "running";
 
@@ -91,7 +92,7 @@ function summaryText(run: CronJobRun): string {
     return [];
   });
 
-  return parts.slice(0, 4).join(" · ") || "Completed";
+  return parts.slice(0, 4).join(" - ") || "Completed";
 }
 
 export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
@@ -125,7 +126,7 @@ export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
       </header>
 
       <div className="mt-5 overflow-x-auto border-t border-border">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-border text-xs text-subtle">
             <tr>
               <th className="px-5 py-3 font-medium">Job</th>
@@ -133,6 +134,7 @@ export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
               <th className="px-5 py-3 font-medium">Latest</th>
               <th className="px-5 py-3 font-medium">Summary</th>
               <th className="px-5 py-3 font-medium">History</th>
+              <th className="px-5 py-3 font-medium">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -170,6 +172,12 @@ export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
                   </td>
                   <td className="px-5 py-4 align-top">
                     <TrendStrip runs={runs} />
+                  </td>
+                  <td className="px-5 py-4 align-top">
+                    <RunCronJobButton
+                      job={config.job}
+                      isRunning={latest ? isInflight(latest) : false}
+                    />
                   </td>
                 </tr>
               );
