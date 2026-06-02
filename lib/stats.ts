@@ -1,5 +1,4 @@
 import Decimal from "decimal.js";
-import { getSettings } from "@/actions/settings";
 import { db } from "@/lib/db";
 import { getValueHistoryByGroup } from "@/lib/dashboard";
 import { getFxRate } from "@/lib/fx";
@@ -8,6 +7,7 @@ import {
   excludeEmptyUnassignedWhere,
   visibleTradeWhere,
 } from "@/lib/portfolio-visibility";
+import { getSettings } from "@/lib/settings";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);

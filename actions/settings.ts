@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { getSettings } from "@/lib/settings";
 import { settingsSchema } from "@/lib/validators";
 
 export type SettingsActionState =
@@ -10,16 +11,7 @@ export type SettingsActionState =
 
 const SINGLETON_ID = "singleton";
 
-export async function getSettings() {
-  const existing = await db.settings.findUnique({
-    where: { id: SINGLETON_ID },
-  });
-  if (existing) return existing;
-
-  return db.settings.create({
-    data: { id: SINGLETON_ID },
-  });
-}
+export { getSettings };
 
 export async function updateSettings(
   _prev: SettingsActionState | undefined,
