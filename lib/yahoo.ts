@@ -128,6 +128,20 @@ export function resolveInstrumentCurrency(
   return null;
 }
 
+type QuoteSummaryInstrumentResponse = {
+  price?: {
+    symbol?: string;
+    exchange?: string;
+    exchangeName?: string;
+    currency?: string | null;
+    longName?: string;
+    shortName?: string;
+    quoteType?: string;
+  } | null;
+  summaryProfile?: { sector?: string | null; industry?: string | null } | null;
+  assetProfile?: { sector?: string | null; industry?: string | null } | null;
+};
+
 export async function lookupInstrument(
   yahooSymbol: string,
   options: { currencyHint?: string } = {},
@@ -136,23 +150,26 @@ export async function lookupInstrument(
   if (!sym) return null;
 
   // Some instruments (e.g. ASX gold ETFs) fail yahoo-finance2 schema validation
-  // because optional modules like summaryProfile are absent in Yahoo's response.
-  // Retry with validation suppressed so we can still read the price module.
+  // because optional modules are absent or null in Yahoo's response. We coerce
+  // the small subset we use ourselves, so skip validation noise here.
   const fetchSummary = () =>
-    yahoo.quoteSummary(sym, {
-      modules: ["price", "summaryProfile", "assetProfile"],
-    });
-  type Summary = Awaited<ReturnType<typeof fetchSummary>>;
+    yahoo.quoteSummary(
+      sym,
+      {
+        modules: ["price", "summaryProfile", "assetProfile"],
+      },
+      { validateResult: false },
+    );
 
-  let summary: Summary;
+  let summary: QuoteSummaryInstrumentResponse;
   try {
-    summary = await fetchSummary();
+    summary = (await fetchSummary()) as QuoteSummaryInstrumentResponse;
   } catch {
     summary = (await yahoo.quoteSummary(
       sym,
       { modules: ["price"] },
       { validateResult: false },
-    )) as Summary;
+    )) as QuoteSummaryInstrumentResponse;
   }
 
   const price = summary.price;
@@ -445,6 +462,42 @@ export type FinancialSummary = {
   numberOfAnalystOpinions: number | null;
 };
 
+type QuoteSummaryFinancialResponse = {
+  summaryDetail?: {
+    marketCap?: number | null;
+    trailingPE?: number | null;
+    forwardPE?: number | null;
+    dividendYield?: number | null;
+    dividendRate?: number | null;
+    beta?: number | null;
+    fiftyTwoWeekHigh?: number | null;
+    fiftyTwoWeekLow?: number | null;
+    averageVolume?: number | null;
+  } | null;
+  defaultKeyStatistics?: {
+    forwardPE?: number | null;
+    trailingEps?: number | null;
+    beta?: number | null;
+    bookValue?: number | null;
+    priceToBook?: number | null;
+  } | null;
+  financialData?: {
+    profitMargins?: number | null;
+    returnOnEquity?: number | null;
+    revenueGrowth?: number | null;
+    earningsGrowth?: number | null;
+    totalRevenue?: number | null;
+    freeCashflow?: number | null;
+    targetMeanPrice?: number | null;
+    targetHighPrice?: number | null;
+    targetLowPrice?: number | null;
+    recommendationMean?: number | null;
+    recommendationKey?: string | null;
+    numberOfAnalystOpinions?: number | null;
+  } | null;
+  summaryProfile?: { longBusinessSummary?: string | null } | null;
+};
+
 export async function fetchFinancialSummary(
   yahooSymbol: string,
 ): Promise<FinancialSummary | null> {
@@ -452,14 +505,18 @@ export async function fetchFinancialSummary(
   if (!sym) return null;
 
   try {
-    const summary = await yahoo.quoteSummary(sym, {
-      modules: [
-        "summaryDetail",
-        "defaultKeyStatistics",
-        "financialData",
-        "summaryProfile",
-      ],
-    });
+    const summary = (await yahoo.quoteSummary(
+      sym,
+      {
+        modules: [
+          "summaryDetail",
+          "defaultKeyStatistics",
+          "financialData",
+          "summaryProfile",
+        ],
+      },
+      { validateResult: false },
+    )) as QuoteSummaryFinancialResponse;
 
     const detail = summary.summaryDetail;
     const stats = summary.defaultKeyStatistics;
