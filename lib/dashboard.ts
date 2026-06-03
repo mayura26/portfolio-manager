@@ -29,6 +29,14 @@ export type GroupPnlRow = {
   realized: Decimal;
 };
 
+export type GroupValueRow = {
+  groupId: string;
+  name: string;
+  equityBase: Decimal;
+  cashBase: Decimal;
+  totalBase: Decimal;
+};
+
 export type DashboardSummary = {
   baseCurrency: string;
   portfolioCount: number;
@@ -43,6 +51,8 @@ export type DashboardSummary = {
   hasMissingPrices: boolean;
   /** Per-group P&L, sorted by group name. */
   groupBreakdown: GroupPnlRow[];
+  /** Per-group equity/cash value, sorted by group name. */
+  groupValueBreakdown: GroupValueRow[];
 };
 
 export type AllocationSlice = {
@@ -292,15 +302,28 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       ? totalDailyChange.dividedBy(previousValue).times(100)
       : null;
 
-  const groups = await db.portfolioGroup.findMany({ select: { id: true } });
+  const groups = await db.portfolioGroup.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
   const now = new Date();
   let totalCashBase = ZERO;
+  const groupValueBreakdown: GroupValueRow[] = [];
   for (const g of groups) {
     const cash = await computeGroupCash(g.id);
-    if (cash.currentCash.isZero()) continue;
-    totalCashBase = totalCashBase.plus(
-      await convert(cash.currentCash, cash.baseCurrency, ws.baseCurrency, now),
-    );
+    const cashBase = cash.currentCash.isZero()
+      ? ZERO
+      : await convert(cash.currentCash, cash.baseCurrency, ws.baseCurrency, now);
+    const equityBase = groupAcc.get(g.id)?.marketValue ?? ZERO;
+
+    totalCashBase = totalCashBase.plus(cashBase);
+    groupValueBreakdown.push({
+      groupId: g.id,
+      name: g.name,
+      equityBase,
+      cashBase,
+      totalBase: equityBase.plus(cashBase),
+    });
   }
 
   return {
@@ -316,6 +339,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     totalDailyChangePercent,
     hasMissingPrices: ws.hasMissingPrices,
     groupBreakdown,
+    groupValueBreakdown,
   };
 }
 

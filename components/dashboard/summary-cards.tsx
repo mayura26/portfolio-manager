@@ -1,7 +1,11 @@
 import Decimal from "decimal.js";
 import { StatCard } from "@/components/shared/stat-card";
 import { groupColor } from "@/lib/chart-colors";
-import { type GroupPnlRow, getDashboardSummary } from "@/lib/dashboard";
+import {
+  type GroupPnlRow,
+  type GroupValueRow,
+  getDashboardSummary,
+} from "@/lib/dashboard";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
 const ZERO = new Decimal(0);
@@ -35,11 +39,13 @@ function TotalValueCard({
   stocksBase,
   cashBase,
   baseCurrency,
+  groupValues,
   hint,
 }: {
   stocksBase: string;
   cashBase: string;
   baseCurrency: string;
+  groupValues: GroupValueRow[];
   hint: string;
 }) {
   const stocks = new Decimal(stocksBase);
@@ -56,6 +62,7 @@ function TotalValueCard({
   if (stocksBar > 0 && cashBar > 0) {
     cashBar = Number((100 - stocksBar).toFixed(2));
   }
+  const showGroupValues = groupValues.length >= 2;
 
   return (
     <div className="hairline bg-surface p-5">
@@ -114,6 +121,54 @@ function TotalValueCard({
         </div>
       </dl>
 
+      {showGroupValues ? (
+        <div className="mt-4 space-y-3 border-t border-border pt-3 text-sm">
+          {groupValues.map((group, i) => {
+            const groupPct = total.gt(0)
+              ? group.totalBase.dividedBy(total).times(100)
+              : ZERO;
+
+            return (
+              <dl key={group.groupId} className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="flex min-w-0 items-center gap-1.5 text-muted">
+                    <span
+                      aria-hidden
+                      className="inline-block h-2.5 w-2.5 shrink-0"
+                      style={{ background: groupColor(i) }}
+                    />
+                    <span className="truncate">{group.name}</span>
+                  </dt>
+                  <dd className="tabular shrink-0 text-right text-foreground">
+                    {formatCurrency(group.totalBase.toString(), baseCurrency)}
+                    <span className="ml-2 text-xs text-subtle">
+                      (
+                      {formatPercent(groupPct.dividedBy(100).toString(), {
+                        decimals: 1,
+                        signed: false,
+                      })}
+                      )
+                    </span>
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 pl-4">
+                  <dt className="text-subtle">Equity</dt>
+                  <dd className="tabular text-right text-muted">
+                    {formatCurrency(group.equityBase.toString(), baseCurrency)}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 pl-4">
+                  <dt className="text-subtle">Cash</dt>
+                  <dd className="tabular text-right text-muted">
+                    {formatCurrency(group.cashBase.toString(), baseCurrency)}
+                  </dd>
+                </div>
+              </dl>
+            );
+          })}
+        </div>
+      ) : null}
+
       {hint ? <p className="mt-3 text-xs text-subtle">{hint}</p> : null}
     </div>
   );
@@ -144,6 +199,7 @@ export async function SummaryCards() {
         stocksBase={data.totalMarketValueBase.toString()}
         cashBase={data.totalCashBase.toString()}
         baseCurrency={data.baseCurrency}
+        groupValues={data.groupValueBreakdown}
         hint={`${data.portfolioCount} ${data.portfolioCount === 1 ? "portfolio" : "portfolios"} · ${data.holdingCount} ${data.holdingCount === 1 ? "holding" : "holdings"}`}
       />
       <StatCard
