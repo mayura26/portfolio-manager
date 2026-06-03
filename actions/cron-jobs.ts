@@ -14,6 +14,7 @@ const CRON_SCRIPTS = {
   "ibkr-sync": "cron:ibkr-sync",
   autowatcher: "cron:autowatcher",
   "weekly-report": "cron:weekly-report",
+  "congress-trades": "cron:congress-trades",
 } as const;
 
 export type ManualCronJob = keyof typeof CRON_SCRIPTS;
