@@ -112,26 +112,31 @@ async function completeAdjustTargetReview(
   if (!review) return { ok: false, error: "Review not found" };
   const alert = review.alert;
   const target = alert?.portfolioTarget;
-  if (
-    !alert ||
-    !target ||
-    (alert.type !== "PRICE_BELOW" && alert.type !== "PRICE_ABOVE")
-  ) {
+  if (!alert || !isAdjustableAlertType(alert.type)) {
     return {
       ok: false,
-      error: "This review is not linked to an adjustable plan target",
+      error: "This review is not linked to an adjustable price target",
+    };
+  }
+  const alertType = alert.type;
+
+  const newTarget = new Decimal(adjustedTargetPrice);
+  const instrumentId = target?.instrumentId ?? alert.instrumentId;
+  if (!instrumentId) {
+    return {
+      ok: false,
+      error: "This review is missing the instrument for target validation",
     };
   }
 
-  const newTarget = new Decimal(adjustedTargetPrice);
   const latest = await db.priceHistory.findFirst({
-    where: { instrumentId: target.instrumentId },
+    where: { instrumentId },
     orderBy: { date: "desc" },
   });
 
   if (latest) {
     const latestClose = new Decimal(latest.close.toString());
-    if (alert.type === "PRICE_BELOW" && newTarget.gte(latestClose)) {
+    if (targetDirection(alertType) === "below" && newTarget.gte(latestClose)) {
       return {
         ok: false,
         error: "Please fix the errors below",
@@ -142,7 +147,7 @@ async function completeAdjustTargetReview(
         },
       };
     }
-    if (alert.type === "PRICE_ABOVE" && newTarget.lte(latestClose)) {
+    if (targetDirection(alertType) === "above" && newTarget.lte(latestClose)) {
       return {
         ok: false,
         error: "Please fix the errors below",
@@ -155,31 +160,48 @@ async function completeAdjustTargetReview(
     }
   }
 
-  const oldTarget =
-    alert.type === "PRICE_BELOW"
+  const oldTarget = target
+    ? alertType === "PRICE_BELOW"
       ? target.intendedBuyPrice
-      : target.intendedSellPrice;
-  const targetLabel = alert.type === "PRICE_BELOW" ? "buy" : "sell";
+      : target.intendedSellPrice
+    : alert.priceTarget;
+  const targetLabel = alertType === "PRICE_BELOW" ? "buy" : "sell";
   const auditNote = `Adjusted ${targetLabel} target from ${oldTarget?.toString() ?? "unset"} to ${adjustedTargetPrice}.`;
   const nextNotes = notes ? `${notes}\n\n${auditNote}` : auditNote;
 
   await db.$transaction(async (tx) => {
-    const updatedTarget = await tx.portfolioTarget.update({
-      where: { id: target.id },
-      data:
-        alert.type === "PRICE_BELOW"
-          ? { intendedBuyPrice: adjustedTargetPrice }
-          : { intendedSellPrice: adjustedTargetPrice },
-      include: { instrument: { select: { symbol: true } } },
-    });
+    if (
+      target &&
+      (alertType === "PRICE_BELOW" || alertType === "PRICE_ABOVE")
+    ) {
+      const updatedTarget = await tx.portfolioTarget.update({
+        where: { id: target.id },
+        data:
+          alertType === "PRICE_BELOW"
+            ? { intendedBuyPrice: adjustedTargetPrice }
+            : { intendedSellPrice: adjustedTargetPrice },
+        include: { instrument: { select: { symbol: true } } },
+      });
 
-    await syncPlanAlerts(tx, {
-      portfolioTargetId: updatedTarget.id,
-      instrumentId: updatedTarget.instrumentId,
-      symbol: updatedTarget.instrument.symbol,
-      intendedBuyPrice: updatedTarget.intendedBuyPrice?.toString() ?? null,
-      intendedSellPrice: updatedTarget.intendedSellPrice?.toString() ?? null,
-    });
+      await syncPlanAlerts(tx, {
+        portfolioTargetId: updatedTarget.id,
+        instrumentId: updatedTarget.instrumentId,
+        symbol: updatedTarget.instrument.symbol,
+        intendedBuyPrice: updatedTarget.intendedBuyPrice?.toString() ?? null,
+        intendedSellPrice: updatedTarget.intendedSellPrice?.toString() ?? null,
+      });
+    } else {
+      await tx.alert.update({
+        where: { id: alert.id },
+        data: {
+          priceTarget: adjustedTargetPrice,
+          priceDirection: targetDirection(alertType),
+          status: "ACTIVE",
+          snoozedUntil: null,
+          triggeredAt: null,
+        },
+      });
+    }
 
     await tx.review.update({
       where: { id: reviewId },
@@ -193,11 +215,27 @@ async function completeAdjustTargetReview(
   });
 
   revalidatePath("/alerts");
-  revalidatePath(`/portfolios/${target.portfolioId}`);
-  revalidatePath(`/portfolios/${target.portfolioId}/targets`);
-  revalidatePath(`/portfolios/${target.portfolioId}/composition`);
+  if (target) {
+    revalidatePath(`/portfolios/${target.portfolioId}`);
+    revalidatePath(`/portfolios/${target.portfolioId}/targets`);
+    revalidatePath(`/portfolios/${target.portfolioId}/composition`);
+  }
 
   return { ok: true };
+}
+
+function isAdjustableAlertType(
+  type: string,
+): type is "PRICE_BELOW" | "PRICE_ABOVE" | "TARGET_HIT" {
+  return (
+    type === "PRICE_BELOW" || type === "PRICE_ABOVE" || type === "TARGET_HIT"
+  );
+}
+
+function targetDirection(
+  type: "PRICE_BELOW" | "PRICE_ABOVE" | "TARGET_HIT",
+): "below" | "above" {
+  return type === "PRICE_BELOW" ? "below" : "above";
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {

@@ -44,24 +44,7 @@ async function ReviewDetailContent({ params }: { params: Params }) {
   });
   if (!review) notFound();
 
-  const targetAdjustment =
-    review.alert?.portfolioTarget &&
-    (review.alert.type === "PRICE_BELOW" || review.alert.type === "PRICE_ABOVE")
-      ? {
-          direction:
-            review.alert.type === "PRICE_BELOW"
-              ? ("buy" as const)
-              : ("sell" as const),
-          currentPrice:
-            review.alert.type === "PRICE_BELOW"
-              ? (review.alert.portfolioTarget.intendedBuyPrice?.toString() ??
-                review.alert.priceTarget?.toString() ??
-                "")
-              : (review.alert.portfolioTarget.intendedSellPrice?.toString() ??
-                review.alert.priceTarget?.toString() ??
-                ""),
-        }
-      : undefined;
+  const targetAdjustment = getTargetAdjustment(review.alert);
 
   return (
     <article className="flex flex-col gap-8">
@@ -114,4 +97,36 @@ async function ReviewDetailContent({ params }: { params: Params }) {
       />
     </article>
   );
+}
+
+function getTargetAdjustment(
+  alert: {
+    type: string;
+    priceTarget: { toString: () => string } | null;
+    portfolioTarget: {
+      intendedBuyPrice: { toString: () => string } | null;
+      intendedSellPrice: { toString: () => string } | null;
+    } | null;
+  } | null,
+) {
+  if (!alert) return undefined;
+  if (alert.type === "PRICE_BELOW") {
+    return {
+      direction: "buy" as const,
+      currentPrice:
+        alert.portfolioTarget?.intendedBuyPrice?.toString() ??
+        alert.priceTarget?.toString() ??
+        "",
+    };
+  }
+  if (alert.type === "PRICE_ABOVE" || alert.type === "TARGET_HIT") {
+    return {
+      direction: "sell" as const,
+      currentPrice:
+        alert.portfolioTarget?.intendedSellPrice?.toString() ??
+        alert.priceTarget?.toString() ??
+        "",
+    };
+  }
+  return undefined;
 }
