@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import pdfParse from "pdf-parse";
 import { db } from "@/lib/db";
 import { findOrCreateInstrument } from "@/lib/instruments";
 
@@ -19,22 +20,6 @@ type RawTransaction = {
   transaction: string;
   transactionDate: Date;
   rangeRaw: string | null;
-};
-
-type HouseSearchRow = {
-  StateDst?: string;
-  Last?: string;
-  First?: string;
-  Filing_Date?: string;
-  DocID?: string;
-};
-
-type HouseSearchResponse = {
-  pagerInfo?: {
-    pageNumber: number;
-    totalPages: number;
-  };
-  filingData?: HouseSearchRow[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -76,22 +61,12 @@ export function parseAmountRange(raw: string | null | undefined): {
 }
 
 function parseTransactionType(raw: string): string {
-  switch (raw?.trim().toUpperCase()) {
-    case "P":
-    case "PURCHASE":
-      return "Purchase";
-    case "S":
-    case "SALE":
-      return "Sale";
-    case "S (PARTIAL)":
-    case "SALE (PARTIAL)":
-      return "Sale (Partial)";
-    case "E":
-    case "EXCHANGE":
-      return "Exchange";
-    default:
-      return raw || "Unknown";
-  }
+  const t = raw?.trim().toUpperCase();
+  if (t === "P" || t === "PURCHASE") return "Purchase";
+  if (t === "S" || t === "SALE") return "Sale";
+  if (t === "S (PARTIAL)" || t === "SALE (PARTIAL)") return "Sale (Partial)";
+  if (t === "E" || t === "EXCHANGE") return "Exchange";
+  return raw || "Unknown";
 }
 
 function parseMDY(raw: string | undefined): Date | null {
@@ -106,7 +81,94 @@ function parseMDY(raw: string | undefined): Date | null {
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
-// ─── House disclosure API ─────────────────────────────────────
+// ─── FD ZIP index (official House bulk data) ──────────────────
+
+type FdMember = {
+  Last?: string;
+  First?: string;
+  Prefix?: string;
+  FilingType?: string;
+  StateDst?: string;
+  Year?: string | number;
+  FilingDate?: string;
+  DocID?: string | number;
+};
+
+async function fetchFdIndex(year: number): Promise<FdMember[]> {
+  const url = `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${year}FD.zip`;
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      headers: { "User-Agent": "PortfolioManager/1.0 (investment research)" },
+    });
+  } catch {
+    return [];
+  }
+  if (!resp.ok) return [];
+
+  const zipBuf = Buffer.from(await resp.arrayBuffer());
+
+  // Extract the XML file from the ZIP using manual ZIP parsing
+  const xmlContent = extractFirstXmlFromZip(zipBuf);
+  if (!xmlContent) return [];
+
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: true,
+    trimValues: true,
+    isArray: (tag) => tag === "Member",
+  });
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parser.parse(xmlContent);
+  } catch {
+    return [];
+  }
+
+  const root = (parsed.FinancialDisclosure as Record<string, unknown>) ?? parsed;
+  const members = root?.Member;
+  if (!Array.isArray(members)) return [];
+  return members as FdMember[];
+}
+
+// Minimal ZIP reader — finds the first .xml file entry and returns its content
+function extractFirstXmlFromZip(buf: Buffer): string | null {
+  // ZIP local file header signature: 0x04034b50
+  let offset = 0;
+  while (offset < buf.length - 30) {
+    const sig = buf.readUInt32LE(offset);
+    if (sig !== 0x04034b50) break;
+
+    const compMethod = buf.readUInt16LE(offset + 8);
+    const compSize = buf.readUInt32LE(offset + 18);
+    const uncompSize = buf.readUInt32LE(offset + 22);
+    const fnLen = buf.readUInt16LE(offset + 26);
+    const extraLen = buf.readUInt16LE(offset + 28);
+    const fileName = buf.slice(offset + 30, offset + 30 + fnLen).toString("utf8");
+
+    const dataOffset = offset + 30 + fnLen + extraLen;
+
+    if (fileName.toLowerCase().endsWith(".xml")) {
+      if (compMethod === 0) {
+        // Stored (no compression)
+        return buf.slice(dataOffset, dataOffset + uncompSize).toString("utf8");
+      } else if (compMethod === 8) {
+        // Deflate
+        const zlib = require("node:zlib");
+        const compressed = buf.slice(dataOffset, dataOffset + compSize);
+        try {
+          return zlib.inflateRawSync(compressed).toString("utf8");
+        } catch {
+          return null;
+        }
+      }
+    }
+
+    offset = dataOffset + compSize;
+  }
+  return null;
+}
 
 async function fetchFilingIndex(
   fromDate: Date,
@@ -117,64 +179,72 @@ async function fetchFilingIndex(
   const toYear = toDate.getFullYear();
 
   for (let year = fromYear; year <= toYear; year++) {
-    const yearFrom = year === fromYear ? fromDate : new Date(year, 0, 1);
-    const yearTo = year === toYear ? toDate : new Date(year, 11, 31);
+    const members = await fetchFdIndex(year);
+    for (const m of members) {
+      if (String(m.FilingType).trim().toUpperCase() !== "P") continue;
+      if (!m.DocID || !m.FilingDate) continue;
 
-    const fmt = (d: Date) =>
-      `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+      const filingDate = parseMDY(String(m.FilingDate));
+      if (!filingDate) continue;
+      if (filingDate < fromDate || filingDate > toDate) continue;
 
-    let page = 1;
-    let totalPages = 1;
-
-    while (page <= totalPages) {
-      const params = new URLSearchParams({
-        LastName: "",
-        FirstName: "",
-        FilingYear: String(year),
-        State: "",
-        District: "",
-        ReportType: "P",
-        FileType: "P",
-        DateRange: "custom",
-        FromDate: fmt(yearFrom),
-        ToDate: fmt(yearTo),
-        page: String(page),
-        pageSize: "100",
+      results.push({
+        docId: String(m.DocID),
+        firstName: String(m.First ?? "").trim(),
+        lastName: String(m.Last ?? "").trim(),
+        stateDist: String(m.StateDst ?? "").trim(),
+        filingDate,
+        year: filingDate.getFullYear(),
       });
-
-      const resp = await fetch(
-        `https://disclosures.house.gov/api/FilingSearch?${params}`,
-        {
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "PortfolioManager/1.0",
-          },
-        },
-      );
-
-      if (!resp.ok) break;
-
-      const data = (await resp.json()) as HouseSearchResponse;
-      totalPages = data.pagerInfo?.totalPages ?? 1;
-
-      for (const row of data.filingData ?? []) {
-        if (!row.DocID || !row.Filing_Date) continue;
-        const filingDate = parseMDY(row.Filing_Date);
-        if (!filingDate) continue;
-
-        results.push({
-          docId: row.DocID,
-          firstName: row.First ?? "",
-          lastName: row.Last ?? "",
-          stateDist: row.StateDst ?? "",
-          filingDate,
-          year: filingDate.getFullYear(),
-        });
-      }
-
-      page++;
-      if (page <= totalPages) await sleep(500);
     }
+    if (year < toYear) await sleep(300);
+  }
+
+  return results;
+}
+
+// ─── PDF text parser ──────────────────────────────────────────
+
+function parseTransactionsFromPdfText(text: string): Array<{
+  ticker: string;
+  transaction: string;
+  transactionDate: Date;
+  rangeRaw: string | null;
+}> {
+  // Normalize: collapse newlines and whitespace so multi-line spans become single lines
+  const norm = text.replace(/\r?\n/g, " ").replace(/\s+/g, " ");
+
+  const results: Array<{
+    ticker: string;
+    transaction: string;
+    transactionDate: Date;
+    rangeRaw: string | null;
+  }> = [];
+
+  // Pattern: (TICKER) [ST]  P_or_S  MM/DD/YYYY  MM/DD/YYYY  $amount
+  // [ST] = stock type; we skip bonds ([GS]), options ([OP]), mutual funds ([MF]), etc.
+  // Dates run together without spaces in PDF text (e.g. 07/28/202508/11/2025)
+  // Amount may contain spaces: "$1,001 - $15,000" or "$15,001 - $50,000" or "Over $250,000"
+  const pattern =
+    /\(([A-Z][A-Z0-9.]{0,5})\)\s*\[ST\]\s*(S\s*\(PARTIAL\)|[SP])\s*(\d{2}\/\d{2}\/\d{4})\d{2}\/\d{2}\/\d{4}\s*((?:Over\s*)?\$[\d,]+(?:\s*-\s*\$?[\d,]+)?)/gi;
+
+  let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop pattern
+  while ((match = pattern.exec(norm)) !== null) {
+    const [, ticker, txType, dateStr, amountStr] = match;
+    const transactionDate = parseMDY(dateStr);
+    if (!transactionDate) continue;
+
+    // Skip obvious non-stock tickers: CUSIPs, too long, or "--"
+    const t = ticker.toUpperCase();
+    if (t === "--" || t.length > 6 || /^\d/.test(t)) continue;
+
+    results.push({
+      ticker: t,
+      transaction: parseTransactionType(txType.trim()),
+      transactionDate,
+      rangeRaw: amountStr.replace(/\s+/g, " ").trim() || null,
+    });
   }
 
   return results;
@@ -183,7 +253,7 @@ async function fetchFilingIndex(
 async function fetchFilingTransactions(
   filing: FilingMeta,
 ): Promise<RawTransaction[]> {
-  const url = `https://disclosures.house.gov/data/${filing.year}/${filing.docId}.xml`;
+  const url = `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${filing.year}/${filing.docId}.pdf`;
 
   let resp: Response;
   try {
@@ -196,63 +266,16 @@ async function fetchFilingTransactions(
 
   if (!resp.ok) return [];
 
-  const xml = await resp.text();
-
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    parseTagValue: true,
-    trimValues: true,
-    isArray: (tagName) => tagName === "Transaction",
-  });
-
-  let parsed: Record<string, unknown>;
+  const pdfBuf = Buffer.from(await resp.arrayBuffer());
+  let parsed: Awaited<ReturnType<typeof pdfParse>>;
   try {
-    parsed = parser.parse(xml);
+    parsed = await pdfParse(pdfBuf);
   } catch {
     return [];
   }
 
-  // Root element name varies across disclosure years
-  const root =
-    (parsed.FinancialDisclosure as Record<string, unknown>) ??
-    (parsed.PeriodicTransactionReport as Record<string, unknown>) ??
-    (parsed as Record<string, unknown>);
-
-  const transactionsNode = root?.Transactions as
-    | Record<string, unknown>
-    | undefined;
-  const txList = transactionsNode?.Transaction;
-
-  if (!Array.isArray(txList)) return [];
-
-  const results: RawTransaction[] = [];
-
-  for (const tx of txList as Record<string, unknown>[]) {
-    const asset = (tx.Asset as Record<string, unknown>) ?? {};
-    const rawTicker = String(
-      asset.TICKER ?? asset.Ticker ?? asset.ticker ?? "",
-    ).trim();
-
-    if (!rawTicker || rawTicker === "--" || rawTicker.length > 10) continue;
-    const ticker = rawTicker.toUpperCase();
-
-    const assetName =
-      String(asset.Name ?? asset.AssetName ?? "").trim() || null;
-
-    const txDateRaw = String(tx.TransactionDate ?? tx.Date ?? "").trim();
-    const transactionDate = parseMDY(txDateRaw);
-    if (!transactionDate) continue;
-
-    const txType = parseTransactionType(
-      String(tx.Type ?? tx.TransactionType ?? "").trim(),
-    );
-    const rangeRaw =
-      String(tx.Amount ?? tx.AmountRange ?? "").trim() || null;
-
-    results.push({ ticker, assetName, transaction: txType, transactionDate, rangeRaw });
-  }
-
-  return results;
+  const txs = parseTransactionsFromPdfText(parsed.text);
+  return txs.map((tx) => ({ ...tx, assetName: null }));
 }
 
 // ─── Sync engine ──────────────────────────────────────────────
@@ -279,13 +302,16 @@ export async function runCongressSync(
     ? lastRun.startedAt
     : new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
+  console.log(`[congress-trades] Fetching filings from ${fromDate.toISOString().slice(0, 10)} to ${now.toISOString().slice(0, 10)}`);
+
   const filings = await fetchFilingIndex(fromDate, now);
+  console.log(`[congress-trades] Found ${filings.length} PTR filings`);
 
   if (filings.length === 0) {
     return { ok: true, inserted: 0, skipped: 0, enriched: 0, filingCount: 0 };
   }
 
-  // Fetch transactions — 5 concurrent XML downloads
+  // Fetch transactions — 5 concurrent PDF downloads
   type FilingResult = { filing: FilingMeta; txs: RawTransaction[] };
   const filingsWithTxs: FilingResult[] = [];
 
@@ -297,7 +323,10 @@ export async function runCongressSync(
     for (const r of settled) {
       if (r.status === "fulfilled") filingsWithTxs.push(r.value);
     }
-    if (i + 5 < filings.length) await sleep(200);
+    if (i + 5 < filings.length) await sleep(300);
+    if (i % 50 === 0 && i > 0) {
+      console.log(`[congress-trades] Processed ${i}/${filings.length} filings`);
+    }
   }
 
   // Enrich distinct tickers with Yahoo Finance
@@ -389,6 +418,8 @@ export async function runCongressSync(
     }
   }
 
+  console.log(`[congress-trades] Built ${rows.length} rows to insert`);
+
   if (rows.length === 0) {
     return { ok: true, inserted: 0, skipped: 0, enriched, filingCount: filings.length };
   }
@@ -474,7 +505,6 @@ export async function getTopClusters(opts: {
 
   const topTickers = top.map((c) => c.ticker);
 
-  // Fetch sector and politicians for top tickers in one batch
   const [sectorRows, politicianRows] = await Promise.all([
     db.congressTrade.findMany({
       where: { ticker: { in: topTickers }, sector: { not: null } },
