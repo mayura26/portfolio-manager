@@ -63,6 +63,13 @@ const CRON_JOBS: CronJobConfig[] = [
     cadence: "Weekly",
     staleHours: 8 * 24,
   },
+  {
+    job: "congress-trades",
+    label: "Congress trades",
+    command: "npm run cron:congress-trades",
+    cadence: "Daily",
+    staleHours: 36,
+  },
 ];
 
 export default function IbkrSyncPage() {
