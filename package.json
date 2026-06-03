@@ -17,6 +17,7 @@
     "test:market-day-records": "tsx scripts/test-market-day-records.ts",
     "test:portfolio-recommendations": "tsx scripts/test-portfolio-recommendations.ts",
     "test:simply-wall-st-export": "tsx scripts/test-simply-wall-st-export.ts",
+    "backfill:congress-amounts": "tsx scripts/backfill-congress-amounts.ts",
     "diagnose:single-day-records": "tsx scripts/diagnose-single-day-records.ts",
     "diagnose:group-cash": "tsx scripts/diagnose-group-cash.ts",
     "debug:live-flex": "tsx scripts/debug-live-flex.ts",
