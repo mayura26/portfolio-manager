@@ -38,7 +38,9 @@ export function parseAmountRange(raw: string | null | undefined): {
   const overMatch = raw.match(/over\s+\$([0-9,]+)/i);
   if (overMatch) {
     const low = Number(overMatch[1].replace(/,/g, ""));
-    return { low, high: null, mid: null };
+    // Open-ended band (e.g. "Over $250,000") has no upper bound; use the floor
+    // as a conservative midpoint so these large trades still carry dollar volume.
+    return { low, high: null, mid: low };
   }
 
   const clean = raw.replace(/\$/g, "").replace(/,/g, "").trim();
@@ -126,7 +128,8 @@ async function fetchFdIndex(year: number): Promise<FdMember[]> {
     return [];
   }
 
-  const root = (parsed.FinancialDisclosure as Record<string, unknown>) ?? parsed;
+  const root =
+    (parsed.FinancialDisclosure as Record<string, unknown>) ?? parsed;
   const members = root?.Member;
   if (!Array.isArray(members)) return [];
   return members as FdMember[];
@@ -145,7 +148,9 @@ function extractFirstXmlFromZip(buf: Buffer): string | null {
     const uncompSize = buf.readUInt32LE(offset + 22);
     const fnLen = buf.readUInt16LE(offset + 26);
     const extraLen = buf.readUInt16LE(offset + 28);
-    const fileName = buf.slice(offset + 30, offset + 30 + fnLen).toString("utf8");
+    const fileName = buf
+      .slice(offset + 30, offset + 30 + fnLen)
+      .toString("utf8");
 
     const dataOffset = offset + 30 + fnLen + extraLen;
 
@@ -302,7 +307,9 @@ export async function runCongressSync(
     ? lastRun.startedAt
     : new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-  console.log(`[congress-trades] Fetching filings from ${fromDate.toISOString().slice(0, 10)} to ${now.toISOString().slice(0, 10)}`);
+  console.log(
+    `[congress-trades] Fetching filings from ${fromDate.toISOString().slice(0, 10)} to ${now.toISOString().slice(0, 10)}`,
+  );
 
   const filings = await fetchFilingIndex(fromDate, now);
   console.log(`[congress-trades] Found ${filings.length} PTR filings`);
@@ -318,7 +325,10 @@ export async function runCongressSync(
   for (let i = 0; i < filings.length; i += 5) {
     const batch = filings.slice(i, i + 5);
     const settled = await Promise.allSettled(
-      batch.map(async (f) => ({ filing: f, txs: await fetchFilingTransactions(f) })),
+      batch.map(async (f) => ({
+        filing: f,
+        txs: await fetchFilingTransactions(f),
+      })),
     );
     for (const r of settled) {
       if (r.status === "fulfilled") filingsWithTxs.push(r.value);
@@ -337,7 +347,11 @@ export async function runCongressSync(
 
   const enrichmentCache = new Map<
     string,
-    { instrumentId: string; sector: string | null; industry: string | null } | null
+    {
+      instrumentId: string;
+      sector: string | null;
+      industry: string | null;
+    } | null
   >();
 
   const tickerArray = Array.from(allTickers);
@@ -421,7 +435,13 @@ export async function runCongressSync(
   console.log(`[congress-trades] Built ${rows.length} rows to insert`);
 
   if (rows.length === 0) {
-    return { ok: true, inserted: 0, skipped: 0, enriched, filingCount: filings.length };
+    return {
+      ok: true,
+      inserted: 0,
+      skipped: 0,
+      enriched,
+      filingCount: filings.length,
+    };
   }
 
   const { count } = await db.congressTrade.createMany({
@@ -446,9 +466,27 @@ export type TradeCluster = {
   buyCount: number;
   sellCount: number;
   totalTrades: number;
+  buyVolume: number;
+  sellVolume: number;
+  buyScore: number;
+  sellScore: number;
   politicians: string[];
   latestDate: Date;
 };
+
+// Blend trade count (breadth) and dollar volume (size) into a single 0–1 score.
+// Each dimension is min-max normalized against the candidate set so "many small
+// buyers" and "one whale" land on a comparable scale, then averaged equally.
+function blendScore(
+  count: number,
+  volume: number,
+  maxCount: number,
+  maxVolume: number,
+): number {
+  const nc = maxCount > 0 ? count / maxCount : 0;
+  const nv = maxVolume > 0 ? volume / maxVolume : 0;
+  return 0.5 * nc + 0.5 * nv;
+}
 
 export async function getTopClusters(opts: {
   since: Date;
@@ -466,40 +504,93 @@ export async function getTopClusters(opts: {
       by: ["ticker"],
       where: { ...baseWhere, transaction: "Purchase" },
       _count: { _all: true },
+      _sum: { amountMid: true },
       _max: { transactionDate: true },
     }),
     db.congressTrade.groupBy({
       by: ["ticker"],
       where: { ...baseWhere, transaction: { in: ["Sale", "Sale (Partial)"] } },
       _count: { _all: true },
+      _sum: { amountMid: true },
       _max: { transactionDate: true },
     }),
   ]);
 
   const buyMap = new Map(
-    buys.map((b) => [b.ticker, { count: b._count._all, latestDate: b._max.transactionDate! }]),
+    buys.map((b) => [
+      b.ticker,
+      {
+        count: b._count._all,
+        volume: b._sum.amountMid ?? 0,
+        latestDate: b._max.transactionDate!,
+      },
+    ]),
   );
   const sellMap = new Map(
-    sells.map((s) => [s.ticker, { count: s._count._all, latestDate: s._max.transactionDate! }]),
+    sells.map((s) => [
+      s.ticker,
+      {
+        count: s._count._all,
+        volume: s._sum.amountMid ?? 0,
+        latestDate: s._max.transactionDate!,
+      },
+    ]),
   );
 
   const allTickers = new Set([...buyMap.keys(), ...sellMap.keys()]);
-  const clusters: Omit<TradeCluster, "politicians" | "sector">[] = [];
+  type RawCluster = Omit<
+    TradeCluster,
+    "politicians" | "sector" | "buyScore" | "sellScore"
+  >;
+  const raw: RawCluster[] = [];
 
   for (const ticker of allTickers) {
     const b = buyMap.get(ticker);
     const s = sellMap.get(ticker);
     const buyCount = b?.count ?? 0;
     const sellCount = s?.count ?? 0;
+    const buyVolume = b?.volume ?? 0;
+    const sellVolume = s?.volume ?? 0;
     const latestDate =
       b?.latestDate && s?.latestDate
-        ? b.latestDate > s.latestDate ? b.latestDate : s.latestDate
-        : b?.latestDate ?? s?.latestDate ?? new Date();
-    clusters.push({ ticker, buyCount, sellCount, totalTrades: buyCount + sellCount, latestDate });
+        ? b.latestDate > s.latestDate
+          ? b.latestDate
+          : s.latestDate
+        : (b?.latestDate ?? s?.latestDate ?? new Date());
+    raw.push({
+      ticker,
+      buyCount,
+      sellCount,
+      buyVolume,
+      sellVolume,
+      totalTrades: buyCount + sellCount,
+      latestDate,
+    });
   }
 
-  clusters.sort((a, b) => b.totalTrades - a.totalTrades);
-  const top = clusters.slice(0, limit);
+  const maxBuyCount = Math.max(0, ...raw.map((c) => c.buyCount));
+  const maxSellCount = Math.max(0, ...raw.map((c) => c.sellCount));
+  const maxBuyVolume = Math.max(0, ...raw.map((c) => c.buyVolume));
+  const maxSellVolume = Math.max(0, ...raw.map((c) => c.sellVolume));
+
+  const scored = raw.map((c) => ({
+    ...c,
+    buyScore: blendScore(c.buyCount, c.buyVolume, maxBuyCount, maxBuyVolume),
+    sellScore: blendScore(
+      c.sellCount,
+      c.sellVolume,
+      maxSellCount,
+      maxSellVolume,
+    ),
+  }));
+
+  // Keep the strongest clusters in either direction so a whale on one side
+  // isn't dropped just because it lacks breadth on the other.
+  scored.sort(
+    (a, b) =>
+      Math.max(b.buyScore, b.sellScore) - Math.max(a.buyScore, a.sellScore),
+  );
+  const top = scored.slice(0, limit);
 
   if (top.length === 0) return [];
 
@@ -536,26 +627,63 @@ export type SectorBreakdown = {
   sector: string;
   buyCount: number;
   sellCount: number;
+  buyVolume: number;
+  sellVolume: number;
 };
 
-export async function getSectorBreakdown(since: Date): Promise<SectorBreakdown[]> {
+export async function getSectorBreakdown(
+  since: Date,
+): Promise<SectorBreakdown[]> {
   const rows = await db.congressTrade.groupBy({
     by: ["sector", "transaction"],
     where: { transactionDate: { gte: since }, sector: { not: null } },
     _count: { _all: true },
+    _sum: { amountMid: true },
   });
 
   const map = new Map<string, SectorBreakdown>();
   for (const row of rows) {
     if (!row.sector) continue;
-    if (!map.has(row.sector)) map.set(row.sector, { sector: row.sector, buyCount: 0, sellCount: 0 });
+    if (!map.has(row.sector))
+      map.set(row.sector, {
+        sector: row.sector,
+        buyCount: 0,
+        sellCount: 0,
+        buyVolume: 0,
+        sellVolume: 0,
+      });
     const entry = map.get(row.sector)!;
-    if (row.transaction === "Purchase") entry.buyCount += row._count._all;
-    else entry.sellCount += row._count._all;
+    const volume = row._sum.amountMid ?? 0;
+    if (row.transaction === "Purchase") {
+      entry.buyCount += row._count._all;
+      entry.buyVolume += volume;
+    } else {
+      entry.sellCount += row._count._all;
+      entry.sellVolume += volume;
+    }
   }
 
-  return Array.from(map.values()).sort(
-    (a, b) => b.buyCount + b.sellCount - (a.buyCount + a.sellCount),
+  const sectors = Array.from(map.values());
+  const maxCount = Math.max(0, ...sectors.map((s) => s.buyCount + s.sellCount));
+  const maxVolume = Math.max(
+    0,
+    ...sectors.map((s) => s.buyVolume + s.sellVolume),
+  );
+
+  return sectors.sort(
+    (a, b) =>
+      blendScore(
+        b.buyCount + b.sellCount,
+        b.buyVolume + b.sellVolume,
+        maxCount,
+        maxVolume,
+      ) -
+      blendScore(
+        a.buyCount + a.sellCount,
+        a.buyVolume + a.sellVolume,
+        maxCount,
+        maxVolume,
+      ),
   );
 }
 
@@ -619,23 +747,24 @@ export async function getFilteredTrades(opts: {
 }
 
 export async function getSummaryStats(since: Date) {
-  const [totalTrades, tickerGroups, politicianGroups, lastRun] = await Promise.all([
-    db.congressTrade.count({ where: { transactionDate: { gte: since } } }),
-    db.congressTrade.groupBy({
-      by: ["ticker"],
-      where: { transactionDate: { gte: since } },
-      _count: { _all: true },
-    }),
-    db.congressTrade.groupBy({
-      by: ["politician"],
-      where: { transactionDate: { gte: since } },
-      _count: { _all: true },
-    }),
-    db.cronJobRun.findFirst({
-      where: { job: "congress-trades" },
-      orderBy: { startedAt: "desc" },
-    }),
-  ]);
+  const [totalTrades, tickerGroups, politicianGroups, lastRun] =
+    await Promise.all([
+      db.congressTrade.count({ where: { transactionDate: { gte: since } } }),
+      db.congressTrade.groupBy({
+        by: ["ticker"],
+        where: { transactionDate: { gte: since } },
+        _count: { _all: true },
+      }),
+      db.congressTrade.groupBy({
+        by: ["politician"],
+        where: { transactionDate: { gte: since } },
+        _count: { _all: true },
+      }),
+      db.cronJobRun.findFirst({
+        where: { job: "congress-trades" },
+        orderBy: { startedAt: "desc" },
+      }),
+    ]);
 
   return {
     totalTrades,
