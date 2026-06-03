@@ -6,10 +6,21 @@ type Props = {
   type: "buy" | "sell";
   since: Date;
   sector?: string;
+  minAmount?: number;
 };
 
-export async function TopTradesTable({ type, since, sector }: Props) {
-  const clusters = await getTopClusters({ since, sector, limit: 10 });
+export async function TopTradesTable({
+  type,
+  since,
+  sector,
+  minAmount,
+}: Props) {
+  const clusters = await getTopClusters({
+    since,
+    sector,
+    minAmount,
+    limit: 10,
+  });
   const filtered = clusters
     .filter((c) => (type === "buy" ? c.buyCount > 0 : c.sellCount > 0))
     .sort((a, b) =>

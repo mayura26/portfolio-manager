@@ -403,6 +403,8 @@ export const congressFiltersSchema = z.object({
   sector: z.string().optional(),
   ticker: z.string().trim().toUpperCase().optional(),
   transaction: z.enum(["Purchase", "Sale"]).optional(),
+  // Minimum disclosed trade size (matched against amountMid, the band midpoint).
+  minAmount: z.coerce.number().int().nonnegative().optional(),
   page: z.coerce.number().int().positive().default(1),
 });
 

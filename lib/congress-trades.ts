@@ -491,12 +491,14 @@ function blendScore(
 export async function getTopClusters(opts: {
   since: Date;
   sector?: string;
+  minAmount?: number;
   limit?: number;
 }): Promise<TradeCluster[]> {
-  const { since, sector, limit = 20 } = opts;
+  const { since, sector, minAmount, limit = 20 } = opts;
   const baseWhere = {
     transactionDate: { gte: since },
     ...(sector ? { sector } : {}),
+    ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
   };
 
   const [buys, sells] = await Promise.all([
@@ -633,10 +635,15 @@ export type SectorBreakdown = {
 
 export async function getSectorBreakdown(
   since: Date,
+  minAmount?: number,
 ): Promise<SectorBreakdown[]> {
   const rows = await db.congressTrade.groupBy({
     by: ["sector", "transaction"],
-    where: { transactionDate: { gte: since }, sector: { not: null } },
+    where: {
+      transactionDate: { gte: since },
+      sector: { not: null },
+      ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
+    },
     _count: { _all: true },
     _sum: { amountMid: true },
   });
@@ -707,16 +714,26 @@ export async function getFilteredTrades(opts: {
   sector?: string;
   ticker?: string;
   transaction?: string;
+  minAmount?: number;
   page: number;
   pageSize?: number;
 }): Promise<{ trades: CongressTradeRow[]; total: number }> {
-  const { since, sector, ticker, transaction, page, pageSize = 50 } = opts;
+  const {
+    since,
+    sector,
+    ticker,
+    transaction,
+    minAmount,
+    page,
+    pageSize = 50,
+  } = opts;
 
   const where = {
     transactionDate: { gte: since },
     ...(sector ? { sector } : {}),
     ...(ticker ? { ticker } : {}),
     ...(transaction ? { transaction } : {}),
+    ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
   };
 
   const [trades, total] = await Promise.all([

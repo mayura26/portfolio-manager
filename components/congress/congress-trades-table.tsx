@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { getFilteredTrades } from "@/lib/congress-trades";
 import { formatDate } from "@/lib/format";
 import type { CongressFilters } from "@/lib/validators";
@@ -37,6 +37,7 @@ export async function CongressTradesTable({ filters }: Props) {
     sector: filters.sector,
     ticker: filters.ticker,
     transaction: filters.transaction,
+    minAmount: filters.minAmount,
     page: filters.page,
     pageSize: PAGE_SIZE,
   });
@@ -50,6 +51,7 @@ export async function CongressTradesTable({ filters }: Props) {
       ...(filters.sector ? { sector: filters.sector } : {}),
       ...(filters.ticker ? { ticker: filters.ticker } : {}),
       ...(filters.transaction ? { transaction: filters.transaction } : {}),
+      ...(filters.minAmount ? { minAmount: String(filters.minAmount) } : {}),
       page: String(p),
     });
     return `/congress?${params.toString()}`;
@@ -62,24 +64,41 @@ export async function CongressTradesTable({ filters }: Props) {
           <thead>
             <tr className="border-b border-border text-left">
               <th className="px-5 py-2 text-xs font-normal text-muted">Date</th>
-              <th className="px-5 py-2 text-xs font-normal text-muted">Member</th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted md:table-cell">State</th>
-              <th className="px-5 py-2 text-xs font-normal text-muted">Ticker</th>
+              <th className="px-5 py-2 text-xs font-normal text-muted">
+                Member
+              </th>
+              <th className="hidden px-5 py-2 text-xs font-normal text-muted md:table-cell">
+                State
+              </th>
+              <th className="px-5 py-2 text-xs font-normal text-muted">
+                Ticker
+              </th>
               <th className="px-5 py-2 text-xs font-normal text-muted">Type</th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted lg:table-cell">Amount</th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted xl:table-cell">Sector</th>
+              <th className="hidden px-5 py-2 text-xs font-normal text-muted lg:table-cell">
+                Amount
+              </th>
+              <th className="hidden px-5 py-2 text-xs font-normal text-muted xl:table-cell">
+                Sector
+              </th>
             </tr>
           </thead>
           <tbody>
             {trades.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted">
-                  No trades found for this period. Click "Sync trades" to fetch disclosures.
+                <td
+                  colSpan={7}
+                  className="px-5 py-10 text-center text-sm text-muted"
+                >
+                  No trades found for this period. Click "Sync trades" to fetch
+                  disclosures.
                 </td>
               </tr>
             ) : (
               trades.map((t) => (
-                <tr key={t.id} className="border-b border-border last:border-0 hover:bg-surface-elevated">
+                <tr
+                  key={t.id}
+                  className="border-b border-border last:border-0 hover:bg-surface-elevated"
+                >
                   <td className="whitespace-nowrap px-5 py-2.5 tabular text-xs text-muted">
                     {formatDate(t.transactionDate)}
                   </td>
@@ -102,7 +121,9 @@ export async function CongressTradesTable({ filters }: Props) {
                       </p>
                     ) : null}
                   </td>
-                  <td className="px-5 py-2.5">{transactionBadge(t.transaction)}</td>
+                  <td className="px-5 py-2.5">
+                    {transactionBadge(t.transaction)}
+                  </td>
                   <td className="hidden px-5 py-2.5 text-xs text-muted tabular lg:table-cell">
                     {t.rangeRaw ?? "—"}
                   </td>

@@ -1,11 +1,11 @@
 import { Landmark } from "lucide-react";
 import { Suspense } from "react";
-import { CongressSyncButton } from "@/components/congress/congress-sync-button";
-import { CongressSummaryCards } from "@/components/congress/congress-summary-cards";
-import { TopTradesTable } from "@/components/congress/top-trades-table";
-import { CongressSectorChart } from "@/components/congress/congress-sector-chart";
 import { CongressFiltersSection } from "@/components/congress/congress-filters-section";
+import { CongressSectorChart } from "@/components/congress/congress-sector-chart";
+import { CongressSummaryCards } from "@/components/congress/congress-summary-cards";
+import { CongressSyncButton } from "@/components/congress/congress-sync-button";
 import { CongressTradesTable } from "@/components/congress/congress-trades-table";
+import { TopTradesTable } from "@/components/congress/top-trades-table";
 import { Skeleton } from "@/components/shared/skeleton";
 import { congressFiltersSchema } from "@/lib/validators";
 
@@ -44,7 +44,11 @@ export default function CongressPage({
   );
 }
 
-async function CongressContent({ searchParams }: { searchParams: SearchParams }) {
+async function CongressContent({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const raw = await searchParams;
   const filters = congressFiltersSchema.parse(raw);
   const since = new Date(Date.now() - filters.days * 24 * 60 * 60 * 1000);
@@ -65,10 +69,20 @@ async function CongressContent({ searchParams }: { searchParams: SearchParams })
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <Suspense fallback={<Skeleton className="h-64" />}>
-          <TopTradesTable type="buy" since={since} sector={filters.sector} />
+          <TopTradesTable
+            type="buy"
+            since={since}
+            sector={filters.sector}
+            minAmount={filters.minAmount}
+          />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-64" />}>
-          <TopTradesTable type="sell" since={since} sector={filters.sector} />
+          <TopTradesTable
+            type="sell"
+            since={since}
+            sector={filters.sector}
+            minAmount={filters.minAmount}
+          />
         </Suspense>
       </div>
 
@@ -78,11 +92,16 @@ async function CongressContent({ searchParams }: { searchParams: SearchParams })
             <h2 className="text-sm font-medium text-foreground">
               Sector Breakdown
             </h2>
-            <p className="mt-0.5 text-xs text-muted">Buys vs. sells by sector</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Buys vs. sells by sector
+            </p>
           </div>
           <div className="p-5">
             <Suspense fallback={<Skeleton className="h-64" />}>
-              <CongressSectorChart since={since} />
+              <CongressSectorChart
+                since={since}
+                minAmount={filters.minAmount}
+              />
             </Suspense>
           </div>
         </div>
