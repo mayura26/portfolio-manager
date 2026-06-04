@@ -9,6 +9,7 @@ export type CronJobName =
   | "ibkr-sync"
   | "autowatcher"
   | "weekly-report"
+  | "trades"
   | "congress-trades"
   | "senate-trades"
   | "insider-trades"

@@ -64,32 +64,11 @@ const CRON_JOBS: CronJobConfig[] = [
     staleHours: 8 * 24,
   },
   {
-    job: "congress-trades",
-    label: "Congress trades",
-    command: "npm run cron:congress-trades",
+    job: "trades",
+    label: "Trades (Congress · Senate · Insider · Executive)",
+    command: "npm run cron:trades",
     cadence: "Daily",
     staleHours: 36,
-  },
-  {
-    job: "senate-trades",
-    label: "Senate trades",
-    command: "npm run cron:senate-trades",
-    cadence: "Daily",
-    staleHours: 36,
-  },
-  {
-    job: "insider-trades",
-    label: "Insider trades (Form 4)",
-    command: "npm run cron:insider-trades",
-    cadence: "Daily",
-    staleHours: 36,
-  },
-  {
-    job: "executive-trades",
-    label: "Executive (OGE 278-T)",
-    command: "npm run cron:executive-trades",
-    cadence: "Weekly",
-    staleHours: 8 * 24,
   },
 ];
 

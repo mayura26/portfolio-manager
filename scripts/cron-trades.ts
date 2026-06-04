@@ -1,96 +1,64 @@
 /**
- * Combined trades cron — a single scheduled task that runs every trade-data
- * source in sequence (House congress PTRs, Senate PTRs, SEC Form 4 insider).
- * Each source still records its own CronJobRun row, so the Data sync status
- * panel keeps per-source health/history and the per-source Run buttons keep
- * working — but Coolify only needs ONE scheduled task ("npm run cron:trades").
+ * Combined trades cron — the single scheduled task that runs every trade-data
+ * source in sequence (House congress PTRs, Senate PTRs, SEC Form 4 insider, and
+ * executive OGE 278-T) and records ONE "trades" CronJobRun summarizing them all.
+ * Coolify only needs this one scheduled task: "npm run cron:trades".
  *
- * One source failing does not abort the others; the process exits non-zero if
- * any source failed.
+ * One source failing does not abort the others; the run is marked not-ok (and
+ * the process exits non-zero) if any source failed.
  */
 import "dotenv/config";
 import { runCongressSync } from "@/lib/congress-trades";
-import type { CronJobName } from "@/lib/cron-runs";
 import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { runInsiderSync } from "@/lib/insider-trades";
 import { runExecutiveSync } from "@/lib/oge-trades";
 import { runSenateSync } from "@/lib/senate-trades";
 
-async function runOne<T extends { ok: boolean }>(
-  job: CronJobName,
-  run: () => Promise<T>,
-  summary: (r: T) => Record<string, string | number | boolean>,
-): Promise<boolean> {
+async function runSource<T extends { ok: boolean; inserted: number }>(
+  label: string,
+  fn: () => Promise<T>,
+): Promise<{ label: string; ok: boolean; inserted: number | string }> {
   try {
-    const { result } = await recordCronRun({
-      job,
-      command: "npm run cron:trades",
-      run,
-      ok: (r) => r.ok,
-      warnings: (r) => (r.ok ? 0 : 1),
-      summary,
-    });
-    console.log(`[cron-trades] ${job}: ${JSON.stringify(result)}`);
-    return result.ok;
+    const r = await fn();
+    console.log(`[cron-trades] ${label}: inserted=${r.inserted} ok=${r.ok}`);
+    return { label, ok: r.ok, inserted: r.inserted };
   } catch (err) {
-    console.error(`[cron-trades] ${job} failed`, err);
-    return false;
+    console.error(`[cron-trades] ${label} failed`, err);
+    return { label, ok: false, inserted: "error" };
   }
 }
 
-async function main() {
-  const results = [
-    await runOne(
-      "congress-trades",
-      () => runCongressSync("cron"),
-      (r) => ({
-        inserted: r.inserted,
-        skipped: r.skipped,
-        enriched: r.enriched,
-        filings: r.filingCount,
-        ok: r.ok,
-      }),
-    ),
-    await runOne(
-      "senate-trades",
-      () => runSenateSync("cron"),
-      (r) => ({
-        inserted: r.inserted,
-        skipped: r.skipped,
-        enriched: r.enriched,
-        reports: r.filingCount,
-        ok: r.ok,
-      }),
-    ),
-    await runOne(
-      "insider-trades",
-      () => runInsiderSync("cron"),
-      (r) => ({
-        inserted: r.inserted,
-        skipped: r.skipped,
-        tickers: r.tickers,
-        filings: r.filings,
-        ok: r.ok,
-      }),
-    ),
-    await runOne(
-      "executive-trades",
-      () => runExecutiveSync("cron"),
-      (r) => ({
-        inserted: r.inserted,
-        skipped: r.skipped,
-        filings: r.filings,
-        ok: r.ok,
-      }),
-    ),
-  ];
+type TradesResult = {
+  ok: boolean;
+  summary: Record<string, number | string | boolean>;
+};
 
-  const allOk = results.every(Boolean);
-  process.exit(allOk ? 0 : 1);
+async function runAllTrades(): Promise<TradesResult> {
+  const sources = [
+    await runSource("congress", () => runCongressSync("cron")),
+    await runSource("senate", () => runSenateSync("cron")),
+    await runSource("insider", () => runInsiderSync("cron")),
+    await runSource("executive", () => runExecutiveSync("cron")),
+  ];
+  const ok = sources.every((s) => s.ok);
+  const summary: Record<string, number | string | boolean> = { ok };
+  for (const s of sources) summary[s.label] = s.inserted;
+  return { ok, summary };
 }
 
-main()
+recordCronRun({
+  job: "trades",
+  command: "npm run cron:trades",
+  run: runAllTrades,
+  ok: (r) => r.ok,
+  warnings: (r) => (r.ok ? 0 : 1),
+  summary: (r) => r.summary,
+})
+  .then(({ result }) => {
+    console.log(JSON.stringify(result.summary, null, 2));
+    process.exit(result.ok ? 0 : 1);
+  })
   .catch((err) => {
     console.error("[cron-trades] fatal", err);
     process.exit(1);
