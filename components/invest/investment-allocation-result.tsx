@@ -1,5 +1,6 @@
-import { type InvestmentAllocation } from "@/lib/investment-allocator";
+import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
+import type { InvestmentAllocation } from "@/lib/investment-allocator";
 
 type Props = {
   result: InvestmentAllocation;
@@ -28,9 +29,12 @@ export function InvestmentAllocationResult({ result, baseCurrency }: Props) {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="display text-base text-foreground">
+                      <Link
+                        href={`/stocks/${encodeURIComponent(a.symbol)}`}
+                        className="display text-base text-foreground hover:text-accent hover:underline"
+                      >
                         {a.symbol}
-                      </span>
+                      </Link>
                       <span className="text-sm text-muted">{a.name}</span>
                       {a.priority === "primary" ? (
                         <span className="rounded-sm bg-accent px-1.5 py-0.5 text-xs text-accent-foreground">
@@ -76,7 +80,9 @@ export function InvestmentAllocationResult({ result, baseCurrency }: Props) {
             {fmt(result.cashRetained)}
           </p>
           {result.cashRetainedReason ? (
-            <p className="mt-1 text-xs text-muted">{result.cashRetainedReason}</p>
+            <p className="mt-1 text-xs text-muted">
+              {result.cashRetainedReason}
+            </p>
           ) : null}
         </div>
       </div>

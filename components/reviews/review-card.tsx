@@ -18,10 +18,7 @@ type ReviewRow = {
 
 export function ReviewCard({ review }: { review: ReviewRow }) {
   return (
-    <Link
-      href={`/reviews/${review.id}`}
-      className="group hairline flex flex-col gap-3 bg-surface-elevated p-4 transition-colors hover:border-border-strong"
-    >
+    <div className="hairline flex flex-col gap-3 bg-surface-elevated p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -34,12 +31,15 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
           </div>
           <h3 className="mt-2 text-base text-foreground">
             {review.instrument ? (
-              <span>
+              <Link
+                href={`/stocks/${encodeURIComponent(review.instrument.yahooSymbol)}`}
+                className="hover:underline"
+              >
                 <span className="tabular font-medium">
                   {review.instrument.symbol}
                 </span>{" "}
                 <span className="text-muted">{review.instrument.name}</span>
-              </span>
+              </Link>
             ) : review.portfolio ? (
               <span>{review.portfolio.name}</span>
             ) : (
@@ -53,11 +53,13 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
             </p>
           ) : null}
         </div>
-        <ArrowUpRight
-          className="h-4 w-4 shrink-0 text-subtle transition-colors group-hover:text-accent"
-          strokeWidth={1.5}
-          aria-hidden
-        />
+        <Link
+          href={`/reviews/${review.id}`}
+          className="group shrink-0 text-subtle transition-colors hover:text-accent"
+          aria-label="View review"
+        >
+          <ArrowUpRight className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+        </Link>
       </div>
 
       <div className="flex items-center justify-between border-t border-border pt-2 text-xs text-muted">
@@ -66,7 +68,7 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
           <span>Decided {formatDate(review.decisionDate)}</span>
         ) : null}
       </div>
-    </Link>
+    </div>
   );
 }
 

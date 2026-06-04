@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import type { WeeklyReportContent } from "@/lib/weekly-report-ai";
 
@@ -71,9 +72,12 @@ export function WeeklyReportView({
                         key={`${group.groupName}-${mover.symbol}-${mover.note}`}
                         className="border-t border-border pt-2 text-sm"
                       >
-                        <span className="tabular font-medium text-foreground">
+                        <Link
+                          href={`/stocks/${encodeURIComponent(mover.symbol)}`}
+                          className="tabular font-medium text-foreground hover:text-accent hover:underline"
+                        >
                           {mover.symbol}
-                        </span>{" "}
+                        </Link>{" "}
                         <span className="text-muted">{mover.note}</span>
                       </li>
                     ))}
@@ -110,9 +114,12 @@ export function WeeklyReportView({
                 key={`${mover.symbol}-${mover.note}`}
                 className="flex gap-3 py-3 first:pt-0 last:pb-0"
               >
-                <span className="tabular w-16 shrink-0 text-sm font-medium text-foreground">
+                <Link
+                  href={`/stocks/${encodeURIComponent(mover.symbol)}`}
+                  className="tabular w-16 shrink-0 text-sm font-medium text-foreground hover:text-accent hover:underline"
+                >
                   {mover.symbol}
-                </span>
+                </Link>
                 <span className="text-sm text-muted">{mover.note}</span>
               </li>
             ))}

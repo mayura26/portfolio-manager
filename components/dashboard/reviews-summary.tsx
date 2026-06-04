@@ -43,42 +43,71 @@ export async function ReviewsSummary() {
       ) : (
         <ul className="divide-y divide-border">
           {recent.map((r) => (
-            <li key={r.id}>
-              <Link
-                href={`/reviews/${r.id}`}
-                className="group flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <ReviewStatusBadge status={r.status} />
+            <li key={r.id} className="flex items-stretch">
+              {r.instrument ? (
+                <>
+                  <Link
+                    href={`/stocks/${encodeURIComponent(r.instrument.yahooSymbol)}`}
+                    className="flex min-w-0 flex-1 flex-col justify-center px-4 py-3 hover:bg-surface"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ReviewStatusBadge status={r.status} />
+                    </div>
+                    <p className="mt-1 text-sm text-foreground">
+                      <span className="tabular font-medium">
+                        {r.instrument.symbol}
+                      </span>{" "}
+                      <span className="text-muted">{r.instrument.name}</span>
+                    </p>
+                    <p className="line-clamp-1 text-xs text-muted">
+                      {r.triggerReason}
+                    </p>
+                  </Link>
+                  <Link
+                    href={`/reviews/${r.id}`}
+                    className="group flex shrink-0 items-center gap-1 border-l border-border px-3 text-xs text-subtle transition-colors hover:bg-surface hover:text-accent"
+                    aria-label="View review"
+                  >
+                    <span className="hidden sm:inline">
+                      {formatRelative(r.createdAt)}
+                    </span>
+                    <ArrowUpRight
+                      className="h-4 w-4"
+                      strokeWidth={1.5}
+                      aria-hidden
+                    />
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  href={`/reviews/${r.id}`}
+                  className="group flex flex-1 items-center justify-between gap-3 px-4 py-3 hover:bg-surface"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <ReviewStatusBadge status={r.status} />
+                    </div>
+                    <p className="mt-1 text-sm text-foreground">
+                      {r.portfolio ? (
+                        r.portfolio.name
+                      ) : (
+                        <span className="text-muted">General</span>
+                      )}
+                    </p>
+                    <p className="line-clamp-1 text-xs text-muted">
+                      {r.triggerReason}
+                    </p>
                   </div>
-                  <p className="mt-1 text-sm text-foreground">
-                    {r.instrument ? (
-                      <span>
-                        <span className="tabular font-medium">
-                          {r.instrument.symbol}
-                        </span>{" "}
-                        <span className="text-muted">{r.instrument.name}</span>
-                      </span>
-                    ) : r.portfolio ? (
-                      r.portfolio.name
-                    ) : (
-                      <span className="text-muted">General</span>
-                    )}
-                  </p>
-                  <p className="line-clamp-1 text-xs text-muted">
-                    {r.triggerReason}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 text-xs text-subtle">
-                  <span>{formatRelative(r.createdAt)}</span>
-                  <ArrowUpRight
-                    className="h-4 w-4 text-subtle transition-colors group-hover:text-accent"
-                    strokeWidth={1.5}
-                    aria-hidden
-                  />
-                </div>
-              </Link>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-subtle">
+                    <span>{formatRelative(r.createdAt)}</span>
+                    <ArrowUpRight
+                      className="h-4 w-4 text-subtle transition-colors group-hover:text-accent"
+                      strokeWidth={1.5}
+                      aria-hidden
+                    />
+                  </div>
+                </Link>
+              )}
             </li>
           ))}
         </ul>
