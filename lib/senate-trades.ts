@@ -24,14 +24,24 @@ const SEARCH_INDEX = `${BASE}/search/`;
 const REPORT_DATA = `${BASE}/search/report/data/`;
 const PAGE_SIZE = 100;
 
-// eFD sits behind a WAF that 403s non-browser clients — validated: a plain tool
-// User-Agent is blocked, these browser headers return 200.
+// eFD sits behind a WAF that blocks non-browser clients. A full browser header
+// set gets 200 from a residential IP; datacenter IPs may still be challenged.
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "sec-ch-ua":
+    '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
 };
 
 function sleep(ms: number) {
@@ -95,7 +105,12 @@ async function establishSession(): Promise<Session> {
     /name=["']csrfmiddlewaretoken["']\s+value=["']([^"']+)["']/i,
   );
   const csrf = jar.get("csrftoken") ?? tokenMatch?.[1] ?? "";
-  if (!csrf) throw new Error("could not obtain Senate eFD CSRF token");
+  if (!csrf) {
+    const snippet = html.slice(0, 160).replace(/\s+/g, " ").trim();
+    throw new Error(
+      `could not obtain Senate eFD CSRF token — landing HTTP ${landing.status}, ${html.length}b. Likely a WAF block on this IP. Snippet: ${snippet}`,
+    );
+  }
 
   // 2. Accept the prohibition agreement (terms of service) → session cookie.
   const agree = await fetch(SEARCH_HOME, {

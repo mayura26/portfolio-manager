@@ -13,7 +13,14 @@ import { db } from "@/lib/db";
 // ExecutiveTrade rows (asset name + buy/sell + date; amount when alignable).
 // ─────────────────────────────────────────────────────────────
 
-const UA = "PortfolioManager/1.0 km.vivekananda@gmail.com";
+// OGE serves these PDFs through a WAF too; present browser-ish headers. Works
+// from a residential IP — datacenter IPs may be challenged.
+const OGE_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "application/pdf,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+};
 
 type OgeFiling = { filer: string; docId: string; url: string };
 
@@ -137,12 +144,27 @@ export function parseOge278T(text: string): ParsedTx[] {
 
 async function fetchFilingTransactions(filing: OgeFiling): Promise<ParsedTx[]> {
   try {
-    const resp = await fetch(filing.url, { headers: { "User-Agent": UA } });
-    if (!resp.ok) return [];
+    const resp = await fetch(filing.url, { headers: OGE_HEADERS });
+    const ct = resp.headers.get("content-type") ?? "";
+    if (!resp.ok) {
+      console.warn(
+        `[executive-trades] ${filing.docId} HTTP ${resp.status} (${ct}) — likely a WAF block on this IP`,
+      );
+      return [];
+    }
+    if (!/pdf/i.test(ct)) {
+      console.warn(
+        `[executive-trades] ${filing.docId} non-PDF response (${ct}) — likely a WAF challenge page`,
+      );
+      return [];
+    }
     const buf = Buffer.from(await resp.arrayBuffer());
     const parsed = await pdfParse(buf);
     return parseOge278T(parsed.text);
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[executive-trades] ${filing.docId} fetch/parse error: ${(err as Error).message}`,
+    );
     return [];
   }
 }
