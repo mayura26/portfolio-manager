@@ -8,11 +8,14 @@ recordCronRun({
   command: "npm run cron:executive-trades",
   run: () => runExecutiveSync("cron"),
   ok: (r) => r.ok,
-  warnings: (r) => (r.ok ? 0 : 1),
+  warnings: (r) => r.failedFilings,
   summary: (r) => ({
     inserted: r.inserted,
     skipped: r.skipped,
     filings: r.filings,
+    processedFilings: r.processedFilings,
+    skippedFilings: r.skippedFilings,
+    failedFilings: r.failedFilings,
     ok: r.ok,
   }),
 })

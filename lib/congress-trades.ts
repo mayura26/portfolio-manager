@@ -1,6 +1,11 @@
 import { XMLParser } from "fast-xml-parser";
 import pdfParse from "pdf-parse";
 import { db } from "@/lib/db";
+import {
+  GOVERNMENT_FILING_SOURCES,
+  getProcessedGovernmentFilingIds,
+  markGovernmentFilingProcessed,
+} from "@/lib/government-trade-filings";
 import { findOrCreateInstrument } from "@/lib/instruments";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -22,10 +27,37 @@ type RawTransaction = {
   rangeRaw: string | null;
 };
 
+const HOUSE_INITIAL_LOOKBACK_DAYS = 90;
+const HOUSE_INCREMENTAL_LOOKBACK_DAYS = 45;
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 function sleep(ms: number) {
   return new Promise<void>((res) => setTimeout(res, ms));
+}
+
+function daysAgo(date: Date, days: number): Date {
+  return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function olderDate(a: Date, b: Date): Date {
+  return a.getTime() < b.getTime() ? a : b;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfDay(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
 }
 
 export function parseAmountRange(raw: string | null | undefined): {
@@ -221,8 +253,10 @@ export async function fetchFilingIndex(
   toDate: Date,
 ): Promise<FilingMeta[]> {
   const results: FilingMeta[] = [];
-  const fromYear = fromDate.getFullYear();
-  const toYear = toDate.getFullYear();
+  const fromDay = startOfDay(fromDate);
+  const toDay = endOfDay(toDate);
+  const fromYear = fromDay.getFullYear();
+  const toYear = toDay.getFullYear();
 
   for (let year = fromYear; year <= toYear; year++) {
     const members = await fetchFdIndex(year);
@@ -232,7 +266,7 @@ export async function fetchFilingIndex(
 
       const filingDate = parseMDY(String(m.FilingDate));
       if (!filingDate) continue;
-      if (filingDate < fromDate || filingDate > toDate) continue;
+      if (filingDate < fromDay || filingDate > toDay) continue;
 
       results.push({
         docId: String(m.DocID),
@@ -240,7 +274,7 @@ export async function fetchFilingIndex(
         lastName: String(m.Last ?? "").trim(),
         stateDist: String(m.StateDst ?? "").trim(),
         filingDate,
-        year: filingDate.getFullYear(),
+        year: Number(m.Year) || filingDate.getFullYear(),
       });
     }
     if (year < toYear) await sleep(300);
@@ -298,7 +332,7 @@ function parseTransactionsFromPdfText(text: string): Array<{
 
 async function fetchFilingTransactions(
   filing: FilingMeta,
-): Promise<RawTransaction[]> {
+): Promise<{ ok: boolean; txs: RawTransaction[] }> {
   const url = `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${filing.year}/${filing.docId}.pdf`;
 
   let resp: Response;
@@ -307,21 +341,21 @@ async function fetchFilingTransactions(
       headers: { "User-Agent": "PortfolioManager/1.0" },
     });
   } catch {
-    return [];
+    return { ok: false, txs: [] };
   }
 
-  if (!resp.ok) return [];
+  if (!resp.ok) return { ok: false, txs: [] };
 
   const pdfBuf = Buffer.from(await resp.arrayBuffer());
   let parsed: Awaited<ReturnType<typeof pdfParse>>;
   try {
     parsed = await pdfParse(pdfBuf);
   } catch {
-    return [];
+    return { ok: false, txs: [] };
   }
 
   const txs = parseTransactionsFromPdfText(parsed.text);
-  return txs.map((tx) => ({ ...tx, assetName: null }));
+  return { ok: true, txs: txs.map((tx) => ({ ...tx, assetName: null })) };
 }
 
 // ─── Sync engine ──────────────────────────────────────────────
@@ -332,6 +366,9 @@ export type CongressSyncResult = {
   skipped: number;
   enriched: number;
   filingCount: number;
+  processedFilings?: number;
+  skippedFilings?: number;
+  failedFilings?: number;
   error?: string;
 };
 
@@ -339,14 +376,15 @@ export async function runCongressSync(
   _trigger: "cron" | "manual",
 ): Promise<CongressSyncResult> {
   const lastRun = await db.cronJobRun.findFirst({
-    where: { job: "congress-trades", ok: true },
+    where: { job: { in: ["congress-trades", "trades"] }, ok: true },
     orderBy: { startedAt: "desc" },
   });
 
   const now = new Date();
+  const lookbackStart = daysAgo(now, HOUSE_INCREMENTAL_LOOKBACK_DAYS);
   const fromDate = lastRun
-    ? lastRun.startedAt
-    : new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    ? olderDate(lastRun.startedAt, lookbackStart)
+    : daysAgo(now, HOUSE_INITIAL_LOOKBACK_DAYS);
 
   return ingestHouseFilings(fromDate, now);
 }
@@ -369,27 +407,70 @@ export async function ingestHouseFilings(
   console.log(`[congress-trades] Found ${filings.length} PTR filings`);
 
   if (filings.length === 0) {
-    return { ok: true, inserted: 0, skipped: 0, enriched: 0, filingCount: 0 };
+    return {
+      ok: true,
+      inserted: 0,
+      skipped: 0,
+      enriched: 0,
+      filingCount: 0,
+      processedFilings: 0,
+      skippedFilings: 0,
+      failedFilings: 0,
+    };
   }
 
   // Fetch transactions — 5 concurrent PDF downloads
+  const processedDocIds = await getProcessedGovernmentFilingIds(
+    GOVERNMENT_FILING_SOURCES.housePtr,
+    filings.map((filing) => filing.docId),
+  );
+  const pendingFilings = filings.filter(
+    (filing) => !processedDocIds.has(filing.docId),
+  );
+  const skippedFilings = filings.length - pendingFilings.length;
+  if (skippedFilings > 0) {
+    console.log(
+      `[congress-trades] Skipping ${skippedFilings} already-processed filing(s)`,
+    );
+  }
+
+  if (pendingFilings.length === 0) {
+    return {
+      ok: true,
+      inserted: 0,
+      skipped: 0,
+      enriched: 0,
+      filingCount: filings.length,
+      processedFilings: 0,
+      skippedFilings,
+      failedFilings: 0,
+    };
+  }
+
   type FilingResult = { filing: FilingMeta; txs: RawTransaction[] };
   const filingsWithTxs: FilingResult[] = [];
+  let failedFilings = 0;
 
-  for (let i = 0; i < filings.length; i += 5) {
-    const batch = filings.slice(i, i + 5);
+  for (let i = 0; i < pendingFilings.length; i += 5) {
+    const batch = pendingFilings.slice(i, i + 5);
     const settled = await Promise.allSettled(
-      batch.map(async (f) => ({
-        filing: f,
-        txs: await fetchFilingTransactions(f),
-      })),
+      batch.map(async (f) => {
+        const result = await fetchFilingTransactions(f);
+        return { filing: f, ...result };
+      }),
     );
     for (const r of settled) {
-      if (r.status === "fulfilled") filingsWithTxs.push(r.value);
+      if (r.status === "fulfilled" && r.value.ok) {
+        filingsWithTxs.push({ filing: r.value.filing, txs: r.value.txs });
+      } else {
+        failedFilings++;
+      }
     }
-    if (i + 5 < filings.length) await sleep(300);
+    if (i + 5 < pendingFilings.length) await sleep(300);
     if (i % 50 === 0 && i > 0) {
-      console.log(`[congress-trades] Processed ${i}/${filings.length} filings`);
+      console.log(
+        `[congress-trades] Processed ${i}/${pendingFilings.length} pending filings`,
+      );
     }
   }
 
@@ -456,13 +537,33 @@ export async function ingestHouseFilings(
 
   console.log(`[congress-trades] Built ${rows.length} rows to insert`);
 
+  async function markProcessedFilings() {
+    for (const { filing, txs } of filingsWithTxs) {
+      await markGovernmentFilingProcessed({
+        source: GOVERNMENT_FILING_SOURCES.housePtr,
+        docId: filing.docId,
+        filer: `${filing.firstName} ${filing.lastName}`.trim() || null,
+        filedAt: filing.filingDate,
+        transactionCount: txs.length,
+        metadata: {
+          stateDist: filing.stateDist || null,
+          year: filing.year,
+        },
+      });
+    }
+  }
+
   if (rows.length === 0) {
+    await markProcessedFilings();
     return {
       ok: true,
       inserted: 0,
       skipped: 0,
       enriched,
       filingCount: filings.length,
+      processedFilings: filingsWithTxs.length,
+      skippedFilings,
+      failedFilings,
     };
   }
 
@@ -471,12 +572,17 @@ export async function ingestHouseFilings(
     skipDuplicates: true,
   });
 
+  await markProcessedFilings();
+
   return {
     ok: true,
     inserted: count,
     skipped: rows.length - count,
     enriched,
     filingCount: filings.length,
+    processedFilings: filingsWithTxs.length,
+    skippedFilings,
+    failedFilings,
   };
 }
 
@@ -807,7 +913,7 @@ export async function getSummaryStats(since: Date) {
         _count: { _all: true },
       }),
       db.cronJobRun.findFirst({
-        where: { job: "congress-trades" },
+        where: { job: { in: ["congress-trades", "trades"] } },
         orderBy: { startedAt: "desc" },
       }),
     ]);

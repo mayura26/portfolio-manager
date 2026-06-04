@@ -1,6 +1,11 @@
 import pdfParse from "pdf-parse";
 import { parseAmountRange } from "@/lib/congress-trades";
 import { db } from "@/lib/db";
+import {
+  GOVERNMENT_FILING_SOURCES,
+  getProcessedGovernmentFilingIds,
+  markGovernmentFilingProcessed,
+} from "@/lib/government-trade-filings";
 
 // ─────────────────────────────────────────────────────────────
 // Executive-branch trades (OGE Form 278-T) — e.g. President Trump
@@ -43,6 +48,9 @@ export type ExecutiveSyncResult = {
   inserted: number;
   skipped: number;
   filings: number;
+  processedFilings: number;
+  skippedFilings: number;
+  failedFilings: number;
   error?: string;
 };
 
@@ -90,6 +98,16 @@ type ParsedTx = {
   transactionDate: Date | null;
   rangeRaw: string | null;
 };
+
+function errorWithCause(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = err.cause;
+  if (cause instanceof Error) return `${err.message}: ${cause.message}`;
+  if (cause && typeof cause === "object" && "code" in cause) {
+    return `${err.message}: ${String(cause.code)}`;
+  }
+  return err.message;
+}
 
 export function parseOge278T(text: string): ParsedTx[] {
   const norm = text.replace(/\r?\n/g, " ").replace(/\s+/g, " ");
@@ -142,30 +160,32 @@ export function parseOge278T(text: string): ParsedTx[] {
   }));
 }
 
-async function fetchFilingTransactions(filing: OgeFiling): Promise<ParsedTx[]> {
+async function fetchFilingTransactions(
+  filing: OgeFiling,
+): Promise<ParsedTx[] | null> {
   try {
     const resp = await fetch(filing.url, { headers: OGE_HEADERS });
     const ct = resp.headers.get("content-type") ?? "";
     if (!resp.ok) {
-      console.warn(
+      console.log(
         `[executive-trades] ${filing.docId} HTTP ${resp.status} (${ct}) — likely a WAF block on this IP`,
       );
-      return [];
+      return null;
     }
     if (!/pdf/i.test(ct)) {
-      console.warn(
+      console.log(
         `[executive-trades] ${filing.docId} non-PDF response (${ct}) — likely a WAF challenge page`,
       );
-      return [];
+      return null;
     }
     const buf = Buffer.from(await resp.arrayBuffer());
     const parsed = await pdfParse(buf);
     return parseOge278T(parsed.text);
   } catch (err) {
-    console.warn(
-      `[executive-trades] ${filing.docId} fetch/parse error: ${(err as Error).message}`,
+    console.log(
+      `[executive-trades] ${filing.docId} fetch/parse error: ${errorWithCause(err)}`,
     );
-    return [];
+    return null;
   }
 }
 
@@ -187,9 +207,30 @@ export async function runExecutiveSync(
     docId: string;
     externalKey: string;
   }[] = [];
+  const processedDocIds = await getProcessedGovernmentFilingIds(
+    GOVERNMENT_FILING_SOURCES.oge278T,
+    OGE_FILINGS.map((filing) => filing.docId),
+  );
+  const pendingFilings = OGE_FILINGS.filter(
+    (filing) => !processedDocIds.has(filing.docId),
+  );
+  const skippedFilings = OGE_FILINGS.length - pendingFilings.length;
+  const successfulFilings: { filing: OgeFiling; txs: ParsedTx[] }[] = [];
+  let failedFilings = 0;
 
-  for (const filing of OGE_FILINGS) {
+  if (skippedFilings > 0) {
+    console.log(
+      `[executive-trades] Skipping ${skippedFilings} already-processed filing(s)`,
+    );
+  }
+
+  for (const filing of pendingFilings) {
     const txs = await fetchFilingTransactions(filing);
+    if (!txs) {
+      failedFilings++;
+      continue;
+    }
+    successfulFilings.push({ filing, txs });
     console.log(`[executive-trades] ${filing.docId}: ${txs.length} txns`);
     txs.forEach((tx, idx) => {
       const amounts = parseAmountRange(tx.rangeRaw);
@@ -209,8 +250,28 @@ export async function runExecutiveSync(
     });
   }
 
+  async function markProcessedFilings() {
+    for (const { filing, txs } of successfulFilings) {
+      await markGovernmentFilingProcessed({
+        source: GOVERNMENT_FILING_SOURCES.oge278T,
+        docId: filing.docId,
+        filer: filing.filer,
+        transactionCount: txs.length,
+      });
+    }
+  }
+
   if (rows.length === 0) {
-    return { ok: true, inserted: 0, skipped: 0, filings: OGE_FILINGS.length };
+    await markProcessedFilings();
+    return {
+      ok: failedFilings === 0,
+      inserted: 0,
+      skipped: 0,
+      filings: OGE_FILINGS.length,
+      processedFilings: successfulFilings.length,
+      skippedFilings,
+      failedFilings,
+    };
   }
 
   const { count } = await db.executiveTrade.createMany({
@@ -218,11 +279,16 @@ export async function runExecutiveSync(
     skipDuplicates: true,
   });
 
+  await markProcessedFilings();
+
   return {
-    ok: true,
+    ok: failedFilings === 0,
     inserted: count,
     skipped: rows.length - count,
     filings: OGE_FILINGS.length,
+    processedFilings: successfulFilings.length,
+    skippedFilings,
+    failedFilings,
   };
 }
 

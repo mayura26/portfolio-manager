@@ -815,3 +815,21 @@ model ExecutiveTrade {
   @@index([transactionDate(sort: Desc)])
   @@index([filer])
 }
+
+// Filing-level ingest ledger for government trade sources. This lets the crons
+// scan a wider date range while skipping PDFs/documents already handled.
+model GovernmentTradeFiling {
+  id               String   @id @default(cuid())
+  source           String
+  docId            String
+  filer            String?
+  filedAt          DateTime? @db.Date
+  processedAt      DateTime @default(now())
+  transactionCount Int      @default(0)
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  @@unique([source, docId])
+  @@index([source, processedAt(sort: Desc)])
+  @@index([filedAt(sort: Desc)])
+}

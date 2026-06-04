@@ -14,6 +14,9 @@ recordCronRun({
     skipped: r.skipped,
     enriched: r.enriched,
     filings: r.filingCount,
+    processedFilings: r.processedFilings,
+    skippedFilings: r.skippedFilings,
+    failedFilings: r.failedFilings,
     ok: r.ok,
   }),
 })
