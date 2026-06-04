@@ -32,6 +32,91 @@ function isSell(transaction: string): boolean {
   return transaction === "Sale" || transaction === "Sale (Partial)";
 }
 
+// ─── Per-ticker smart-money feed (stock detail page) ──────────
+
+export type SmartMoneyTrade = {
+  source: "House" | "Senate" | "Insider";
+  actor: string;
+  detail: string | null; // state/district or insider title
+  transaction: string;
+  transactionDate: Date;
+  rangeRaw: string | null; // congress dollar band
+  value: number | null; // insider dollar value
+  shares: number | null; // insider share count
+};
+
+/**
+ * Recent government (House/Senate) + corporate insider trades for a single
+ * ticker, merged into one date-sorted feed for the stock detail page.
+ */
+export async function getTickerSmartMoney(
+  ticker: string,
+  opts: { sinceDays?: number; limit?: number } = {},
+): Promise<SmartMoneyTrade[]> {
+  const { sinceDays = 365, limit = 10 } = opts;
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  const where = { ticker, transactionDate: { gte: since } };
+
+  const [congress, insider] = await Promise.all([
+    db.congressTrade.findMany({
+      where,
+      orderBy: { transactionDate: "desc" },
+      take: limit,
+      select: {
+        politician: true,
+        stateDist: true,
+        chamber: true,
+        transaction: true,
+        transactionDate: true,
+        rangeRaw: true,
+      },
+    }),
+    db.insiderTrade.findMany({
+      where,
+      orderBy: { transactionDate: "desc" },
+      take: limit,
+      select: {
+        insiderName: true,
+        insiderTitle: true,
+        transaction: true,
+        transactionDate: true,
+        value: true,
+        shares: true,
+      },
+    }),
+  ]);
+
+  const trades: SmartMoneyTrade[] = [
+    ...congress.map((c) => ({
+      source: (c.chamber === "Senate" ? "Senate" : "House") as
+        | "House"
+        | "Senate",
+      actor: c.politician,
+      detail: c.stateDist,
+      transaction: c.transaction,
+      transactionDate: c.transactionDate,
+      rangeRaw: c.rangeRaw,
+      value: null,
+      shares: null,
+    })),
+    ...insider.map((i) => ({
+      source: "Insider" as const,
+      actor: i.insiderName,
+      detail: i.insiderTitle,
+      transaction: i.transaction,
+      transactionDate: i.transactionDate,
+      rangeRaw: null,
+      value: i.value,
+      shares: i.shares,
+    })),
+  ];
+
+  trades.sort(
+    (a, b) => b.transactionDate.getTime() - a.transactionDate.getTime(),
+  );
+  return trades.slice(0, limit);
+}
+
 export async function getCrossSourceTopTickers(opts: {
   since: Date;
   limit?: number;

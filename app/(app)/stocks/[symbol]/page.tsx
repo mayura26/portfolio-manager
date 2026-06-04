@@ -20,6 +20,7 @@ import {
 } from "@/components/stocks/price-target-panel";
 import { RunForecastButton } from "@/components/stocks/run-forecast-button";
 import { SignalsCard } from "@/components/stocks/signals-card";
+import { SmartMoneyCard } from "@/components/stocks/smart-money-card";
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
 import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
@@ -49,6 +50,12 @@ export default function StockOverviewPage({
         <section>
           <Suspense fallback={null}>
             <SignalsLoader params={params} />
+          </Suspense>
+        </section>
+
+        <section>
+          <Suspense fallback={null}>
+            <SmartMoneyLoader params={params} />
           </Suspense>
         </section>
 
@@ -101,6 +108,15 @@ async function SignalsLoader({ params }: { params: Params }) {
   const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
   if (!instrument) return null;
   return <SignalsCard instrumentId={instrument.id} />;
+}
+
+async function SmartMoneyLoader({ params }: { params: Params }) {
+  const { symbol } = await params;
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
+  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  if (!instrument) return null;
+  return <SmartMoneyCard ticker={instrument.symbol} />;
 }
 
 async function ForecastUploadLoader({ params }: { params: Params }) {
