@@ -499,7 +499,7 @@ export type TradeCluster = {
 // Blend trade count (breadth) and dollar volume (size) into a single 0–1 score.
 // Each dimension is min-max normalized against the candidate set so "many small
 // buyers" and "one whale" land on a comparable scale, then averaged equally.
-function blendScore(
+export function blendScore(
   count: number,
   volume: number,
   maxCount: number,

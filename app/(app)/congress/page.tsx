@@ -1,4 +1,5 @@
-import { Landmark } from "lucide-react";
+import { Building2, Landmark } from "lucide-react";
+import Link from "next/link";
 import { Suspense } from "react";
 import { CongressFiltersSection } from "@/components/congress/congress-filters-section";
 import { CongressSectorChart } from "@/components/congress/congress-sector-chart";
@@ -6,6 +7,7 @@ import { CongressSummaryCards } from "@/components/congress/congress-summary-car
 import { CongressTradesTable } from "@/components/congress/congress-trades-table";
 import { TopTradesTable } from "@/components/congress/top-trades-table";
 import { Skeleton } from "@/components/shared/skeleton";
+import { CrossSourceLeaderboard } from "@/components/signals/cross-source-leaderboard";
 import { congressFiltersSchema } from "@/lib/validators";
 
 type SearchParams = Promise<Record<string, string>>;
@@ -18,19 +20,28 @@ export default function CongressPage({
 }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-8 border-b border-border pb-6">
-        <p className="label">Intelligence</p>
-        <h1 className="display mt-2 text-4xl text-foreground">
-          <span className="inline-flex items-center gap-3">
-            <Landmark className="h-8 w-8 text-muted" strokeWidth={1} />
-            Government Trades
-          </span>
-        </h1>
-        <p className="mt-2 max-w-prose text-sm text-muted">
-          Congressional Periodic Transaction Reports across the House and Senate
-          — STOCK Act disclosures. Spot clusters where multiple members are
-          buying or selling the same stock.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <p className="label">Intelligence</p>
+          <h1 className="display mt-2 text-4xl text-foreground">
+            <span className="inline-flex items-center gap-3">
+              <Landmark className="h-8 w-8 text-muted" strokeWidth={1} />
+              Government Trades
+            </span>
+          </h1>
+          <p className="mt-2 max-w-prose text-sm text-muted">
+            Congressional Periodic Transaction Reports across the House and
+            Senate — STOCK Act disclosures. Spot clusters where multiple members
+            are buying or selling the same stock.
+          </p>
+        </div>
+        <Link
+          href="/insiders"
+          className="hairline inline-flex shrink-0 items-center gap-2 bg-surface px-3 py-1.5 text-xs text-foreground hover:border-border-strong"
+        >
+          <Building2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+          Insider trades
+        </Link>
       </header>
 
       <Suspense fallback={<CongressPageSkeleton />}>
@@ -62,6 +73,12 @@ async function CongressContent({
       >
         <CongressSummaryCards since={since} />
       </Suspense>
+
+      <div className="mt-8">
+        <Suspense fallback={<Skeleton className="h-64" />}>
+          <CrossSourceLeaderboard since={since} />
+        </Suspense>
+      </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <Suspense fallback={<Skeleton className="h-64" />}>

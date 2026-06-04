@@ -1,9 +1,11 @@
-import { Building2 } from "lucide-react";
+import { Building2, Landmark } from "lucide-react";
+import Link from "next/link";
 import { Suspense } from "react";
 import { InsiderFiltersBar } from "@/components/insiders/insider-filters-bar";
 import { InsiderSummaryCards } from "@/components/insiders/insider-summary-cards";
 import { InsiderTradesTable } from "@/components/insiders/insider-trades-table";
 import { Skeleton } from "@/components/shared/skeleton";
+import { CrossSourceLeaderboard } from "@/components/signals/cross-source-leaderboard";
 import { insiderFiltersSchema } from "@/lib/validators";
 
 type SearchParams = Promise<Record<string, string>>;
@@ -15,18 +17,27 @@ export default function InsidersPage({
 }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-8 border-b border-border pb-6">
-        <p className="label">Intelligence</p>
-        <h1 className="display mt-2 text-4xl text-foreground">
-          <span className="inline-flex items-center gap-3">
-            <Building2 className="h-8 w-8 text-muted" strokeWidth={1} />
-            Insider Trades
-          </span>
-        </h1>
-        <p className="mt-2 max-w-prose text-sm text-muted">
-          Corporate insider buys and sells from SEC Form 4 filings, limited to
-          companies you hold or watch.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <p className="label">Intelligence</p>
+          <h1 className="display mt-2 text-4xl text-foreground">
+            <span className="inline-flex items-center gap-3">
+              <Building2 className="h-8 w-8 text-muted" strokeWidth={1} />
+              Insider Trades
+            </span>
+          </h1>
+          <p className="mt-2 max-w-prose text-sm text-muted">
+            Corporate insider buys and sells from SEC Form 4 filings, limited to
+            companies you hold or watch.
+          </p>
+        </div>
+        <Link
+          href="/congress"
+          className="hairline inline-flex shrink-0 items-center gap-2 bg-surface px-3 py-1.5 text-xs text-foreground hover:border-border-strong"
+        >
+          <Landmark className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+          Government trades
+        </Link>
       </header>
 
       <Suspense fallback={<InsidersPageSkeleton />}>
@@ -58,6 +69,12 @@ async function InsidersContent({
       >
         <InsiderSummaryCards since={since} />
       </Suspense>
+
+      <div className="mt-8">
+        <Suspense fallback={<Skeleton className="h-64" />}>
+          <CrossSourceLeaderboard since={since} />
+        </Suspense>
+      </div>
 
       <div className="mt-8">
         <div className="border-b border-border pb-3">
