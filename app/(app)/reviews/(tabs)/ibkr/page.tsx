@@ -84,6 +84,13 @@ const CRON_JOBS: CronJobConfig[] = [
     cadence: "Daily",
     staleHours: 36,
   },
+  {
+    job: "executive-trades",
+    label: "Executive (OGE 278-T)",
+    command: "npm run cron:executive-trades",
+    cadence: "Weekly",
+    staleHours: 8 * 24,
+  },
 ];
 
 export default function IbkrSyncPage() {

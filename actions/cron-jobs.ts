@@ -17,6 +17,7 @@ const CRON_SCRIPTS = {
   "congress-trades": "cron:congress-trades",
   "senate-trades": "cron:senate-trades",
   "insider-trades": "cron:insider-trades",
+  "executive-trades": "cron:executive-trades",
 } as const;
 
 export type ManualCronJob = keyof typeof CRON_SCRIPTS;

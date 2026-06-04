@@ -14,6 +14,7 @@ import type { CronJobName } from "@/lib/cron-runs";
 import { recordCronRun } from "@/lib/cron-runs";
 import { db } from "@/lib/db";
 import { runInsiderSync } from "@/lib/insider-trades";
+import { runExecutiveSync } from "@/lib/oge-trades";
 import { runSenateSync } from "@/lib/senate-trades";
 
 async function runOne<T extends { ok: boolean }>(
@@ -69,6 +70,16 @@ async function main() {
         inserted: r.inserted,
         skipped: r.skipped,
         tickers: r.tickers,
+        filings: r.filings,
+        ok: r.ok,
+      }),
+    ),
+    await runOne(
+      "executive-trades",
+      () => runExecutiveSync("cron"),
+      (r) => ({
+        inserted: r.inserted,
+        skipped: r.skipped,
         filings: r.filings,
         ok: r.ok,
       }),

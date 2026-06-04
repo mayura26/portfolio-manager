@@ -11,7 +11,8 @@ export type CronJobName =
   | "weekly-report"
   | "congress-trades"
   | "senate-trades"
-  | "insider-trades";
+  | "insider-trades"
+  | "executive-trades";
 
 type RecordCronRunOptions<T> = {
   job: CronJobName;

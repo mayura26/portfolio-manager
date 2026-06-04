@@ -788,3 +788,30 @@ model InsiderTrade {
   @@index([transactionDate(sort: Desc)])
   @@index([transaction, transactionDate(sort: Desc)])
 }
+
+// ─────────────────────────────────────────────────────────────
+// Executive-branch trades (OGE Form 278-T, e.g. the President)
+//
+// These filings are OCR'd scanned PDFs of mostly bonds/funds with no ticker
+// symbols, so they get their own asset-name-based model rather than polluting
+// the ticker-centric CongressTrade / InsiderTrade flows.
+// ─────────────────────────────────────────────────────────────
+
+model ExecutiveTrade {
+  id              String    @id @default(cuid())
+  filer           String
+  assetName       String
+  assetClass      String?
+  transaction     String
+  transactionDate DateTime? @db.Date
+  rangeRaw        String?
+  amountLow       Int?
+  amountHigh      Int?
+  amountMid       Int?
+  docId           String
+  externalKey     String    @unique
+  createdAt       DateTime  @default(now())
+
+  @@index([transactionDate(sort: Desc)])
+  @@index([filer])
+}

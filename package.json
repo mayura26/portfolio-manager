@@ -32,6 +32,7 @@
     "cron:congress-trades": "tsx scripts/cron-congress-trades.ts",
     "cron:senate-trades": "tsx scripts/cron-senate-trades.ts",
     "cron:insider-trades": "tsx scripts/cron-insider-trades.ts",
+    "cron:executive-trades": "tsx scripts/cron-executive-trades.ts",
     "cron:trades": "tsx scripts/cron-trades.ts"
   },
   "dependencies": {

@@ -7,6 +7,7 @@ const TABS = [
   { href: "/signals", label: "Overview" },
   { href: "/signals/government", label: "Government" },
   { href: "/signals/insiders", label: "Insiders" },
+  { href: "/signals/executive", label: "Executive" },
 ] as const;
 
 export function SignalsSectionTabs() {
