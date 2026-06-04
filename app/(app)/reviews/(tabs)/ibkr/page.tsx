@@ -1,8 +1,8 @@
 import { CableIcon, KeyRound } from "lucide-react";
 import { Suspense } from "react";
 import {
-  CronStatusPanel,
   type CronJobConfig,
+  CronStatusPanel,
 } from "@/components/reviews/cron-status-panel";
 import { IbkrSyncPanel } from "@/components/reviews/ibkr-sync-panel";
 import { PriceRefreshPanel } from "@/components/reviews/price-refresh-panel";
@@ -67,6 +67,20 @@ const CRON_JOBS: CronJobConfig[] = [
     job: "congress-trades",
     label: "Congress trades",
     command: "npm run cron:congress-trades",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "senate-trades",
+    label: "Senate trades",
+    command: "npm run cron:senate-trades",
+    cadence: "Daily",
+    staleHours: 36,
+  },
+  {
+    job: "insider-trades",
+    label: "Insider trades (Form 4)",
+    command: "npm run cron:insider-trades",
     cadence: "Daily",
     staleHours: 36,
   },

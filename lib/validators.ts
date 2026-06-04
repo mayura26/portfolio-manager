@@ -403,12 +403,24 @@ export const congressFiltersSchema = z.object({
   sector: z.string().optional(),
   ticker: z.string().trim().toUpperCase().optional(),
   transaction: z.enum(["Purchase", "Sale"]).optional(),
+  chamber: z.enum(["House", "Senate"]).optional(),
   // Minimum disclosed trade size (matched against amountMid, the band midpoint).
   minAmount: z.coerce.number().int().nonnegative().optional(),
   page: z.coerce.number().int().positive().default(1),
 });
 
 export type CongressFilters = z.infer<typeof congressFiltersSchema>;
+
+// ─── Insider trades filters ───────────────────────────────────
+
+export const insiderFiltersSchema = z.object({
+  days: z.coerce.number().int().positive().default(90),
+  ticker: z.string().trim().toUpperCase().optional(),
+  transaction: z.enum(["Purchase", "Sale"]).optional(),
+  page: z.coerce.number().int().positive().default(1),
+});
+
+export type InsiderFilters = z.infer<typeof insiderFiltersSchema>;
 
 // ─── Stock Note ───────────────────────────────────────────────
 

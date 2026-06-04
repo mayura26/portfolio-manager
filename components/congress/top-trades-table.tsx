@@ -7,6 +7,7 @@ type Props = {
   since: Date;
   sector?: string;
   minAmount?: number;
+  chamber?: string;
 };
 
 export async function TopTradesTable({
@@ -14,11 +15,13 @@ export async function TopTradesTable({
   since,
   sector,
   minAmount,
+  chamber,
 }: Props) {
   const clusters = await getTopClusters({
     since,
     sector,
     minAmount,
+    chamber,
     limit: 10,
   });
   const filtered = clusters

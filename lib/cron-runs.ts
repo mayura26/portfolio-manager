@@ -9,7 +9,9 @@ export type CronJobName =
   | "ibkr-sync"
   | "autowatcher"
   | "weekly-report"
-  | "congress-trades";
+  | "congress-trades"
+  | "senate-trades"
+  | "insider-trades";
 
 type RecordCronRunOptions<T> = {
   job: CronJobName;

@@ -1,13 +1,13 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { getFilteredTrades } from "@/lib/congress-trades";
-import { formatDate } from "@/lib/format";
-import type { CongressFilters } from "@/lib/validators";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { getFilteredInsiderTrades } from "@/lib/insider-trades";
+import type { InsiderFilters } from "@/lib/validators";
 
 const PAGE_SIZE = 50;
 
 type Props = {
-  filters: CongressFilters;
+  filters: InsiderFilters;
 };
 
 function transactionBadge(tx: string) {
@@ -19,7 +19,7 @@ function transactionBadge(tx: string) {
       </span>
     );
   }
-  if (lower.includes("sale") || lower.includes("sell")) {
+  if (lower.includes("sale")) {
     return (
       <span className="inline-block rounded-sm bg-loss/10 px-1.5 py-0.5 text-xs font-medium text-loss">
         {tx}
@@ -29,16 +29,13 @@ function transactionBadge(tx: string) {
   return <span className="text-xs text-muted">{tx}</span>;
 }
 
-export async function CongressTradesTable({ filters }: Props) {
+export async function InsiderTradesTable({ filters }: Props) {
   const since = new Date(Date.now() - filters.days * 24 * 60 * 60 * 1000);
 
-  const { trades, total } = await getFilteredTrades({
+  const { trades, total } = await getFilteredInsiderTrades({
     since,
-    sector: filters.sector,
     ticker: filters.ticker,
     transaction: filters.transaction,
-    minAmount: filters.minAmount,
-    chamber: filters.chamber,
     page: filters.page,
     pageSize: PAGE_SIZE,
   });
@@ -49,14 +46,11 @@ export async function CongressTradesTable({ filters }: Props) {
   function pageHref(p: number) {
     const params = new URLSearchParams({
       days: String(filters.days),
-      ...(filters.sector ? { sector: filters.sector } : {}),
       ...(filters.ticker ? { ticker: filters.ticker } : {}),
       ...(filters.transaction ? { transaction: filters.transaction } : {}),
-      ...(filters.minAmount ? { minAmount: String(filters.minAmount) } : {}),
-      ...(filters.chamber ? { chamber: filters.chamber } : {}),
       page: String(p),
     });
-    return `/congress?${params.toString()}`;
+    return `/insiders?${params.toString()}`;
   }
 
   return (
@@ -67,20 +61,20 @@ export async function CongressTradesTable({ filters }: Props) {
             <tr className="border-b border-border text-left">
               <th className="px-5 py-2 text-xs font-normal text-muted">Date</th>
               <th className="px-5 py-2 text-xs font-normal text-muted">
-                Member
-              </th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted md:table-cell">
-                State
+                Insider
               </th>
               <th className="px-5 py-2 text-xs font-normal text-muted">
                 Ticker
               </th>
               <th className="px-5 py-2 text-xs font-normal text-muted">Type</th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted lg:table-cell">
-                Amount
+              <th className="px-5 py-2 text-right text-xs font-normal text-muted">
+                Shares
               </th>
-              <th className="hidden px-5 py-2 text-xs font-normal text-muted xl:table-cell">
-                Sector
+              <th className="hidden px-5 py-2 text-right text-xs font-normal text-muted lg:table-cell">
+                Price
+              </th>
+              <th className="px-5 py-2 text-right text-xs font-normal text-muted">
+                Value
               </th>
             </tr>
           </thead>
@@ -91,9 +85,9 @@ export async function CongressTradesTable({ filters }: Props) {
                   colSpan={7}
                   className="px-5 py-10 text-center text-sm text-muted"
                 >
-                  No trades found for this period. Disclosures populate from the
-                  scheduled congress-trades sync (run it from the Data sync
-                  page).
+                  No insider trades for this period. Form 4 data populates from
+                  the scheduled insider-trades sync (Data sync page) for tickers
+                  you hold or watch.
                 </td>
               </tr>
             ) : (
@@ -106,11 +100,12 @@ export async function CongressTradesTable({ filters }: Props) {
                     {formatDate(t.transactionDate)}
                   </td>
                   <td className="px-5 py-2.5">
-                    <span className="text-foreground">{t.politician}</span>
-                    <p className="mt-0.5 text-xs text-subtle">{t.chamber}</p>
-                  </td>
-                  <td className="hidden whitespace-nowrap px-5 py-2.5 text-xs text-muted md:table-cell">
-                    {t.stateDist ?? "—"}
+                    <span className="text-foreground">{t.insiderName}</span>
+                    {t.insiderTitle ? (
+                      <p className="mt-0.5 max-w-[180px] truncate text-xs text-subtle">
+                        {t.insiderTitle}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-5 py-2.5">
                     <Link
@@ -119,20 +114,24 @@ export async function CongressTradesTable({ filters }: Props) {
                     >
                       {t.ticker}
                     </Link>
-                    {t.assetName ? (
-                      <p className="mt-0.5 max-w-[140px] truncate text-xs text-muted">
-                        {t.assetName}
-                      </p>
-                    ) : null}
                   </td>
                   <td className="px-5 py-2.5">
                     {transactionBadge(t.transaction)}
                   </td>
-                  <td className="hidden px-5 py-2.5 text-xs text-muted tabular lg:table-cell">
-                    {t.rangeRaw ?? "—"}
+                  <td className="px-5 py-2.5 text-right tabular text-xs text-muted">
+                    {t.shares != null
+                      ? formatNumber(t.shares, { decimals: 0 })
+                      : "—"}
                   </td>
-                  <td className="hidden px-5 py-2.5 text-xs text-muted xl:table-cell">
-                    {t.sector ?? "—"}
+                  <td className="hidden px-5 py-2.5 text-right tabular text-xs text-muted lg:table-cell">
+                    {t.pricePerShare != null
+                      ? formatCurrency(t.pricePerShare, "USD")
+                      : "—"}
+                  </td>
+                  <td className="px-5 py-2.5 text-right tabular text-xs text-muted">
+                    {t.value != null
+                      ? formatCurrency(t.value, "USD", { compact: true })
+                      : "—"}
                   </td>
                 </tr>
               ))

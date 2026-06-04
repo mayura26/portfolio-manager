@@ -2,6 +2,7 @@ import {
   Bell,
   Bookmark,
   Briefcase,
+  Building2,
   ClipboardCheck,
   Landmark,
   Layers,
@@ -60,8 +61,13 @@ export const PRIMARY_NAV: NavItem[] = [
   },
   {
     href: "/congress",
-    label: "Congress",
+    label: "Government",
     icon: <Landmark className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
+  },
+  {
+    href: "/insiders",
+    label: "Insiders",
+    icon: <Building2 className={ICON_CLASS} strokeWidth={ICON_STROKE} />,
   },
   {
     href: "/stats",

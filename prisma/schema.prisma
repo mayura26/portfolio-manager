@@ -756,3 +756,35 @@ model CongressTrade {
   @@index([sector, transactionDate(sort: Desc)])
   @@index([instrumentId])
 }
+
+// ─────────────────────────────────────────────────────────────
+// Insider Trades (SEC EDGAR Form 4)
+// ─────────────────────────────────────────────────────────────
+
+model InsiderTrade {
+  id               String   @id @default(cuid())
+  ticker           String
+  issuerName       String
+  insiderName      String
+  insiderTitle     String?
+  transaction      String // normalized: "Purchase" | "Sale" | "Award" | "Other"
+  transactionCode  String? // raw Form 4 code (P, S, A, M, G, ...)
+  transactionDate  DateTime @db.Date
+  shares           Float?
+  pricePerShare    Float?
+  value            Float?
+  sharesOwnedAfter Float?
+  accessionNo      String
+
+  // Denormalized enrichment (no relation — keeps Instrument untouched).
+  instrumentId String?
+  sector       String?
+  industry     String?
+
+  externalKey String   @unique
+  createdAt   DateTime @default(now())
+
+  @@index([ticker, transactionDate(sort: Desc)])
+  @@index([transactionDate(sort: Desc)])
+  @@index([transaction, transactionDate(sort: Desc)])
+}

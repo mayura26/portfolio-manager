@@ -15,6 +15,8 @@ const CRON_SCRIPTS = {
   autowatcher: "cron:autowatcher",
   "weekly-report": "cron:weekly-report",
   "congress-trades": "cron:congress-trades",
+  "senate-trades": "cron:senate-trades",
+  "insider-trades": "cron:insider-trades",
 } as const;
 
 export type ManualCronJob = keyof typeof CRON_SCRIPTS;
@@ -64,4 +66,3 @@ export async function runCronJob(job: string): Promise<RunCronJobResult> {
   revalidatePath("/reviews/ibkr");
   return { ok: true, job };
 }
-

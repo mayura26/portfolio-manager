@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { CongressFiltersSection } from "@/components/congress/congress-filters-section";
 import { CongressSectorChart } from "@/components/congress/congress-sector-chart";
 import { CongressSummaryCards } from "@/components/congress/congress-summary-cards";
-import { CongressSyncButton } from "@/components/congress/congress-sync-button";
 import { CongressTradesTable } from "@/components/congress/congress-trades-table";
 import { TopTradesTable } from "@/components/congress/top-trades-table";
 import { Skeleton } from "@/components/shared/skeleton";
@@ -19,22 +18,19 @@ export default function CongressPage({
 }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-8 flex items-end justify-between border-b border-border pb-6">
-        <div>
-          <p className="label">Intelligence</p>
-          <h1 className="display mt-2 text-4xl text-foreground">
-            <span className="inline-flex items-center gap-3">
-              <Landmark className="h-8 w-8 text-muted" strokeWidth={1} />
-              Congress Trades
-            </span>
-          </h1>
-          <p className="mt-2 max-w-prose text-sm text-muted">
-            House Periodic Transaction Reports — STOCK Act disclosures from
-            disclosures.house.gov. Spot clusters where multiple members are
-            buying or selling the same stock.
-          </p>
-        </div>
-        <CongressSyncButton />
+      <header className="mb-8 border-b border-border pb-6">
+        <p className="label">Intelligence</p>
+        <h1 className="display mt-2 text-4xl text-foreground">
+          <span className="inline-flex items-center gap-3">
+            <Landmark className="h-8 w-8 text-muted" strokeWidth={1} />
+            Government Trades
+          </span>
+        </h1>
+        <p className="mt-2 max-w-prose text-sm text-muted">
+          Congressional Periodic Transaction Reports across the House and Senate
+          — STOCK Act disclosures. Spot clusters where multiple members are
+          buying or selling the same stock.
+        </p>
       </header>
 
       <Suspense fallback={<CongressPageSkeleton />}>
@@ -74,6 +70,7 @@ async function CongressContent({
             since={since}
             sector={filters.sector}
             minAmount={filters.minAmount}
+            chamber={filters.chamber}
           />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-64" />}>
@@ -82,6 +79,7 @@ async function CongressContent({
             since={since}
             sector={filters.sector}
             minAmount={filters.minAmount}
+            chamber={filters.chamber}
           />
         </Suspense>
       </div>
@@ -101,6 +99,7 @@ async function CongressContent({
               <CongressSectorChart
                 since={since}
                 minAmount={filters.minAmount}
+                chamber={filters.chamber}
               />
             </Suspense>
           </div>

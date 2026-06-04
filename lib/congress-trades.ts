@@ -62,6 +62,47 @@ export function parseAmountRange(raw: string | null | undefined): {
   return { low: null, high: null, mid: null };
 }
 
+export type TickerEnrichment = {
+  instrumentId: string;
+  sector: string | null;
+  industry: string | null;
+};
+
+/**
+ * Resolve a set of tickers to instruments (creating + enriching via Yahoo as
+ * needed), 20 at a time. Shared by every trade source (House/Senate/OGE) so the
+ * sector/industry/instrument linkage is consistent. Failures cache as null
+ * rather than throwing, so one bad ticker never aborts a sync.
+ */
+export async function enrichTickers(
+  tickers: Iterable<string>,
+): Promise<{ cache: Map<string, TickerEnrichment | null>; enriched: number }> {
+  const cache = new Map<string, TickerEnrichment | null>();
+  const arr = Array.from(new Set(tickers));
+  let enriched = 0;
+
+  for (let i = 0; i < arr.length; i += 20) {
+    const batch = arr.slice(i, i + 20);
+    await Promise.allSettled(
+      batch.map(async (ticker) => {
+        try {
+          const inst = await findOrCreateInstrument(ticker);
+          cache.set(ticker, {
+            instrumentId: inst.id,
+            sector: inst.sector,
+            industry: inst.industry,
+          });
+          enriched++;
+        } catch {
+          cache.set(ticker, null);
+        }
+      }),
+    );
+  }
+
+  return { cache, enriched };
+}
+
 function parseTransactionType(raw: string): string {
   const t = raw?.trim().toUpperCase();
   if (t === "P" || t === "PURCHASE") return "Purchase";
@@ -175,7 +216,7 @@ function extractFirstXmlFromZip(buf: Buffer): string | null {
   return null;
 }
 
-async function fetchFilingIndex(
+export async function fetchFilingIndex(
   fromDate: Date,
   toDate: Date,
 ): Promise<FilingMeta[]> {
@@ -307,11 +348,24 @@ export async function runCongressSync(
     ? lastRun.startedAt
     : new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
+  return ingestHouseFilings(fromDate, now);
+}
+
+/**
+ * Core House pipeline for a date range: fetch the per-year filing index, pull
+ * and parse each PTR PDF (5 concurrent), enrich distinct tickers via Yahoo, and
+ * insert CongressTrade rows (skipDuplicates). Shared by the incremental cron and
+ * the historical backfill so both behave identically.
+ */
+export async function ingestHouseFilings(
+  fromDate: Date,
+  toDate: Date,
+): Promise<CongressSyncResult> {
   console.log(
-    `[congress-trades] Fetching filings from ${fromDate.toISOString().slice(0, 10)} to ${now.toISOString().slice(0, 10)}`,
+    `[congress-trades] Fetching filings from ${fromDate.toISOString().slice(0, 10)} to ${toDate.toISOString().slice(0, 10)}`,
   );
 
-  const filings = await fetchFilingIndex(fromDate, now);
+  const filings = await fetchFilingIndex(fromDate, toDate);
   console.log(`[congress-trades] Found ${filings.length} PTR filings`);
 
   if (filings.length === 0) {
@@ -340,41 +394,9 @@ export async function runCongressSync(
   }
 
   // Enrich distinct tickers with Yahoo Finance
-  const allTickers = new Set<string>();
-  for (const { txs } of filingsWithTxs) {
-    for (const tx of txs) allTickers.add(tx.ticker);
-  }
-
-  const enrichmentCache = new Map<
-    string,
-    {
-      instrumentId: string;
-      sector: string | null;
-      industry: string | null;
-    } | null
-  >();
-
-  const tickerArray = Array.from(allTickers);
-  let enriched = 0;
-
-  for (let i = 0; i < tickerArray.length; i += 20) {
-    const batch = tickerArray.slice(i, i + 20);
-    await Promise.allSettled(
-      batch.map(async (ticker) => {
-        try {
-          const inst = await findOrCreateInstrument(ticker);
-          enrichmentCache.set(ticker, {
-            instrumentId: inst.id,
-            sector: inst.sector,
-            industry: inst.industry,
-          });
-          enriched++;
-        } catch {
-          enrichmentCache.set(ticker, null);
-        }
-      }),
-    );
-  }
+  const { cache: enrichmentCache, enriched } = await enrichTickers(
+    filingsWithTxs.flatMap(({ txs }) => txs.map((tx) => tx.ticker)),
+  );
 
   // Build insert rows
   const rows: {
@@ -492,13 +514,15 @@ export async function getTopClusters(opts: {
   since: Date;
   sector?: string;
   minAmount?: number;
+  chamber?: string;
   limit?: number;
 }): Promise<TradeCluster[]> {
-  const { since, sector, minAmount, limit = 20 } = opts;
+  const { since, sector, minAmount, chamber, limit = 20 } = opts;
   const baseWhere = {
     transactionDate: { gte: since },
     ...(sector ? { sector } : {}),
     ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
+    ...(chamber ? { chamber } : {}),
   };
 
   const [buys, sells] = await Promise.all([
@@ -636,6 +660,7 @@ export type SectorBreakdown = {
 export async function getSectorBreakdown(
   since: Date,
   minAmount?: number,
+  chamber?: string,
 ): Promise<SectorBreakdown[]> {
   const rows = await db.congressTrade.groupBy({
     by: ["sector", "transaction"],
@@ -643,6 +668,7 @@ export async function getSectorBreakdown(
       transactionDate: { gte: since },
       sector: { not: null },
       ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
+      ...(chamber ? { chamber } : {}),
     },
     _count: { _all: true },
     _sum: { amountMid: true },
@@ -715,6 +741,7 @@ export async function getFilteredTrades(opts: {
   ticker?: string;
   transaction?: string;
   minAmount?: number;
+  chamber?: string;
   page: number;
   pageSize?: number;
 }): Promise<{ trades: CongressTradeRow[]; total: number }> {
@@ -724,6 +751,7 @@ export async function getFilteredTrades(opts: {
     ticker,
     transaction,
     minAmount,
+    chamber,
     page,
     pageSize = 50,
   } = opts;
@@ -734,6 +762,7 @@ export async function getFilteredTrades(opts: {
     ...(ticker ? { ticker } : {}),
     ...(transaction ? { transaction } : {}),
     ...(minAmount ? { amountMid: { gte: minAmount } } : {}),
+    ...(chamber ? { chamber } : {}),
   };
 
   const [trades, total] = await Promise.all([

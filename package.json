@@ -18,6 +18,7 @@
     "test:portfolio-recommendations": "tsx scripts/test-portfolio-recommendations.ts",
     "test:simply-wall-st-export": "tsx scripts/test-simply-wall-st-export.ts",
     "backfill:congress-amounts": "tsx scripts/backfill-congress-amounts.ts",
+    "backfill:congress-history": "tsx scripts/backfill-congress-history.ts",
     "diagnose:single-day-records": "tsx scripts/diagnose-single-day-records.ts",
     "diagnose:group-cash": "tsx scripts/diagnose-group-cash.ts",
     "debug:live-flex": "tsx scripts/debug-live-flex.ts",
@@ -28,7 +29,10 @@
     "cron:ibkr-sync": "tsx scripts/cron-ibkr-sync.ts",
     "cron:autowatcher": "tsx scripts/cron-autowatcher.ts",
     "cron:weekly-report": "tsx scripts/cron-weekly-report.ts",
-    "cron:congress-trades": "tsx scripts/cron-congress-trades.ts"
+    "cron:congress-trades": "tsx scripts/cron-congress-trades.ts",
+    "cron:senate-trades": "tsx scripts/cron-senate-trades.ts",
+    "cron:insider-trades": "tsx scripts/cron-insider-trades.ts",
+    "cron:trades": "tsx scripts/cron-trades.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

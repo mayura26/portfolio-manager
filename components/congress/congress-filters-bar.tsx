@@ -32,6 +32,7 @@ export function CongressFiltersBar({ filters, sectors }: Props) {
       ...(filters.ticker ? { ticker: filters.ticker } : {}),
       ...(filters.transaction ? { transaction: filters.transaction } : {}),
       ...(filters.minAmount ? { minAmount: String(filters.minAmount) } : {}),
+      ...(filters.chamber ? { chamber: filters.chamber } : {}),
     });
 
     if (value) {
@@ -63,6 +64,22 @@ export function CongressFiltersBar({ filters, sectors }: Props) {
           <option value="90">90 days</option>
           <option value="180">180 days</option>
           <option value="365">1 year</option>
+        </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label htmlFor="congress-chamber" className="label text-xs">
+          Chamber
+        </label>
+        <select
+          id="congress-chamber"
+          value={filters.chamber ?? ""}
+          onChange={(e) => updateParam("chamber", e.target.value)}
+          className="hairline bg-transparent px-2 py-1 text-sm text-foreground"
+        >
+          <option value="">All</option>
+          <option value="House">House</option>
+          <option value="Senate">Senate</option>
         </select>
       </div>
 
