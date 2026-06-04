@@ -29,6 +29,10 @@ export type SearchHit = {
   quoteType: string;
 };
 
+type SearchResponse = {
+  quotes?: unknown[];
+};
+
 export async function searchSymbols(
   query: string,
   limit = 10,
@@ -36,15 +40,24 @@ export async function searchSymbols(
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const result = await yahoo.search(trimmed, {
-    quotesCount: limit,
-    newsCount: 0,
-  });
+  // Yahoo sometimes changes display fields before yahoo-finance2 updates its
+  // schema. Coerce the small quote subset we use instead of failing search.
+  const result = (await yahoo.search(
+    trimmed,
+    {
+      quotesCount: limit,
+      newsCount: 0,
+    },
+    { validateResult: false },
+  )) as SearchResponse;
 
-  return result.quotes
+  return (result.quotes ?? [])
     .filter(
-      (q): q is typeof q & { symbol: string } =>
-        "symbol" in q && typeof q.symbol === "string",
+      (q): q is Record<string, unknown> & { symbol: string } =>
+        typeof q === "object" &&
+        q !== null &&
+        "symbol" in q &&
+        typeof q.symbol === "string",
     )
     .map((q) => {
       const yahooSymbol = q.symbol;
