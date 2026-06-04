@@ -56,7 +56,7 @@ export async function CongressTradesTable({ filters }: Props) {
       ...(filters.chamber ? { chamber: filters.chamber } : {}),
       page: String(p),
     });
-    return `/congress?${params.toString()}`;
+    return `/signals/government?${params.toString()}`;
   }
 
   return (

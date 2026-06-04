@@ -50,7 +50,7 @@ export async function InsiderTradesTable({ filters }: Props) {
       ...(filters.transaction ? { transaction: filters.transaction } : {}),
       page: String(p),
     });
-    return `/insiders?${params.toString()}`;
+    return `/signals/insiders?${params.toString()}`;
   }
 
   return (
