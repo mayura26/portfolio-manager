@@ -117,6 +117,89 @@ export async function getTickerSmartMoney(
   return trades.slice(0, limit);
 }
 
+/**
+ * Batched version of getTickerSmartMoney for the leaderboard's expandable rows:
+ * fetches the recent government + insider trades for many tickers at once
+ * (2 queries total), grouped by ticker. Uses the same window as the leaderboard.
+ */
+export async function getSmartMoneyForTickers(
+  tickers: string[],
+  since: Date,
+  perTicker = 8,
+): Promise<Map<string, SmartMoneyTrade[]>> {
+  const result = new Map<string, SmartMoneyTrade[]>();
+  if (tickers.length === 0) return result;
+  const where = { ticker: { in: tickers }, transactionDate: { gte: since } };
+
+  const [congress, insider] = await Promise.all([
+    db.congressTrade.findMany({
+      where,
+      orderBy: { transactionDate: "desc" },
+      select: {
+        ticker: true,
+        politician: true,
+        stateDist: true,
+        chamber: true,
+        transaction: true,
+        transactionDate: true,
+        rangeRaw: true,
+      },
+    }),
+    db.insiderTrade.findMany({
+      where,
+      orderBy: { transactionDate: "desc" },
+      select: {
+        ticker: true,
+        insiderName: true,
+        insiderTitle: true,
+        transaction: true,
+        transactionDate: true,
+        value: true,
+        shares: true,
+      },
+    }),
+  ]);
+
+  const push = (ticker: string, trade: SmartMoneyTrade) => {
+    const list = result.get(ticker) ?? [];
+    list.push(trade);
+    result.set(ticker, list);
+  };
+
+  for (const c of congress) {
+    push(c.ticker, {
+      source: c.chamber === "Senate" ? "Senate" : "House",
+      actor: c.politician,
+      detail: c.stateDist,
+      transaction: c.transaction,
+      transactionDate: c.transactionDate,
+      rangeRaw: c.rangeRaw,
+      value: null,
+      shares: null,
+    });
+  }
+  for (const i of insider) {
+    push(i.ticker, {
+      source: "Insider",
+      actor: i.insiderName,
+      detail: i.insiderTitle,
+      transaction: i.transaction,
+      transactionDate: i.transactionDate,
+      rangeRaw: null,
+      value: i.value,
+      shares: i.shares,
+    });
+  }
+
+  for (const [ticker, list] of result) {
+    list.sort(
+      (a, b) => b.transactionDate.getTime() - a.transactionDate.getTime(),
+    );
+    result.set(ticker, list.slice(0, perTicker));
+  }
+  return result;
+}
+
 export async function getCrossSourceTopTickers(opts: {
   since: Date;
   limit?: number;
