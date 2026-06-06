@@ -134,7 +134,7 @@ async function GroupCash({ params }: { params: Params }) {
                   </td>
                 </tr>
               ) : (
-                cash.ledger.map((e) => (
+                cash.ledger.toReversed().map((e) => (
                   <tr
                     key={`${e.kind}-${e.id}`}
                     className="border-b border-border last:border-b-0"
