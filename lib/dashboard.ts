@@ -228,6 +228,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   let totalCostBase = ZERO;
   let totalMarketValueBase = ZERO;
+  let totalRealizedCashIncome = ZERO;
   let totalDailyChange = ZERO;
   let canComputeDaily = true;
 
@@ -285,16 +286,6 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     acc.realized = acc.realized.plus(realized);
   }
 
-  const groupBreakdown: GroupPnlRow[] = Array.from(groupAcc.entries())
-    .map(([groupId, acc]) => ({
-      groupId,
-      name: acc.name,
-      unrealized: acc.marketValue.minus(acc.cost),
-      dailyChange: acc.dailyChange,
-      realized: acc.realized,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
   const totalUnrealizedPnL = totalMarketValueBase.minus(totalCostBase);
   const previousValue = totalMarketValueBase.minus(totalDailyChange);
   const totalDailyChangePercent =
@@ -314,7 +305,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     const cashBase = cash.currentCash.isZero()
       ? ZERO
       : await convert(cash.currentCash, cash.baseCurrency, ws.baseCurrency, now);
+    const realizedIncome = cash.realizedIncome.isZero()
+      ? ZERO
+      : await convert(
+          cash.realizedIncome,
+          cash.baseCurrency,
+          ws.baseCurrency,
+          now,
+        );
     const equityBase = groupAcc.get(g.id)?.marketValue ?? ZERO;
+    const acc = ensureGroup(g.id, g.name);
+    acc.realized = acc.realized.plus(realizedIncome);
+    totalRealizedCashIncome = totalRealizedCashIncome.plus(realizedIncome);
 
     totalCashBase = totalCashBase.plus(cashBase);
     groupValueBreakdown.push({
@@ -326,6 +328,16 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     });
   }
 
+  const groupBreakdown: GroupPnlRow[] = Array.from(groupAcc.entries())
+    .map(([groupId, acc]) => ({
+      groupId,
+      name: acc.name,
+      unrealized: acc.marketValue.minus(acc.cost),
+      dailyChange: acc.dailyChange,
+      realized: acc.realized,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     baseCurrency: ws.baseCurrency,
     portfolioCount: ws.portfolios.length,
@@ -334,7 +346,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     totalMarketValueBase,
     totalCashBase,
     totalUnrealizedPnL,
-    totalRealizedPnL: ws.totalRealizedGlobal,
+    totalRealizedPnL: ws.totalRealizedGlobal.plus(totalRealizedCashIncome),
     totalDailyChange: canComputeDaily ? totalDailyChange : ZERO,
     totalDailyChangePercent,
     hasMissingPrices: ws.hasMissingPrices,

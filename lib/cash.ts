@@ -41,6 +41,7 @@ export type GroupCash = {
   withdrawals: Decimal;
   tradeOutflows: Decimal;
   tradeInflows: Decimal;
+  realizedIncome: Decimal;
   ledger: CashLedgerEntry[];
 };
 
@@ -68,6 +69,13 @@ const EXTERNAL_FLOW_TYPES = new Set([
 /** True if a ledger entry is an external cash flow (excluded from TWR return). */
 export function isExternalCashFlow(e: CashLedgerEntry): boolean {
   return e.kind === "transaction" && EXTERNAL_FLOW_TYPES.has(e.type);
+}
+
+const REALIZED_CASH_INCOME_TYPES = new Set(["DIVIDEND", "INTEREST"]);
+
+/** Cash income that should be reported as realized profit. */
+export function isRealizedCashIncome(e: CashLedgerEntry): boolean {
+  return e.kind === "transaction" && REALIZED_CASH_INCOME_TYPES.has(e.type);
 }
 
 const groupCashInclude = {
@@ -197,12 +205,14 @@ function aggregatesFromLedger(ledger: CashLedgerEntry[]): {
   withdrawals: Decimal;
   tradeOutflows: Decimal;
   tradeInflows: Decimal;
+  realizedIncome: Decimal;
   currentCash: Decimal;
 } {
   let seededAndDeposits = ZERO;
   let withdrawals = ZERO;
   let tradeOutflows = ZERO;
   let tradeInflows = ZERO;
+  let realizedIncome = ZERO;
   let currentCash = ZERO;
 
   for (const e of ledger) {
@@ -210,15 +220,14 @@ function aggregatesFromLedger(ledger: CashLedgerEntry[]): {
     if (e.kind === "transaction") {
       if (e.type === "WITHDRAWAL") {
         withdrawals = withdrawals.plus(e.amountBase.abs());
-      } else if (
-        e.type === "SEED" ||
-        e.type === "DEPOSIT" ||
-        e.type === "DIVIDEND"
-      ) {
+      } else if (e.type === "SEED" || e.type === "DEPOSIT") {
         seededAndDeposits = seededAndDeposits.plus(e.amountBase);
       }
-      // FEE / INTEREST / WITHHOLDING / FX_IN / FX_OUT affect the balance only,
-      // not the seeded/deposit/withdrawal breakdown.
+      if (isRealizedCashIncome(e)) {
+        realizedIncome = realizedIncome.plus(e.amountBase);
+      }
+      // DIVIDEND / INTEREST / FEE / WITHHOLDING / FX_IN / FX_OUT affect the
+      // balance, but are not external seed/deposit/withdrawal flows.
     } else if (e.type === "BUY") {
       tradeOutflows = tradeOutflows.plus(e.amountBase.abs());
     } else {
@@ -231,6 +240,7 @@ function aggregatesFromLedger(ledger: CashLedgerEntry[]): {
     withdrawals,
     tradeOutflows,
     tradeInflows,
+    realizedIncome,
     currentCash,
   };
 }
@@ -282,6 +292,7 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
     withdrawals: agg.withdrawals,
     tradeOutflows: agg.tradeOutflows,
     tradeInflows: agg.tradeInflows,
+    realizedIncome: agg.realizedIncome,
     ledger,
   };
 }

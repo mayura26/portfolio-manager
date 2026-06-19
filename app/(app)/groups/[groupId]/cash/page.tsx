@@ -76,6 +76,12 @@ async function GroupCash({ params }: { params: Params }) {
             )}
           </span>
           <span>
+            Dividend + interest income:{" "}
+            {formatCurrency(cash.realizedIncome.toString(), cash.baseCurrency, {
+              signed: true,
+            })}
+          </span>
+          <span>
             Withdrawals:{" "}
             {formatCurrency(cash.withdrawals.toString(), cash.baseCurrency)}
           </span>
