@@ -83,7 +83,7 @@ export async function PriceChart({
   );
   const avgCost =
     position && !position.quantity.isZero()
-      ? position.costBase.dividedBy(position.quantity).toNumber()
+      ? position.avgCostInstrument.toNumber()
       : null;
   const userTrim =
     trimGainPercent != null && avgCost != null

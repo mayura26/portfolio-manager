@@ -1,9 +1,12 @@
 import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
+import { getFxRate } from "@/lib/fx";
 import { computeHoldings, type Holding } from "@/lib/holdings";
 
 const APPROACHING_BAND = new Decimal(3); // within 3% of a threshold
+const ZERO = new Decimal(0);
+const ONE = new Decimal(1);
 
 export type SignalKind =
   | "TARGET_HIT"
@@ -39,10 +42,16 @@ export type AggregatePosition = {
   symbol: string;
   name: string;
   currency: string;
+  baseCurrency: string;
   quantity: Decimal;
   costBase: Decimal;
+  costInstrument: Decimal;
+  avgCostInstrument: Decimal;
   marketPrice: Decimal | null;
   marketValueBase: Decimal | null;
+  marketValueInstrument: Decimal | null;
+  unrealizedPnL: Decimal | null;
+  unrealizedPnLInstrument: Decimal | null;
   unrealizedPnLPercent: Decimal | null;
 };
 
@@ -262,9 +271,19 @@ function maxDec(a: Decimal | null, b: Decimal | null): Decimal | null {
 export async function aggregateOpenPositions(
   portfolioId?: string,
 ): Promise<AggregatePosition[]> {
-  const portfolios = portfolioId
-    ? [{ id: portfolioId }]
-    : await db.portfolio.findMany({ select: { id: true } });
+  const [settings, portfolios] = await Promise.all([
+    db.settings.findUnique({
+      where: { id: "singleton" },
+      select: { defaultBaseCurrency: true },
+    }),
+    portfolioId
+      ? db.portfolio.findMany({
+          where: { id: portfolioId },
+          select: { id: true, baseCurrency: true },
+        })
+      : db.portfolio.findMany({ select: { id: true, baseCurrency: true } }),
+  ]);
+  const baseCurrency = settings?.defaultBaseCurrency ?? "USD";
 
   const byInstrument = new Map<string, AggregatePosition>();
 
@@ -275,15 +294,32 @@ export async function aggregateOpenPositions(
     } catch {
       continue;
     }
+    const portfolioToBase =
+      p.baseCurrency === baseCurrency
+        ? ONE
+        : await getFxRate(p.baseCurrency, baseCurrency);
     for (const h of snapshot.holdings) {
-      mergeHolding(byInstrument, h);
+      mergeHolding(byInstrument, h, baseCurrency, portfolioToBase);
     }
   }
 
   return Array.from(byInstrument.values());
 }
 
-function mergeHolding(map: Map<string, AggregatePosition>, h: Holding): void {
+function mergeHolding(
+  map: Map<string, AggregatePosition>,
+  h: Holding,
+  baseCurrency: string,
+  portfolioToBase: Decimal,
+): void {
+  const costBase = h.costBase.times(portfolioToBase);
+  const marketValueBase = h.marketValueBase
+    ? h.marketValueBase.times(portfolioToBase)
+    : null;
+  const unrealizedPnL = marketValueBase
+    ? marketValueBase.minus(costBase)
+    : null;
+
   const existing = map.get(h.instrumentId);
   if (!existing) {
     map.set(h.instrumentId, {
@@ -292,34 +328,61 @@ function mergeHolding(map: Map<string, AggregatePosition>, h: Holding): void {
       symbol: h.symbol,
       name: h.name,
       currency: h.currency,
+      baseCurrency,
       quantity: h.quantity,
-      costBase: h.costBase,
+      costBase,
+      costInstrument: h.costInstrument,
+      avgCostInstrument: h.avgCostInstrument,
       marketPrice: h.marketPrice,
-      marketValueBase: h.marketValueBase,
-      unrealizedPnLPercent: h.unrealizedPnLPercent,
+      marketValueBase,
+      marketValueInstrument: h.marketValueInstrument,
+      unrealizedPnL,
+      unrealizedPnLInstrument: h.unrealizedPnLInstrument,
+      unrealizedPnLPercent:
+        unrealizedPnL && !costBase.isZero()
+          ? unrealizedPnL.dividedBy(costBase).times(100)
+          : null,
     });
     return;
   }
 
   const newQuantity = existing.quantity.plus(h.quantity);
-  const newCostBase = existing.costBase.plus(h.costBase);
+  const newCostBase = existing.costBase.plus(costBase);
+  const newCostInstrument = existing.costInstrument.plus(h.costInstrument);
   const newMarketValueBase =
-    h.marketValueBase && existing.marketValueBase
-      ? existing.marketValueBase.plus(h.marketValueBase)
-      : (h.marketValueBase ?? existing.marketValueBase);
+    marketValueBase && existing.marketValueBase
+      ? existing.marketValueBase.plus(marketValueBase)
+      : (marketValueBase ?? existing.marketValueBase);
+  const newMarketValueInstrument =
+    h.marketValueInstrument && existing.marketValueInstrument
+      ? existing.marketValueInstrument.plus(h.marketValueInstrument)
+      : (h.marketValueInstrument ?? existing.marketValueInstrument);
+  const newUnrealizedPnL = newMarketValueBase
+    ? newMarketValueBase.minus(newCostBase)
+    : null;
+  const newUnrealizedPnLInstrument = newMarketValueInstrument
+    ? newMarketValueInstrument.minus(newCostInstrument)
+    : null;
 
   const newPnLPercent =
-    newMarketValueBase && !newCostBase.isZero()
-      ? newMarketValueBase.minus(newCostBase).dividedBy(newCostBase).times(100)
+    newUnrealizedPnL && !newCostBase.isZero()
+      ? newUnrealizedPnL.dividedBy(newCostBase).times(100)
       : null;
 
   map.set(h.instrumentId, {
     ...existing,
     quantity: newQuantity,
     costBase: newCostBase,
+    costInstrument: newCostInstrument,
+    avgCostInstrument: newQuantity.isZero()
+      ? ZERO
+      : newCostInstrument.dividedBy(newQuantity),
     // Market price is the same per instrument; keep first non-null
     marketPrice: existing.marketPrice ?? h.marketPrice,
     marketValueBase: newMarketValueBase,
+    marketValueInstrument: newMarketValueInstrument,
+    unrealizedPnL: newUnrealizedPnL,
+    unrealizedPnLInstrument: newUnrealizedPnLInstrument,
     unrealizedPnLPercent: newPnLPercent,
   });
 }

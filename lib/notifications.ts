@@ -35,6 +35,9 @@ export type CreateNotificationInput = {
 
 export async function createNotification(input: CreateNotificationInput) {
   const visibleInInbox = input.visibleInInbox ?? true;
+  const metadata = input.url
+    ? { ...(input.metadata ?? {}), url: input.url }
+    : input.metadata;
 
   const created = await db.notification.create({
     data: {
@@ -44,7 +47,7 @@ export async function createNotification(input: CreateNotificationInput) {
       read: !visibleInInbox,
       dismissed: !visibleInInbox,
       alertId: input.alertId,
-      metadata: input.metadata ? (input.metadata as object) : undefined,
+      metadata: metadata ? (metadata as object) : undefined,
     },
   });
 

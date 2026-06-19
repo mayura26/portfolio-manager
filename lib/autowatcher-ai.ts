@@ -15,7 +15,7 @@ type AutoWatcherSummaryInput = {
   currentPrice: number;
   dayChangePct: number;
   weekChangePct: number | null;
-  avgCostBase: number;
+  avgCost: number;
   unrealizedPnLPct: number | null;
   newsHeadlines: string[];
 };
@@ -42,7 +42,7 @@ function buildUserMessage(input: AutoWatcherSummaryInput): string {
       input.weekChangePct != null
         ? `${input.weekChangePct >= 0 ? "+" : ""}${input.weekChangePct.toFixed(2)}%`
         : "n/a",
-    avgCostBase: input.avgCostBase,
+    avgCost: input.avgCost,
     unrealizedPnL:
       input.unrealizedPnLPct != null
         ? `${input.unrealizedPnLPct >= 0 ? "+" : ""}${input.unrealizedPnLPct.toFixed(1)}%`

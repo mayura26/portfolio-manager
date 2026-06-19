@@ -9,6 +9,7 @@ const ONE = new Decimal(1);
 type Lot = {
   quantity: Decimal;
   unitCostBase: Decimal;
+  unitCostInstrument: Decimal;
 };
 
 export type Holding = {
@@ -21,10 +22,14 @@ export type Holding = {
   quantity: Decimal;
   costBase: Decimal;
   avgCostBase: Decimal;
+  costInstrument: Decimal;
+  avgCostInstrument: Decimal;
   marketPrice: Decimal | null;
   priceAsOf: Date | null;
   marketValueBase: Decimal | null;
+  marketValueInstrument: Decimal | null;
   unrealizedPnL: Decimal | null;
+  unrealizedPnLInstrument: Decimal | null;
   unrealizedPnLPercent: Decimal | null;
   realizedPnL: Decimal;
   allocationPercent: Decimal | null;
@@ -88,13 +93,28 @@ export async function computeHoldings(
           ? toDec(trade.fxRate)
           : ONE;
     const qty = toDec(trade.quantity);
-    const priceBase = toDec(trade.price).times(tradeFx);
-    const feesBase = toDec(trade.fees).times(tradeFx);
+    const price = toDec(trade.price);
+    const fees = toDec(trade.fees);
+    const priceBase = price.times(tradeFx);
+    const feesBase = fees.times(tradeFx);
+    const instrumentCurrency = trade.instrument.currency;
+    const tradeToInstrument =
+      trade.currency === instrumentCurrency
+        ? ONE
+        : await getFxRate(trade.currency, instrumentCurrency, trade.date);
+    const priceInstrument = price.times(tradeToInstrument);
+    const feesInstrument = fees.times(tradeToInstrument);
 
     if (trade.type === "BUY") {
       const totalCost = priceBase.times(qty).plus(feesBase);
+      const totalCostInstrument = priceInstrument
+        .times(qty)
+        .plus(feesInstrument);
       const unitCostBase = qty.isZero() ? ZERO : totalCost.dividedBy(qty);
-      bucket.lots.push({ quantity: qty, unitCostBase });
+      const unitCostInstrument = qty.isZero()
+        ? ZERO
+        : totalCostInstrument.dividedBy(qty);
+      bucket.lots.push({ quantity: qty, unitCostBase, unitCostInstrument });
       continue;
     }
 
@@ -149,7 +169,14 @@ export async function computeHoldings(
       (acc, lot) => acc.plus(lot.quantity.times(lot.unitCostBase)),
       ZERO,
     );
+    const costInstrument = bucket.lots.reduce(
+      (acc, lot) => acc.plus(lot.quantity.times(lot.unitCostInstrument)),
+      ZERO,
+    );
     const avgCostBase = quantity.isZero() ? ZERO : costBase.dividedBy(quantity);
+    const avgCostInstrument = quantity.isZero()
+      ? ZERO
+      : costInstrument.dividedBy(quantity);
     const realizedPnL = bucket.realizedPnL;
     totalRealizedPnL = totalRealizedPnL.plus(realizedPnL);
 
@@ -162,18 +189,22 @@ export async function computeHoldings(
     let marketPrice: Decimal | null = null;
     let priceAsOf: Date | null = null;
     let marketValueBase: Decimal | null = null;
+    let marketValueInstrument: Decimal | null = null;
     let unrealizedPnL: Decimal | null = null;
+    let unrealizedPnLInstrument: Decimal | null = null;
     let unrealizedPnLPercent: Decimal | null = null;
 
     if (priceEntry) {
       marketPrice = priceEntry.close;
       priceAsOf = priceEntry.date;
+      marketValueInstrument = marketPrice.times(quantity);
       const priceCurrency = bucket.instrument.currency;
       const fx =
         priceCurrency === baseCurrency
           ? ONE
           : await getFxRate(priceCurrency, baseCurrency);
       marketValueBase = marketPrice.times(quantity).times(fx);
+      unrealizedPnLInstrument = marketValueInstrument.minus(costInstrument);
       unrealizedPnL = marketValueBase.minus(costBase);
       unrealizedPnLPercent = costBase.isZero()
         ? null
@@ -195,10 +226,14 @@ export async function computeHoldings(
       quantity,
       costBase,
       avgCostBase,
+      costInstrument,
+      avgCostInstrument,
       marketPrice,
       priceAsOf,
       marketValueBase,
+      marketValueInstrument,
       unrealizedPnL,
+      unrealizedPnLInstrument,
       unrealizedPnLPercent,
       realizedPnL,
       allocationPercent: null,
@@ -274,7 +309,11 @@ export function computeFifoOpenCostBasis(
     if (trade.type === "BUY") {
       const totalCost = priceBase.times(qty).plus(feesBase);
       const unitCostBase = qty.isZero() ? ZERO : totalCost.dividedBy(qty);
-      lots.push({ quantity: qty, unitCostBase });
+      lots.push({
+        quantity: qty,
+        unitCostBase,
+        unitCostInstrument: unitCostBase,
+      });
       continue;
     }
 

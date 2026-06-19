@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { generateDailySummary } from "@/lib/autowatcher-ai";
+import { formatAutoWatcherMilestoneMessage } from "@/lib/autowatcher-format";
 import { db } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
 import { loadPriceChanges } from "@/lib/price-changes";
@@ -29,12 +30,6 @@ function isSameDayUtc(a: Date, b: Date): boolean {
     a.getUTCFullYear() === b.getUTCFullYear() &&
     a.getUTCMonth() === b.getUTCMonth() &&
     a.getUTCDate() === b.getUTCDate()
-  );
-}
-
-function formatMoney(value: Decimal, currency: string): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
-    value.toNumber(),
   );
 }
 
@@ -95,6 +90,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
 
       const threshold = new Decimal(inst.autoWatcherThreshold.toString());
       const thresholdNum = threshold.toNumber();
+      const stockUrl = `/stocks/${encodeURIComponent(inst.yahooSymbol)}`;
 
       // ── P&L milestone check ─────────────────────────────────────────
       const pnlPct = position.unrealizedPnLPercent;
@@ -108,22 +104,32 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
             data: { autoWatcherLastBand: currentBand },
           });
         } else if (currentBand !== inst.autoWatcherLastBand) {
-          const prevBand = inst.autoWatcherLastBand;
           const milestonePct = currentBand * thresholdNum;
           const milestoneLabel = `${milestonePct >= 0 ? "+" : ""}${milestonePct}%`;
-          const avgCost = position.costBase.dividedBy(position.quantity);
 
           await createNotification({
             type: "AUTO_WATCHER",
             title: `${inst.symbol} crossed ${milestoneLabel} milestone`,
-            message: `${inst.symbol} is now ${pnlPct.toFixed(1)}% vs cost basis (prev band: ${prevBand * thresholdNum}%). Avg cost ${formatMoney(avgCost, inst.currency)}, current ${position.marketPrice ? formatMoney(position.marketPrice, inst.currency) : "N/A"}.`,
+            message: formatAutoWatcherMilestoneMessage({
+              symbol: inst.symbol,
+              pnlPct,
+              unrealizedPnL: position.unrealizedPnL,
+              pnlCurrency: position.baseCurrency,
+              avgCost: position.avgCostInstrument,
+              currentPrice: position.marketPrice,
+              instrumentCurrency: inst.currency,
+            }),
             metadata: {
               kind: "milestone",
               currentBand,
-              prevBand,
               pnlPct: pnlPct.toNumber(),
+              unrealizedPnL: position.unrealizedPnL?.toNumber() ?? null,
+              pnlCurrency: position.baseCurrency,
+              avgCost: position.avgCostInstrument.toNumber(),
+              currentPrice: position.marketPrice?.toNumber() ?? null,
               threshold: thresholdNum,
             },
+            url: stockUrl,
           });
 
           await db.instrument.update({
@@ -170,9 +176,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
               currentPrice: pc.currentPrice.toNumber(),
               dayChangePct,
               weekChangePct: pc.weekPct?.toNumber() ?? null,
-              avgCostBase: position.costBase
-                .dividedBy(position.quantity)
-                .toNumber(),
+              avgCost: position.avgCostInstrument.toNumber(),
               unrealizedPnLPct: pnlPct?.toNumber() ?? null,
               newsHeadlines: recentHeadlines,
             });
@@ -192,6 +196,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
                 dayChangePct,
                 generatedAt: summary.generatedAt,
               },
+              url: stockUrl,
             });
 
             if (isImmediate) {
