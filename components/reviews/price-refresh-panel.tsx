@@ -132,8 +132,8 @@ export function PriceRefreshPanel({
               </>
             ) : (
               <span>
-                Daily Yahoo Finance EOD pull across every instrument — no runs
-                recorded yet.
+                Daily Yahoo Finance EOD pull across tracked instruments - no
+                runs recorded yet.
               </span>
             )}
           </p>

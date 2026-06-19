@@ -1,5 +1,5 @@
 /**
- * Daily price refresh — fetches the last week of OHLC for every instrument
+ * Daily price refresh — fetches the last week of OHLC for tracked instruments
  * and upserts into PriceHistory. Run as a Coolify scheduled task:
  *   npm run cron:prices
  *

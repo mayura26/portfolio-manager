@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { trackedInstrumentWhere } from "@/lib/tracked-instruments";
 import { fetchDailyHistory } from "@/lib/yahoo";
 
 const BACKFILL_DAYS = 7;
@@ -19,8 +20,8 @@ export type PriceRefreshOutcome = {
 };
 
 /**
- * Run the EOD price refresh for every instrument and write the result to
- * the given PriceRefreshRun row (created up-front by the caller).
+ * Run the EOD price refresh for tracked instruments and write the result
+ * to the given PriceRefreshRun row (created up-front by the caller).
  *
  * Used by both the Coolify cron script and the manual server action.
  * Top-level failures (DB unreachable, etc.) are caught and recorded in
@@ -31,6 +32,7 @@ export async function executePriceRefreshIntoRun(
 ): Promise<PriceRefreshOutcome> {
   try {
     const instruments = await db.instrument.findMany({
+      where: trackedInstrumentWhere,
       select: { id: true, yahooSymbol: true },
     });
 

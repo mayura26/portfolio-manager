@@ -16,6 +16,7 @@ import {
   visibleTradeWhere,
 } from "@/lib/portfolio-visibility";
 import { loadPriceChanges, type PriceChangeData } from "@/lib/price-changes";
+import { trackedInstrumentWhere } from "@/lib/tracked-instruments";
 
 type PortfolioStockGroup = {
   id: string | null;
@@ -35,9 +36,8 @@ export default function StocksPage() {
         <p className="label">Universe</p>
         <h1 className="display mt-2 text-4xl text-foreground">Stocks</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Every instrument referenced by your portfolios, targets, watchlist,
-          alerts, and reviews. Click through for research, financials, and
-          notes.
+          Stocks you hold, target, or actively watch. Click through for
+          research, financials, and notes.
         </p>
       </header>
 
@@ -153,6 +153,7 @@ async function StocksGrid() {
 
 async function loadInstruments() {
   return db.instrument.findMany({
+    where: trackedInstrumentWhere,
     orderBy: { symbol: "asc" },
     include: {
       trades: {
@@ -168,6 +169,7 @@ async function loadInstruments() {
         },
       },
       watchlistItems: {
+        where: { status: "WATCHING" },
         select: {
           portfolioId: true,
           status: true,
