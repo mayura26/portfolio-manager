@@ -7,6 +7,7 @@ import {
 } from "@/components/stocks/financials-panel";
 import { ForecastCard } from "@/components/stocks/forecast-card";
 import { ForecastHistory } from "@/components/stocks/forecast-history";
+import { ForecastToggle } from "@/components/stocks/forecast-toggle";
 import { ForecastUpload } from "@/components/stocks/forecast-upload";
 import { NewsFeed, NewsFeedSkeleton } from "@/components/stocks/news-feed";
 import {
@@ -63,7 +64,7 @@ export default function StockOverviewPage({
           <div className="mb-4 flex items-end justify-between">
             <h2 className="display text-2xl text-foreground">AI forecast</h2>
             <Suspense fallback={null}>
-              <ForecastButtonLoader params={params} />
+              <ForecastControlsLoader params={params} />
             </Suspense>
           </div>
           <Suspense fallback={<Skeleton className="h-32 w-full" />}>
@@ -92,13 +93,26 @@ export default function StockOverviewPage({
   );
 }
 
-async function ForecastButtonLoader({ params }: { params: Params }) {
+async function ForecastControlsLoader({ params }: { params: Params }) {
   const { symbol } = await params;
   const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
   if (!yahooSymbol) return null;
-  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  const instrument = await db.instrument.findUnique({
+    where: { yahooSymbol },
+    select: { id: true, forecastsEnabled: true },
+  });
   if (!instrument) return null;
-  return <RunForecastButton instrumentId={instrument.id} />;
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <ForecastToggle
+        instrumentId={instrument.id}
+        enabled={instrument.forecastsEnabled}
+      />
+      {instrument.forecastsEnabled ? (
+        <RunForecastButton instrumentId={instrument.id} />
+      ) : null}
+    </div>
+  );
 }
 
 async function SignalsLoader({ params }: { params: Params }) {
@@ -123,8 +137,18 @@ async function ForecastUploadLoader({ params }: { params: Params }) {
   const { symbol } = await params;
   const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
   if (!yahooSymbol) return null;
-  const instrument = await db.instrument.findUnique({ where: { yahooSymbol } });
+  const instrument = await db.instrument.findUnique({
+    where: { yahooSymbol },
+    select: { id: true, forecastsEnabled: true },
+  });
   if (!instrument) return null;
+  if (!instrument.forecastsEnabled) {
+    return (
+      <div className="hairline bg-surface px-5 py-4 text-sm text-muted">
+        Forecasts disabled for this instrument.
+      </div>
+    );
+  }
   return <ForecastUpload instrumentId={instrument.id} />;
 }
 
@@ -145,7 +169,13 @@ async function ForecastLoader({ params }: { params: Params }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <ForecastCard forecast={active} currency={instrument.currency} />
+      <ForecastCard
+        forecast={active}
+        currency={instrument.currency}
+        emptyText={
+          instrument.forecastsEnabled ? undefined : "No forecast saved yet."
+        }
+      />
       <ForecastHistory forecasts={history} currency={instrument.currency} />
     </div>
   );

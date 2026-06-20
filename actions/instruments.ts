@@ -9,6 +9,10 @@ export type AutoWatcherActionState =
   | { ok: true }
   | { ok: false; error: string };
 
+export type ForecastToggleActionState =
+  | { ok: true }
+  | { ok: false; error: string };
+
 export async function setAutoWatcher(
   instrumentId: string,
   enabled: boolean,
@@ -41,6 +45,41 @@ export async function setAutoWatcher(
 
   revalidatePath("/stocks");
   revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  return { ok: true };
+}
+
+export async function setForecastsEnabled(
+  instrumentId: string,
+  enabled: boolean,
+): Promise<ForecastToggleActionState> {
+  const instrument = await db.instrument.findUnique({
+    where: { id: instrumentId },
+    select: { id: true, yahooSymbol: true },
+  });
+  if (!instrument) return { ok: false, error: "Instrument not found" };
+
+  await db.$transaction(async (tx) => {
+    await tx.instrument.update({
+      where: { id: instrument.id },
+      data: { forecastsEnabled: enabled },
+    });
+
+    if (!enabled) {
+      await tx.alert.updateMany({
+        where: {
+          instrumentId: instrument.id,
+          status: { in: ["ACTIVE", "SNOOZED"] },
+          type: { in: ["TARGET_HIT", "FORECAST_DEVIATION"] },
+        },
+        data: { status: "DISMISSED" },
+      });
+    }
+  });
+
+  revalidatePath("/stocks");
+  revalidatePath(`/stocks/${instrument.yahooSymbol}`);
+  revalidatePath("/notifications");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 

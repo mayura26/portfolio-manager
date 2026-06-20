@@ -51,7 +51,7 @@ async function run() {
   }
 
   const instruments = await db.instrument.findMany({
-    where: { id: { in: Array.from(ids) } },
+    where: { id: { in: Array.from(ids) }, forecastsEnabled: true },
   });
 
   const from = new Date();

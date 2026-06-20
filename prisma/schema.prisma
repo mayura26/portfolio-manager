@@ -82,10 +82,11 @@ model Instrument {
   yahooSymbol    String   @unique
   name           String
   currency       String
-  sector         String?
-  industry       String?
-  instrumentType String   @default("EQUITY")
-  createdAt      DateTime @default(now())
+  sector           String?
+  industry         String?
+  instrumentType   String   @default("EQUITY")
+  forecastsEnabled Boolean  @default(true)
+  createdAt        DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // AutoWatcher — daily AI news monitoring + P&L milestone alerts

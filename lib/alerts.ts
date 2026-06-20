@@ -132,10 +132,21 @@ async function fireAlert(
     title: titleFor(alert),
     message,
     alertId: alert.id,
-    metadata,
+    metadata: withInstrumentUrl(alert, metadata),
   });
 
   void updated;
+}
+
+function withInstrumentUrl(
+  alert: AlertWithRelations,
+  metadata: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!alert.instrument?.yahooSymbol) return metadata;
+  return {
+    ...metadata,
+    url: `/stocks/${encodeURIComponent(alert.instrument.yahooSymbol)}`,
+  };
 }
 
 function priorityFor(type: AlertWithRelations["type"]): number {

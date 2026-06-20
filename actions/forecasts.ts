@@ -19,6 +19,12 @@ export async function generateStockForecast(
     where: { id: instrumentId },
   });
   if (!instrument) return { ok: false, error: "Instrument not found" };
+  if (!instrument.forecastsEnabled) {
+    return {
+      ok: false,
+      error: "Forecasts are disabled for this instrument",
+    };
+  }
 
   const financials = await fetchFinancialSummary(instrument.yahooSymbol);
   if (!financials) {
@@ -117,6 +123,12 @@ export async function saveUserForecast(
     where: { id: input.instrumentId },
   });
   if (!instrument) return { ok: false, error: "Instrument not found" };
+  if (!instrument.forecastsEnabled) {
+    return {
+      ok: false,
+      error: "Forecasts are disabled for this instrument",
+    };
+  }
 
   if (!Number.isFinite(input.targetPrice) || input.targetPrice <= 0) {
     return { ok: false, error: "Target price must be positive" };
