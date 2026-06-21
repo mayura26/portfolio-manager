@@ -1,13 +1,13 @@
 import type Decimal from "decimal.js";
-import { ArrowUpRight, LineChart } from "lucide-react";
-import Link from "next/link";
+import { LineChart } from "lucide-react";
 import { Suspense } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/shared/skeleton";
+import type { StockCardContext } from "@/components/stocks/stock-card";
 import {
-  StockCard,
-  type StockCardContext,
-} from "@/components/stocks/stock-card";
+  type StocksSearchGroup,
+  StocksSearchList,
+} from "@/components/stocks/stocks-search-list";
 import { db } from "@/lib/db";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { computeHoldings } from "@/lib/holdings";
@@ -18,16 +18,10 @@ import {
 import { loadPriceChanges, type PriceChangeData } from "@/lib/price-changes";
 import { trackedInstrumentWhere } from "@/lib/tracked-instruments";
 
-type PortfolioStockGroup = {
-  id: string | null;
-  name: string;
-  stocks: {
-    instrument: InstrumentRow;
-    context: StockCardContext;
-  }[];
-};
-
+type PortfolioStockGroup = StocksSearchGroup;
+type PortfolioSummary = NonNullable<StocksSearchGroup["summary"]>;
 type InstrumentRow = Awaited<ReturnType<typeof loadInstruments>>[number];
+type PortfolioHoldings = Awaited<ReturnType<typeof computeHoldings>>;
 
 export default function StocksPage() {
   return (
@@ -73,12 +67,14 @@ async function StocksGrid() {
     id: p.id,
     name: p.name,
     stocks: [],
+    summary: null,
   }));
   const groupMap = new Map(groups.map((g) => [g.id, g]));
   const noPortfolioGroup: PortfolioStockGroup = {
     id: null,
     name: "No portfolio",
     stocks: [],
+    summary: null,
   };
 
   const linkedPortfolioIds = new Set<string>();
@@ -97,14 +93,23 @@ async function StocksGrid() {
     loadPriceChanges(instrumentIds),
     ...Array.from(linkedPortfolioIds).map(async (portfolioId) => {
       const holdings = await computeHoldings(portfolioId);
-      return [
-        portfolioId,
-        new Map(holdings.holdings.map((h) => [h.instrumentId, h])),
-      ] as const;
+      return [portfolioId, holdings] as const;
     }),
   ]);
 
-  const holdingsByPortfolio = new Map(holdingsEntries);
+  const holdingsDataByPortfolio = new Map(holdingsEntries);
+  const holdingsByPortfolio = new Map(
+    holdingsEntries.map(([portfolioId, holdings]) => [
+      portfolioId,
+      new Map(holdings.holdings.map((h) => [h.instrumentId, h])),
+    ]),
+  );
+
+  for (const group of groups) {
+    if (!group.id) continue;
+    const holdings = holdingsDataByPortfolio.get(group.id);
+    group.summary = holdings ? buildPortfolioSummary(holdings) : null;
+  }
 
   for (const instrument of instruments) {
     const portfolioIds = getVisiblePortfolioIds(instrument, portfolioMap);
@@ -112,8 +117,10 @@ async function StocksGrid() {
 
     if (portfolioIds.length === 0) {
       noPortfolioGroup.stocks.push({
-        instrument,
+        id: instrument.id,
+        instrument: toStockCardInstrument(instrument),
         context: buildStockContext(instrument, null, null, priceData),
+        searchText: buildSearchText(instrument, noPortfolioGroup.name),
       });
       continue;
     }
@@ -126,13 +133,15 @@ async function StocksGrid() {
       const holding =
         holdingsByPortfolio.get(portfolioId)?.get(instrument.id) ?? null;
       group.stocks.push({
-        instrument,
+        id: instrument.id,
+        instrument: toStockCardInstrument(instrument),
         context: buildStockContext(
           instrument,
           portfolioId,
           { holding, baseCurrency: portfolio.baseCurrency },
           priceData,
         ),
+        searchText: buildSearchText(instrument, group.name),
       });
     }
   }
@@ -142,13 +151,7 @@ async function StocksGrid() {
     visibleGroups.push(noPortfolioGroup);
   }
 
-  return (
-    <div className="flex flex-col gap-10">
-      {visibleGroups.map((group) => (
-        <PortfolioStockSection key={group.id ?? "none"} group={group} />
-      ))}
-    </div>
-  );
+  return <StocksSearchList groups={visibleGroups} />;
 }
 
 async function loadInstruments() {
@@ -196,41 +199,6 @@ async function loadInstruments() {
   });
 }
 
-function PortfolioStockSection({ group }: { group: PortfolioStockGroup }) {
-  return (
-    <section>
-      <div className="mb-4 flex items-end justify-between gap-4 border-b border-border pb-3">
-        <div>
-          <h2 className="display text-2xl text-foreground">{group.name}</h2>
-          <p className="mt-1 text-xs text-muted">
-            {group.stocks.length}{" "}
-            {group.stocks.length === 1 ? "stock" : "stocks"}
-          </p>
-        </div>
-        {group.id ? (
-          <Link
-            href={`/portfolios/${group.id}`}
-            className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-accent"
-          >
-            Open portfolio
-            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.5} />
-          </Link>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {group.stocks.map(({ instrument, context }) => (
-          <StockCard
-            key={`${group.id ?? "none"}-${instrument.id}`}
-            instrument={instrument}
-            context={context}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function getVisiblePortfolioIds(
   instrument: InstrumentRow,
   portfolioMap: Map<string, { id: string }>,
@@ -262,9 +230,67 @@ function getVisiblePortfolioIds(
   return Array.from(ids);
 }
 
+function toStockCardInstrument(instrument: InstrumentRow) {
+  return {
+    yahooSymbol: instrument.yahooSymbol,
+    symbol: instrument.symbol,
+    name: instrument.name,
+    currency: instrument.currency,
+    exchange: instrument.exchange,
+    sector: instrument.sector,
+  };
+}
+
+function buildSearchText(instrument: InstrumentRow, groupName: string) {
+  return [
+    groupName,
+    instrument.yahooSymbol,
+    instrument.symbol,
+    instrument.name,
+    instrument.currency,
+    instrument.exchange,
+    instrument.sector,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function buildPortfolioSummary(holdings: PortfolioHoldings): PortfolioSummary {
+  const unrealizedPercent = holdings.totalCostBase.isZero()
+    ? null
+    : formatPercent(
+        holdings.totalUnrealizedPnL.dividedBy(holdings.totalCostBase),
+        {
+          signed: true,
+          decimals: 2,
+        },
+      );
+
+  return {
+    marketValue: formatCurrency(
+      holdings.totalMarketValueBase.toString(),
+      holdings.baseCurrency,
+    ),
+    unrealizedPnl: formatCurrency(
+      holdings.totalUnrealizedPnL.toString(),
+      holdings.baseCurrency,
+      { signed: true },
+    ),
+    unrealizedPercent,
+    tone: toneOf(holdings.totalUnrealizedPnL),
+    hasMissingPrices: holdings.hasMissingPrices,
+  };
+}
+
+function toneOf(value: Decimal): "gain" | "loss" | "neutral" {
+  if (value.isZero()) return "neutral";
+  return value.isPositive() ? "gain" : "loss";
+}
+
 function formatPct(value: Decimal | null): string | null {
   if (!value) return null;
-  // value is already a percentage like 2.4 — divide by 100 for formatPercent
+  // value is already a percentage like 2.4 - divide by 100 for formatPercent
   return formatPercent(value.dividedBy(100), { signed: true, decimals: 2 });
 }
 
@@ -337,6 +363,8 @@ function buildStockContext(
     position: holding
       ? {
           quantity: holding.quantity.toString(),
+          avgCostInstrument: holding.avgCostInstrument.toString(),
+          instrumentCurrency: instrument.currency,
           marketValueBase: holding.marketValueBase?.toString() ?? null,
           unrealizedPnL: holding.unrealizedPnL?.toString() ?? null,
           unrealizedPnLPercent:
@@ -395,20 +423,20 @@ function buildStockContext(
 
 function StocksGridSkeleton() {
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-4">
+      <div className="hairline bg-surface px-4 py-3">
+        <Skeleton className="h-10 w-full" />
+      </div>
       {[0, 1].map((section) => (
         <section key={section}>
-          <div className="mb-4 flex items-end justify-between gap-4 border-b border-border pb-3">
-            <div>
-              <Skeleton className="h-7 w-40" />
-              <Skeleton className="mt-2 h-4 w-16" />
+          <div className="hairline bg-surface px-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Skeleton className="h-7 w-40" />
+                <Skeleton className="mt-2 h-4 w-72" />
+              </div>
+              <Skeleton className="h-4 w-24" />
             </div>
-            <Skeleton className="h-4 w-24" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-48" />
-            ))}
           </div>
         </section>
       ))}

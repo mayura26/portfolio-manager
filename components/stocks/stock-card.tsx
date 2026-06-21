@@ -17,6 +17,8 @@ export type StockCardContext = {
   hasReview: boolean;
   position: {
     quantity: string;
+    avgCostInstrument: string | null;
+    instrumentCurrency: string;
     marketValueBase: string | null;
     unrealizedPnL: string | null;
     unrealizedPnLPercent: string | null;
@@ -206,7 +208,7 @@ function PositionMetrics({ context }: { context: StockCardContext }) {
 
   return (
     <div className="grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs">
-      <Metric label="Qty" value={formatQuantity(position.quantity)} />
+      <Metric label="Position" value={formatPosition(position)} />
       <Metric
         label="Value"
         value={
@@ -242,7 +244,27 @@ function PositionMetrics({ context }: { context: StockCardContext }) {
     </div>
   );
 }
+function formatPosition(position: NonNullable<StockCardContext["position"]>) {
+  const quantity = formatPositionQuantity(position.quantity);
+  if (!position.avgCostInstrument) return quantity;
 
+  return `${quantity} @ ${formatCurrency(
+    position.avgCostInstrument,
+    position.instrumentCurrency,
+  )}`;
+}
+
+function formatPositionQuantity(value: string) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return formatQuantity(value);
+
+  const abs = Math.abs(numeric);
+  const maximumFractionDigits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits,
+  }).format(numeric);
+}
 function Metric({
   label,
   value,
