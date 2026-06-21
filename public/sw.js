@@ -1,12 +1,14 @@
-// Ledger service worker — minimal app-shell + push handler.
+// Ledger service worker - minimal app-shell + push handler.
 // Cache-first for the navigation shell, network-first for everything else.
 
-const CACHE_NAME = "ledger-shell-v3";
+const CACHE_NAME = "ledger-shell-v4";
 const NOTIFICATION_ICON = "/notification-icon.svg";
+const NOTIFICATION_BADGE = "/notification-badge.svg";
 const SHELL_URLS = [
   "/dashboard",
   "/logo.png",
   NOTIFICATION_ICON,
+  NOTIFICATION_BADGE,
   "/web-app-manifest-192x192.png",
   "/web-app-manifest-512x512.png",
 ];
@@ -76,7 +78,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: payload.body ?? "",
     icon: payload.icon ?? NOTIFICATION_ICON,
-    badge: payload.badge ?? NOTIFICATION_ICON,
+    badge: payload.badge ?? NOTIFICATION_BADGE,
     data: payload.data ?? {},
     tag:
       payload.tag ??

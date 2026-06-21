@@ -53,6 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (
         pathname === "/manifest.webmanifest" ||
         pathname === "/notification-icon.svg" ||
+        pathname === "/notification-badge.svg" ||
         pathname === "/logo.png" ||
         pathname === "/web-app-manifest-192x192.png" ||
         pathname === "/web-app-manifest-512x512.png" ||

@@ -92,7 +92,7 @@ async function sendPush(
             title,
             body,
             icon: "/notification-icon.svg",
-            badge: "/notification-icon.svg",
+            badge: "/notification-badge.svg",
             data,
           }),
         );
