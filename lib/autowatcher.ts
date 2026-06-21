@@ -2,7 +2,8 @@ import Decimal from "decimal.js";
 import { generateDailySummary } from "@/lib/autowatcher-ai";
 import { formatAutoWatcherMilestoneMessage } from "@/lib/autowatcher-format";
 import { db } from "@/lib/db";
-import { createNotification } from "@/lib/notifications";
+import type { NotificationBatchCandidate } from "@/lib/notification-batching";
+import { createBatchedNotifications } from "@/lib/notifications";
 import { loadPriceChanges } from "@/lib/price-changes";
 import { aggregateOpenPositions } from "@/lib/signals";
 import { fetchNews } from "@/lib/yahoo";
@@ -59,7 +60,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
     };
   }
 
-  // Aggregate open positions across all portfolios + load price changes once
+  // Aggregate open positions across all portfolios + load price changes once.
   const allPositions = await aggregateOpenPositions();
   const positionMap = new Map(allPositions.map((p) => [p.instrumentId, p]));
   const priceChanges = await loadPriceChanges(instruments.map((i) => i.id));
@@ -70,6 +71,8 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
   let skipped = 0;
   let processed = 0;
   const failures: AutoWatcherItemResult[] = [];
+  const milestoneNotifications: NotificationBatchCandidate[] = [];
+  const dailyNotifications: NotificationBatchCandidate[] = [];
 
   for (const inst of instruments) {
     const result: AutoWatcherItemResult = {
@@ -92,13 +95,12 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
       const thresholdNum = threshold.toNumber();
       const stockUrl = `/stocks/${encodeURIComponent(inst.yahooSymbol)}`;
 
-      // ── P&L milestone check ─────────────────────────────────────────
       const pnlPct = position.unrealizedPnLPercent;
       if (pnlPct && !threshold.isZero()) {
         const currentBand = Math.trunc(pnlPct.dividedBy(threshold).toNumber());
 
         if (inst.autoWatcherLastBand === null) {
-          // First evaluation: just record the band, no alert
+          // First evaluation: just record the band, no alert.
           await db.instrument.update({
             where: { id: inst.id },
             data: { autoWatcherLastBand: currentBand },
@@ -106,21 +108,25 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
         } else if (currentBand !== inst.autoWatcherLastBand) {
           const milestonePct = currentBand * thresholdNum;
           const milestoneLabel = `${milestonePct >= 0 ? "+" : ""}${milestonePct}%`;
+          const message = formatAutoWatcherMilestoneMessage({
+            symbol: inst.symbol,
+            pnlPct,
+            unrealizedPnL: position.unrealizedPnL,
+            pnlCurrency: position.baseCurrency,
+            avgCost: position.avgCostInstrument,
+            currentPrice: position.marketPrice,
+            instrumentCurrency: inst.currency,
+          });
 
-          await createNotification({
+          milestoneNotifications.push({
             type: "AUTO_WATCHER",
+            groupKey: "autowatcher:milestone",
             title: `${inst.symbol} crossed ${milestoneLabel} milestone`,
-            message: formatAutoWatcherMilestoneMessage({
-              symbol: inst.symbol,
-              pnlPct,
-              unrealizedPnL: position.unrealizedPnL,
-              pnlCurrency: position.baseCurrency,
-              avgCost: position.avgCostInstrument,
-              currentPrice: position.marketPrice,
-              instrumentCurrency: inst.currency,
-            }),
+            message,
             metadata: {
               kind: "milestone",
+              symbol: inst.symbol,
+              instrumentId: inst.id,
               currentBand,
               pnlPct: pnlPct.toNumber(),
               unrealizedPnL: position.unrealizedPnL?.toNumber() ?? null,
@@ -130,6 +136,10 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
               threshold: thresholdNum,
             },
             url: stockUrl,
+            priority: 2,
+            itemLabel: `${inst.symbol}: crossed ${milestoneLabel}`,
+            batchLabelSingular: "AutoWatcher milestone crossed",
+            batchLabelPlural: "AutoWatcher milestones crossed",
           });
 
           await db.instrument.update({
@@ -142,7 +152,6 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
         }
       }
 
-      // ── Daily AI summary check ──────────────────────────────────────
       const now = new Date();
       const ranToday =
         inst.autoWatcherLastDailyAt &&
@@ -162,7 +171,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
               .map((n) => n.title)
               .slice(0, 5);
           } catch {
-            // News fetch failure shouldn't block the rest
+            // News fetch failure should not block the rest.
           }
 
           const shouldFire =
@@ -183,23 +192,27 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
 
             const isImmediate = summary.urgency === "immediate";
 
-            await createNotification({
-              type: "AUTO_WATCHER",
-              title: `${inst.symbol}: ${summary.headline}`,
-              message: summary.summary,
-              push: isImmediate,
-              visibleInInbox: isImmediate,
-              metadata: {
-                kind: "daily",
-                sentiment: summary.sentiment,
-                urgency: summary.urgency,
-                dayChangePct,
-                generatedAt: summary.generatedAt,
-              },
-              url: stockUrl,
-            });
-
             if (isImmediate) {
+              dailyNotifications.push({
+                type: "AUTO_WATCHER",
+                groupKey: "autowatcher:daily:immediate",
+                title: `${inst.symbol}: ${summary.headline}`,
+                message: summary.summary,
+                metadata: {
+                  kind: "daily",
+                  symbol: inst.symbol,
+                  instrumentId: inst.id,
+                  sentiment: summary.sentiment,
+                  urgency: summary.urgency,
+                  dayChangePct,
+                  generatedAt: summary.generatedAt,
+                },
+                url: stockUrl,
+                priority: 2,
+                itemLabel: `${inst.symbol}: ${summary.headline}`,
+                batchLabelSingular: "AutoWatcher daily summary",
+                batchLabelPlural: "AutoWatcher daily summaries",
+              });
               result.dailySummaryFired = true;
               dailyFired++;
             } else {
@@ -218,6 +231,24 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
       result.error = err instanceof Error ? err.message : String(err);
       failures.push(result);
     }
+  }
+
+  try {
+    await createBatchedNotifications(milestoneNotifications, {
+      fallbackUrl: "/notifications",
+    });
+    await createBatchedNotifications(dailyNotifications, {
+      fallbackUrl: "/notifications",
+    });
+  } catch (err) {
+    failures.push({
+      instrumentId: "notification-batch",
+      symbol: "AutoWatcher",
+      pnlAlertFired: false,
+      dailySummaryFired: false,
+      dailySummaryDeferred: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return { processed, pnlFired, dailyFired, dailyDeferred, skipped, failures };

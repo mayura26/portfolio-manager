@@ -1,7 +1,11 @@
 import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { computeHoldings } from "@/lib/holdings";
-import { createNotification } from "@/lib/notifications";
+import {
+  IMPORTANT_NOTIFICATION_PRIORITY,
+  type NotificationBatchCandidate,
+} from "@/lib/notification-batching";
+import { createBatchedNotifications } from "@/lib/notifications";
 
 const ZERO = new Decimal(0);
 
@@ -32,17 +36,33 @@ export async function evaluateAllAlerts(): Promise<EvaluationResult> {
 
   let triggered = 0;
   const failures: { alertId: string; error: string }[] = [];
+  const notificationCandidates: NotificationBatchCandidate[] = [];
 
   for (const alert of alerts) {
     try {
-      const fired = await evaluateOne(alert, now);
-      if (fired) triggered++;
+      const notification = await evaluateOne(alert, now);
+      if (notification) {
+        triggered++;
+        notificationCandidates.push(notification);
+      }
     } catch (err) {
       failures.push({
         alertId: alert.id,
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  try {
+    await createBatchedNotifications(notificationCandidates, {
+      minPriority: IMPORTANT_NOTIFICATION_PRIORITY,
+      fallbackUrl: "/reviews",
+    });
+  } catch (err) {
+    failures.push({
+      alertId: "notification-batch",
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return { evaluated: alerts.length, triggered, failures };
@@ -59,7 +79,7 @@ type AlertWithRelations = Awaited<
 async function evaluateOne(
   alert: AlertWithRelations,
   now: Date,
-): Promise<boolean> {
+): Promise<NotificationBatchCandidate | null> {
   switch (alert.type) {
     case "PRICE_ABOVE":
     case "TARGET_HIT":
@@ -76,10 +96,10 @@ async function evaluateOne(
       return await evalForecastDeviation(alert);
     case "DIVIDEND_EVENT":
     case "EARNINGS_EVENT":
-      // Event-based alerts require a calendar feed — out of scope for MVP.
-      return false;
+      // Event-based alerts require a calendar feed - out of scope for MVP.
+      return null;
     default:
-      return false;
+      return null;
   }
 }
 
@@ -108,10 +128,11 @@ async function fireAlert(
   alert: AlertWithRelations,
   message: string,
   metadata: Record<string, unknown>,
-): Promise<void> {
+): Promise<NotificationBatchCandidate> {
   const now = new Date();
+  const priority = priorityFor(alert.type);
 
-  const updated = await db.alert.update({
+  await db.alert.update({
     where: { id: alert.id },
     data: { status: "TRIGGERED", triggeredAt: now },
   });
@@ -123,30 +144,62 @@ async function fireAlert(
       instrumentId: alert.instrumentId,
       triggerReason: message,
       status: "PENDING",
-      priority: priorityFor(alert.type),
+      priority,
     },
   });
 
-  await createNotification({
+  return {
     type: notificationTypeFor(alert.type),
+    groupKey: notificationGroupKey(alert),
     title: titleFor(alert),
     message,
     alertId: alert.id,
-    metadata: withInstrumentUrl(alert, metadata),
-  });
-
-  void updated;
+    metadata,
+    url: instrumentUrl(alert),
+    priority,
+    itemLabel: itemLabelFor(alert, message),
+    batchLabelSingular: batchLabelFor(alert.type, 1),
+    batchLabelPlural: batchLabelFor(alert.type, 2),
+  };
 }
 
-function withInstrumentUrl(
-  alert: AlertWithRelations,
-  metadata: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!alert.instrument?.yahooSymbol) return metadata;
-  return {
-    ...metadata,
-    url: `/stocks/${encodeURIComponent(alert.instrument.yahooSymbol)}`,
-  };
+function notificationGroupKey(alert: AlertWithRelations): string {
+  const scope = alert.portfolioId ? `portfolio:${alert.portfolioId}` : "global";
+  return `${scope}:${notificationTypeFor(alert.type)}`;
+}
+
+function instrumentUrl(alert: AlertWithRelations): string | undefined {
+  if (!alert.instrument?.yahooSymbol) return undefined;
+  return `/stocks/${encodeURIComponent(alert.instrument.yahooSymbol)}`;
+}
+
+function itemLabelFor(alert: AlertWithRelations, message: string): string {
+  const sym = alert.instrument?.symbol ?? alert.portfolio?.name;
+  return sym ? `${sym}: ${message}` : message;
+}
+
+function batchLabelFor(
+  type: AlertWithRelations["type"],
+  count: number,
+): string {
+  const plural = count !== 1;
+  switch (type) {
+    case "PRICE_ABOVE":
+    case "PRICE_BELOW":
+    case "PCT_CHANGE":
+    case "TARGET_HIT":
+      return plural ? "price alerts triggered" : "price alert triggered";
+    case "FORECAST_DEVIATION":
+      return plural ? "forecast alerts triggered" : "forecast alert triggered";
+    case "ALLOCATION_DRIFT":
+      return plural
+        ? "allocation drifts triggered"
+        : "allocation drift triggered";
+    case "REVIEW_TIMER":
+      return plural ? "reviews due" : "review due";
+    default:
+      return plural ? "alerts triggered" : "alert triggered";
+  }
 }
 
 function priorityFor(type: AlertWithRelations["type"]): number {
@@ -215,14 +268,14 @@ function titleFor(alert: AlertWithRelations): string {
 async function evalPriceCross(
   alert: AlertWithRelations,
   direction: "above" | "below",
-): Promise<boolean> {
-  if (!alert.instrumentId || !alert.priceTarget) return false;
+): Promise<NotificationBatchCandidate | null> {
+  if (!alert.instrumentId || !alert.priceTarget) return null;
   const price = await latestPrice(alert.instrumentId);
-  if (!price) return false;
+  if (!price) return null;
   const target = new Decimal(alert.priceTarget.toString());
 
   const triggered = direction === "above" ? price.gt(target) : price.lt(target);
-  if (!triggered) return false;
+  if (!triggered) return null;
 
   const sym = alert.instrument?.symbol ?? "instrument";
   const cur = alert.instrument?.currency ?? "USD";
@@ -231,51 +284,51 @@ async function evalPriceCross(
       ? `${sym} is at ${formatMoney(price, cur)}, above target ${formatMoney(target, cur)}.`
       : `${sym} is at ${formatMoney(price, cur)}, below target ${formatMoney(target, cur)}.`;
 
-  await fireAlert(alert, message, {
+  return await fireAlert(alert, message, {
     price: price.toString(),
     target: target.toString(),
     direction,
   });
-  return true;
 }
 
-async function evalPctChange(alert: AlertWithRelations): Promise<boolean> {
-  if (!alert.instrumentId || !alert.pctChange) return false;
+async function evalPctChange(
+  alert: AlertWithRelations,
+): Promise<NotificationBatchCandidate | null> {
+  if (!alert.instrumentId || !alert.pctChange) return null;
   const price = await latestPrice(alert.instrumentId);
-  if (!price) return false;
+  if (!price) return null;
   const reference = alert.referencePrice
     ? new Decimal(alert.referencePrice.toString())
     : await previousPrice(alert.instrumentId, new Date());
-  if (!reference || reference.isZero()) return false;
+  if (!reference || reference.isZero()) return null;
 
   const threshold = new Decimal(alert.pctChange.toString());
   const move = price.minus(reference).dividedBy(reference).times(100);
-  if (move.abs().lt(threshold)) return false;
+  if (move.abs().lt(threshold)) return null;
 
   const sym = alert.instrument?.symbol ?? "instrument";
-  const message = `${sym} moved ${move.toFixed(2)}% from ${reference.toFixed(2)} to ${price.toFixed(2)} (threshold ±${threshold.toFixed(2)}%).`;
+  const message = `${sym} moved ${move.toFixed(2)}% from ${reference.toFixed(2)} to ${price.toFixed(2)} (threshold +/-${threshold.toFixed(2)}%).`;
 
-  await fireAlert(alert, message, {
+  return await fireAlert(alert, message, {
     movePercent: move.toString(),
     threshold: threshold.toString(),
   });
-  return true;
 }
 
 async function evalReviewTimer(
   alert: AlertWithRelations,
   now: Date,
-): Promise<boolean> {
-  if (!alert.reviewIntervalDays) return false;
+): Promise<NotificationBatchCandidate | null> {
+  if (!alert.reviewIntervalDays) return null;
   const last = alert.lastReviewDate ?? alert.createdAt;
   const due = new Date(last);
   due.setUTCDate(due.getUTCDate() + alert.reviewIntervalDays);
-  if (now < due) return false;
+  if (now < due) return null;
 
   const sym = alert.instrument?.symbol ?? alert.portfolio?.name ?? "item";
   const message = `Review timer: ${alert.reviewIntervalDays} days have passed since the last check on ${sym}.`;
 
-  await fireAlert(alert, message, {
+  const notification = await fireAlert(alert, message, {
     intervalDays: alert.reviewIntervalDays,
     lastReviewDate: last.toISOString(),
   });
@@ -283,55 +336,54 @@ async function evalReviewTimer(
     where: { id: alert.id },
     data: { lastReviewDate: now },
   });
-  return true;
+  return notification;
 }
 
 async function evalForecastDeviation(
   alert: AlertWithRelations,
-): Promise<boolean> {
+): Promise<NotificationBatchCandidate | null> {
   if (
     !alert.instrumentId ||
     !alert.deviationThreshold ||
     !alert.forecastId ||
     !alert.forecast
   ) {
-    return false;
+    return null;
   }
   const price = await latestPrice(alert.instrumentId);
-  if (!price) return false;
+  if (!price) return null;
 
   const target = new Decimal(alert.forecast.targetPrice.toString());
-  if (target.lte(0)) return false;
+  if (target.lte(0)) return null;
 
   const deviation = price.minus(target).dividedBy(target).times(100);
   const threshold = new Decimal(alert.deviationThreshold.toString());
-  if (deviation.abs().lt(threshold)) return false;
+  if (deviation.abs().lt(threshold)) return null;
 
   const sym = alert.instrument?.symbol ?? "instrument";
   const cur = alert.instrument?.currency ?? "USD";
   const direction = deviation.gt(0) ? "above" : "below";
-  const message = `${sym} is at ${formatMoney(price, cur)}, ${deviation.abs().toFixed(1)}% ${direction} the AI forecast target of ${formatMoney(target, cur)} (threshold ±${threshold.toFixed(1)}%).`;
+  const message = `${sym} is at ${formatMoney(price, cur)}, ${deviation.abs().toFixed(1)}% ${direction} the AI forecast target of ${formatMoney(target, cur)} (threshold +/-${threshold.toFixed(1)}%).`;
 
-  await fireAlert(alert, message, {
+  return await fireAlert(alert, message, {
     currentPrice: price.toString(),
     targetPrice: target.toString(),
     deviationPercent: deviation.toString(),
     threshold: threshold.toString(),
     forecastId: alert.forecastId,
   });
-  return true;
 }
 
 async function evalAllocationDrift(
   alert: AlertWithRelations,
-): Promise<boolean> {
+): Promise<NotificationBatchCandidate | null> {
   if (!alert.portfolioId || !alert.instrumentId || !alert.allocationThreshold)
-    return false;
+    return null;
   const data = await computeHoldings(alert.portfolioId);
   const holding = data.holdings.find(
     (h) => h.instrumentId === alert.instrumentId,
   );
-  if (!holding || !holding.allocationPercent) return false;
+  if (!holding || !holding.allocationPercent) return null;
 
   const threshold = new Decimal(alert.allocationThreshold.toString());
   const reference = alert.referencePrice
@@ -339,17 +391,16 @@ async function evalAllocationDrift(
     : ZERO;
 
   const drift = holding.allocationPercent.minus(reference).abs();
-  if (drift.lt(threshold)) return false;
+  if (drift.lt(threshold)) return null;
 
   const sym = alert.instrument?.symbol ?? "instrument";
-  const message = `${sym} now ${holding.allocationPercent.toFixed(1)}% of portfolio (target ${reference.toFixed(1)}%, threshold ±${threshold.toFixed(1)}%).`;
+  const message = `${sym} now ${holding.allocationPercent.toFixed(1)}% of portfolio (target ${reference.toFixed(1)}%, threshold +/-${threshold.toFixed(1)}%).`;
 
-  await fireAlert(alert, message, {
+  return await fireAlert(alert, message, {
     currentAllocation: holding.allocationPercent.toString(),
     target: reference.toString(),
     threshold: threshold.toString(),
   });
-  return true;
 }
 
 function formatMoney(value: Decimal, currency: string): string {

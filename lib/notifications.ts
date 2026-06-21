@@ -1,6 +1,11 @@
 import webpush from "web-push";
 import type { NotificationType } from "@/app/generated/prisma/enums";
 import { db } from "@/lib/db";
+import {
+  type BuildNotificationBatchOptions,
+  buildNotificationBatches,
+  type NotificationBatchCandidate,
+} from "@/lib/notification-batching";
 
 const SINGLETON_ID = "singleton";
 
@@ -57,6 +62,20 @@ export async function createNotification(input: CreateNotificationInput) {
       alertId: input.alertId,
       url: input.url ?? "/notifications",
     });
+  }
+
+  return created;
+}
+
+export async function createBatchedNotifications(
+  candidates: NotificationBatchCandidate[],
+  options?: BuildNotificationBatchOptions,
+) {
+  const batches = buildNotificationBatches(candidates, options);
+  const created = [];
+
+  for (const batch of batches) {
+    created.push(await createNotification(batch));
   }
 
   return created;
