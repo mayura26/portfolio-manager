@@ -1,3 +1,4 @@
+import { BENCHMARK_YAHOO_SYMBOL } from "@/lib/benchmark";
 import { db } from "@/lib/db";
 import { trackedInstrumentWhere } from "@/lib/tracked-instruments";
 import { fetchDailyHistory } from "@/lib/yahoo";
@@ -32,7 +33,9 @@ export async function executePriceRefreshIntoRun(
 ): Promise<PriceRefreshOutcome> {
   try {
     const instruments = await db.instrument.findMany({
-      where: trackedInstrumentWhere,
+      where: {
+        OR: [trackedInstrumentWhere, { yahooSymbol: BENCHMARK_YAHOO_SYMBOL }],
+      },
       select: { id: true, yahooSymbol: true },
     });
 
