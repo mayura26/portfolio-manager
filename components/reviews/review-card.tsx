@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatRelative } from "@/lib/format";
+import { DeleteReviewFromQueueButton } from "./delete-review-from-queue-button";
 import { ReviewStatusBadge } from "./review-status-badge";
 
 type ReviewRow = {
@@ -53,13 +54,17 @@ export function ReviewCard({ review }: { review: ReviewRow }) {
             </p>
           ) : null}
         </div>
-        <Link
-          href={`/reviews/${review.id}`}
-          className="group shrink-0 text-subtle transition-colors hover:text-accent"
-          aria-label="View review"
-        >
-          <ArrowUpRight className="h-4 w-4" strokeWidth={1.5} aria-hidden />
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <DeleteReviewFromQueueButton reviewId={review.id} />
+          <Link
+            href={`/reviews/${review.id}`}
+            className="text-subtle transition-colors hover:text-accent"
+            title="View review"
+            aria-label="View review"
+          >
+            <ArrowUpRight className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-border pt-2 text-xs text-muted">

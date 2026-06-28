@@ -243,3 +243,8 @@ export async function deleteReview(reviewId: string): Promise<void> {
   revalidate(reviewId);
   redirect("/reviews");
 }
+
+export async function deleteReviewFromQueue(reviewId: string): Promise<void> {
+  await db.review.delete({ where: { id: reviewId } });
+  revalidate();
+}
