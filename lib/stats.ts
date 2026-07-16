@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
-import { db } from "@/lib/db";
 import { getValueHistoryByGroup } from "@/lib/dashboard";
+import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { computeHoldings } from "@/lib/holdings";
 import {
@@ -8,6 +8,14 @@ import {
   visibleTradeWhere,
 } from "@/lib/portfolio-visibility";
 import { getSettings } from "@/lib/settings";
+import {
+  adjustQuantityForSplits,
+  indexStockSplits,
+  loadStockSplits,
+  type StockSplitLike,
+  splitRatio,
+  utcDayStartMs,
+} from "@/lib/stock-splits";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -57,6 +65,10 @@ export type PortfolioStats = {
 };
 
 type SimpleLot = { qty: Decimal; unitCost: Decimal };
+type RealizedSplitState = {
+  splits: StockSplitLike[];
+  nextIndex: number;
+};
 type DayRecordTrade = {
   date: Date;
   instrumentId: string;
@@ -104,6 +116,29 @@ function uniqueSortedDates(dates: Date[]): Date[] {
     .map((key) => new Date(`${key}T00:00:00.000Z`));
 }
 
+function applySplitToSimpleLots(lots: SimpleLot[], split: StockSplitLike) {
+  const ratio = splitRatio(split);
+  if (ratio.isZero()) return;
+  for (const lot of lots) {
+    lot.qty = lot.qty.times(ratio);
+    lot.unitCost = lot.unitCost.dividedBy(ratio);
+  }
+}
+
+function applyRealizedSplitsThrough(
+  lots: SimpleLot[],
+  state: RealizedSplitState,
+  throughDate: Date,
+) {
+  const throughDay = utcDayStartMs(throughDate);
+  while (state.nextIndex < state.splits.length) {
+    const split = state.splits[state.nextIndex];
+    if (utcDayStartMs(split.exDate) > throughDay) break;
+    applySplitToSimpleLots(lots, split);
+    state.nextIndex += 1;
+  }
+}
+
 function priceOnOrBefore(
   series: PricePoint[] | undefined,
   asOf: Date,
@@ -121,12 +156,18 @@ function priceOnOrBefore(
 function quantityHeldThroughDay(
   trades: DayRecordTrade[],
   throughDay: Date,
+  splits: StockSplitLike[] = [],
 ): Decimal {
   const through = utcDayKey(throughDay);
   let qty = ZERO;
   for (const trade of trades) {
     if (utcDayKey(trade.date) > through) break;
-    const tradeQty = toDec(trade.quantity);
+    const tradeQty = adjustQuantityForSplits(
+      toDec(trade.quantity),
+      splits,
+      trade.instrumentId,
+      trade.date,
+    );
     qty = trade.type === "BUY" ? qty.plus(tradeQty) : qty.minus(tradeQty);
   }
   return qty;
@@ -137,11 +178,13 @@ export async function computeMarketDayRecords({
   prices,
   baseCurrency,
   fxOn,
+  splits = [],
 }: {
   trades: DayRecordTrade[];
   prices: DayRecordPrice[];
   baseCurrency: string;
   fxOn: FxLookup;
+  splits?: StockSplitLike[];
 }): Promise<{ bestDay: DayStat | null; worstDay: DayStat | null }> {
   if (trades.length === 0 || prices.length === 0) {
     return { bestDay: null, worstDay: null };
@@ -191,7 +234,7 @@ export async function computeMarketDayRecords({
       const meta = instrumentMeta.get(instrumentId);
       if (!meta) continue;
 
-      const qty = quantityHeldThroughDay(instrumentTrades, prevDate);
+      const qty = quantityHeldThroughDay(instrumentTrades, prevDate, splits);
       if (qty.lte(0)) continue;
 
       const priceSeries = pricesByInstrument.get(instrumentId);
@@ -263,6 +306,8 @@ export async function computeMarketDayRecords({
 /** Inline FIFO realized P&L — mirrors the logic in computeHoldings. */
 function computeRealizedPnL(
   trades: Array<{
+    instrumentId: string;
+    date: Date;
     type: string;
     quantity: { toString(): string };
     price: { toString(): string };
@@ -271,24 +316,36 @@ function computeRealizedPnL(
     fxRate: { toString(): string } | null;
   }>,
   baseCurrency: string,
+  splits: StockSplitLike[] = [],
 ): Decimal {
   const lots: SimpleLot[] = [];
   let realized = ZERO;
+  const splitsByInstrument = indexStockSplits(splits);
+  const splitStates = new Map<string, RealizedSplitState>();
 
   for (const t of trades) {
+    let splitState = splitStates.get(t.instrumentId);
+    if (!splitState) {
+      splitState = {
+        splits: splitsByInstrument.get(t.instrumentId) ?? [],
+        nextIndex: 0,
+      };
+      splitStates.set(t.instrumentId, splitState);
+    }
+    applyRealizedSplitsThrough(lots, splitState, t.date);
+
     const tradeFx =
-      t.currency === baseCurrency
-        ? ONE
-        : t.fxRate
-          ? toDec(t.fxRate)
-          : ONE;
+      t.currency === baseCurrency ? ONE : t.fxRate ? toDec(t.fxRate) : ONE;
     const qty = toDec(t.quantity);
     const priceBase = toDec(t.price).times(tradeFx);
     const feesBase = toDec(t.fees).times(tradeFx);
 
     if (t.type === "BUY") {
       const totalCost = priceBase.times(qty).plus(feesBase);
-      lots.push({ qty, unitCost: qty.isZero() ? ZERO : totalCost.dividedBy(qty) });
+      lots.push({
+        qty,
+        unitCost: qty.isZero() ? ZERO : totalCost.dividedBy(qty),
+      });
       continue;
     }
 
@@ -349,7 +406,9 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     where: visibleTradeWhere,
     orderBy: [{ portfolioId: "asc" }, { instrumentId: "asc" }, { date: "asc" }],
     include: {
-      instrument: { select: { id: true, symbol: true, name: true, currency: true } },
+      instrument: {
+        select: { id: true, symbol: true, name: true, currency: true },
+      },
       portfolio: { select: { baseCurrency: true } },
     },
   });
@@ -380,6 +439,7 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
   const instrumentIds = Array.from(
     new Set(allTrades.map((trade) => trade.instrumentId)),
   );
+  const splits = await loadStockSplits(instrumentIds);
   const earliestTradeDate =
     allTrades.length > 0
       ? allTrades
@@ -403,6 +463,7 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     prices: dailyPriceRows,
     baseCurrency,
     fxOn: cachedFx,
+    splits,
   });
   bestDay = marketRecords.bestDay;
   worstDay = marketRecords.worstDay;
@@ -471,7 +532,10 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
         percent: pct,
       };
     }
-    if (pct && (!bestUnrealizedPct || pct.gt(bestUnrealizedPct.percent ?? ZERO))) {
+    if (
+      pct &&
+      (!bestUnrealizedPct || pct.gt(bestUnrealizedPct.percent ?? ZERO))
+    ) {
       bestUnrealizedPct = {
         instrumentId: entry.instrumentId,
         symbol: entry.symbol,
@@ -492,12 +556,17 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
   }
 
   // Only show worst if it's actually negative
-  if (worstPositionAbs && worstPositionAbs.value.gte(0)) {
+  if (worstPositionAbs?.value.gte(0)) {
     worstPositionAbs = null;
   }
 
   // ── 3. Per-instrument realized P&L (all instruments, open + closed) ────
-  type RealizedEntry = { instrumentId: string; symbol: string; name: string; realizedPnL: Decimal };
+  type RealizedEntry = {
+    instrumentId: string;
+    symbol: string;
+    name: string;
+    realizedPnL: Decimal;
+  };
   const realizedMap = new Map<string, RealizedEntry>();
 
   // Group by (portfolioId, instrumentId) to run FIFO per portfolio
@@ -519,7 +588,11 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     const portfolioBase = first.portfolio.baseCurrency;
     const toGlobal = await cachedFx(portfolioBase, baseCurrency);
 
-    const realizedInPortfolioBase = computeRealizedPnL(trades, portfolioBase);
+    const realizedInPortfolioBase = computeRealizedPnL(
+      trades,
+      portfolioBase,
+      splits,
+    );
     const realizedGlobal = realizedInPortfolioBase.times(toGlobal);
 
     const instrId = first.instrumentId;

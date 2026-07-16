@@ -25,6 +25,8 @@ recordCronRun({
     priceRefreshRunId: r.priceRefreshRunId,
     instruments: r.instruments,
     bars: r.bars,
+    splits: r.splits,
+    repairedPriceHistories: r.repairedPriceHistories,
     failures: r.failures.length,
     ok: r.ok,
   }),

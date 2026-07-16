@@ -7,6 +7,11 @@ import {
   type ReturnPeriods,
 } from "@/lib/performance";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
+import {
+  adjustQuantityForSplits,
+  loadStockSplits,
+  type StockSplitLike,
+} from "@/lib/stock-splits";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -72,13 +77,19 @@ function quantityHeldOn(
   trades: PositionTrade[],
   instrumentId: string,
   asOf: Date,
+  splits: StockSplitLike[],
 ): Decimal {
   const through = utcDayStart(asOf);
   let qty = ZERO;
   for (const trade of trades) {
     if (trade.instrumentId !== instrumentId) continue;
     if (utcDayStart(trade.date) > through) break;
-    const tradeQty = new Decimal(trade.quantity.toString());
+    const tradeQty = adjustQuantityForSplits(
+      new Decimal(trade.quantity.toString()),
+      splits,
+      instrumentId,
+      trade.date,
+    );
     qty = trade.type === "BUY" ? qty.plus(tradeQty) : qty.minus(tradeQty);
   }
   return qty;
@@ -104,12 +115,14 @@ function priceReturnPercent(
   prices: PricePoint[] | undefined,
   trades: PositionTrade[],
   instrumentId: string,
+  splits: StockSplitLike[],
   days: number,
 ): Decimal | null {
   if (!latestPrice || !latestDate) return null;
 
   const anchorDate = addUtcDays(latestDate, -days);
-  if (quantityHeldOn(trades, instrumentId, anchorDate).lte(0)) return null;
+  if (quantityHeldOn(trades, instrumentId, anchorDate, splits).lte(0))
+    return null;
 
   const anchorPrice = priceOnOrBefore(prices, anchorDate);
   if (!anchorPrice || anchorPrice.isZero()) return null;
@@ -164,6 +177,8 @@ export async function getPortfolioHoldingPerformance(
     }),
   ]);
 
+  const splits = await loadStockSplits(instrumentIds);
+
   const pricesByInstrument = new Map<string, PricePoint[]>();
   for (const price of prices) {
     let arr = pricesByInstrument.get(price.instrumentId);
@@ -192,6 +207,7 @@ export async function getPortfolioHoldingPerformance(
           pricesByInstrument.get(holding.instrumentId),
           trades,
           holding.instrumentId,
+          splits,
           1,
         ),
         week: priceReturnPercent(
@@ -200,6 +216,7 @@ export async function getPortfolioHoldingPerformance(
           pricesByInstrument.get(holding.instrumentId),
           trades,
           holding.instrumentId,
+          splits,
           7,
         ),
         month: priceReturnPercent(
@@ -208,6 +225,7 @@ export async function getPortfolioHoldingPerformance(
           pricesByInstrument.get(holding.instrumentId),
           trades,
           holding.instrumentId,
+          splits,
           30,
         ),
       },

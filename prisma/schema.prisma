@@ -97,6 +97,7 @@ model Instrument {
 
   trades         Trade[]
   prices         PriceHistory[]
+  stockSplits    StockSplit[]
   alerts         Alert[]
   reviews        Review[]
   notes          StockNote[]
@@ -164,6 +165,22 @@ model PriceHistory {
 
   @@unique([instrumentId, date])
   @@index([instrumentId, date(sort: Desc)])
+}
+
+model StockSplit {
+  id           String   @id @default(cuid())
+  instrumentId String
+  exDate       DateTime @db.Date
+  numerator    Decimal  @db.Decimal(18, 8)
+  denominator  Decimal  @db.Decimal(18, 8)
+  source       String   @default("YAHOO")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([instrumentId, exDate, source])
+  @@index([instrumentId, exDate])
 }
 
 // ─────────────────────────────────────────────────────────────

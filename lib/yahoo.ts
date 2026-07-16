@@ -269,6 +269,24 @@ export type DailyBar = {
   volume: number | null;
 };
 
+export type StockSplitEvent = {
+  date: Date;
+  numerator: number;
+  denominator: number;
+  splitRatio: string;
+};
+
+function parseSplitRatio(
+  value: string,
+): { numerator: number; denominator: number } | null {
+  const [numeratorRaw, denominatorRaw] = value.split(":");
+  const numerator = Number(numeratorRaw);
+  const denominator = Number(denominatorRaw);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) return null;
+  if (numerator <= 0 || denominator <= 0) return null;
+  return { numerator, denominator };
+}
+
 export const PRICE_CHART_RANGES = ["4h", "1m", "6m", "1y", "5y"] as const;
 export type PriceChartRange = (typeof PRICE_CHART_RANGES)[number];
 
@@ -281,17 +299,7 @@ export type PriceChartBar = {
   volume: number | null;
 };
 
-export async function fetchDailyHistory(
-  yahooSymbol: string,
-  from: Date,
-  to: Date = new Date(),
-): Promise<DailyBar[]> {
-  const result = await fetchChart(yahooSymbol, {
-    period1: from,
-    period2: to,
-    interval: "1d",
-  });
-
+function dailyBarsFromChart(result: ChartResultArray): DailyBar[] {
   return (result.quotes ?? [])
     .filter(
       (
@@ -317,6 +325,101 @@ export async function fetchDailyHistory(
       close: q.close,
       volume: typeof q.volume === "number" ? q.volume : null,
     }));
+}
+
+function stockSplitsFromChart(result: ChartResultArray): StockSplitEvent[] {
+  return (result.events?.splits ?? [])
+    .filter(
+      (
+        split,
+      ): split is typeof split & {
+        date: Date;
+        numerator: number;
+        denominator: number;
+        splitRatio: string;
+      } =>
+        split.date instanceof Date &&
+        typeof split.numerator === "number" &&
+        typeof split.denominator === "number" &&
+        split.denominator !== 0 &&
+        typeof split.splitRatio === "string",
+    )
+    .map((split) => ({
+      date: split.date,
+      numerator: split.numerator,
+      denominator: split.denominator,
+      splitRatio: split.splitRatio,
+    }));
+}
+
+export async function fetchDailyHistory(
+  yahooSymbol: string,
+  from: Date,
+  to: Date = new Date(),
+): Promise<DailyBar[]> {
+  const result = await fetchChart(yahooSymbol, {
+    period1: from,
+    period2: to,
+    interval: "1d",
+  });
+
+  return dailyBarsFromChart(result);
+}
+
+export async function fetchDailyHistoryWithSplits(
+  yahooSymbol: string,
+  from: Date,
+  to: Date = new Date(),
+): Promise<{ bars: DailyBar[]; splits: StockSplitEvent[] }> {
+  const result = await fetchChart(yahooSymbol, {
+    period1: from,
+    period2: to,
+    interval: "1d",
+    events: "split",
+  });
+
+  return {
+    bars: dailyBarsFromChart(result),
+    splits: stockSplitsFromChart(result),
+  };
+}
+
+export async function fetchStockSplits(
+  yahooSymbol: string,
+  from: Date,
+  to: Date = new Date(),
+): Promise<StockSplitEvent[]> {
+  const rows = (await yahoo.historical(
+    yahooSymbol,
+    {
+      period1: from,
+      period2: to,
+      events: "split",
+    },
+    { validateResult: false },
+  )) as unknown[];
+
+  return rows
+    .filter(
+      (row): row is { date: Date; stockSplits: string } =>
+        typeof row === "object" &&
+        row !== null &&
+        "date" in row &&
+        row.date instanceof Date &&
+        "stockSplits" in row &&
+        typeof row.stockSplits === "string",
+    )
+    .map((row) => {
+      const parsed = parseSplitRatio(row.stockSplits);
+      if (!parsed) return null;
+      return {
+        date: row.date,
+        numerator: parsed.numerator,
+        denominator: parsed.denominator,
+        splitRatio: row.stockSplits,
+      };
+    })
+    .filter((split): split is StockSplitEvent => split !== null);
 }
 
 export async function fetchPriceChartHistory(

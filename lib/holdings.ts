@@ -2,6 +2,13 @@ import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
+import {
+  indexStockSplits,
+  loadStockSplits,
+  type StockSplitLike,
+  splitRatio,
+  utcDayStartMs,
+} from "@/lib/stock-splits";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -52,6 +59,38 @@ function toDec(value: unknown): Decimal {
   return new Decimal(value as Decimal.Value);
 }
 
+type SplitState = {
+  splits: StockSplitLike[];
+  nextIndex: number;
+};
+
+function applySplitToLots(lots: Lot[], split: StockSplitLike) {
+  const ratio = splitRatio(split);
+  if (ratio.isZero()) return;
+  for (const lot of lots) {
+    lot.quantity = lot.quantity.times(ratio);
+    lot.unitCostBase = lot.unitCostBase.dividedBy(ratio);
+    lot.unitCostInstrument = lot.unitCostInstrument.dividedBy(ratio);
+  }
+}
+
+function applySplitsThrough(lots: Lot[], state: SplitState, throughDate: Date) {
+  const throughDay = utcDayStartMs(throughDate);
+  while (state.nextIndex < state.splits.length) {
+    const split = state.splits[state.nextIndex];
+    if (utcDayStartMs(split.exDate) > throughDay) break;
+    applySplitToLots(lots, split);
+    state.nextIndex += 1;
+  }
+}
+
+function applyRemainingSplits(lots: Lot[], state: SplitState) {
+  while (state.nextIndex < state.splits.length) {
+    applySplitToLots(lots, state.splits[state.nextIndex]);
+    state.nextIndex += 1;
+  }
+}
+
 export async function computeHoldings(
   portfolioId: string,
 ): Promise<PortfolioHoldings> {
@@ -71,10 +110,14 @@ export async function computeHoldings(
   }
 
   const baseCurrency = portfolio.baseCurrency;
+  const splitsByInstrument = indexStockSplits(
+    await loadStockSplits(portfolio.trades.map((trade) => trade.instrumentId)),
+  );
   type InstrumentBucket = {
     instrument: (typeof portfolio.trades)[number]["instrument"];
     lots: Lot[];
     realizedPnL: Decimal;
+    splitState: SplitState;
   };
   const byInstrument = new Map<string, InstrumentBucket>();
 
@@ -82,10 +125,19 @@ export async function computeHoldings(
     const instrumentId = trade.instrumentId;
     let bucket = byInstrument.get(instrumentId);
     if (!bucket) {
-      bucket = { instrument: trade.instrument, lots: [], realizedPnL: ZERO };
+      bucket = {
+        instrument: trade.instrument,
+        lots: [],
+        realizedPnL: ZERO,
+        splitState: {
+          splits: splitsByInstrument.get(instrumentId) ?? [],
+          nextIndex: 0,
+        },
+      };
       byInstrument.set(instrumentId, bucket);
     }
 
+    applySplitsThrough(bucket.lots, bucket.splitState, trade.date);
     const tradeFx =
       trade.currency === baseCurrency
         ? ONE
@@ -143,6 +195,10 @@ export async function computeHoldings(
     }
 
     bucket.realizedPnL = bucket.realizedPnL.plus(proceeds.minus(costRemoved));
+  }
+
+  for (const bucket of byInstrument.values()) {
+    applyRemainingSplits(bucket.lots, bucket.splitState);
   }
 
   const openInstrumentIds = Array.from(byInstrument.entries())
@@ -271,6 +327,7 @@ export async function computeHoldings(
 export type FifoCostTradeInput = {
   instrumentId: string;
   type: "BUY" | "SELL";
+  date: Date;
   quantity: { toString(): string };
   price: { toString(): string };
   fees: { toString(): string };
@@ -285,8 +342,11 @@ export type FifoCostTradeInput = {
 export function computeFifoOpenCostBasis(
   tradesChronological: FifoCostTradeInput[],
   baseCurrency: string,
+  splits: StockSplitLike[] = [],
 ): Decimal {
   const byInstrument = new Map<string, Lot[]>();
+  const splitsByInstrument = indexStockSplits(splits);
+  const splitStates = new Map<string, SplitState>();
 
   for (const trade of tradesChronological) {
     const instrumentId = trade.instrumentId;
@@ -294,7 +354,14 @@ export function computeFifoOpenCostBasis(
     if (!lots) {
       lots = [];
       byInstrument.set(instrumentId, lots);
+      splitStates.set(instrumentId, {
+        splits: splitsByInstrument.get(instrumentId) ?? [],
+        nextIndex: 0,
+      });
     }
+
+    const splitState = splitStates.get(instrumentId);
+    if (splitState) applySplitsThrough(lots, splitState, trade.date);
 
     const tradeFx =
       trade.currency === baseCurrency

@@ -17,6 +17,11 @@ import {
   visibleTradeWhere,
 } from "@/lib/portfolio-visibility";
 import { getSettings } from "@/lib/settings";
+import {
+  adjustQuantityForSplits,
+  loadStockSplits,
+  type StockSplitLike,
+} from "@/lib/stock-splits";
 
 const ZERO = new Decimal(0);
 const ONE = new Decimal(1);
@@ -304,7 +309,12 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     const cash = await computeGroupCash(g.id);
     const cashBase = cash.currentCash.isZero()
       ? ZERO
-      : await convert(cash.currentCash, cash.baseCurrency, ws.baseCurrency, now);
+      : await convert(
+          cash.currentCash,
+          cash.baseCurrency,
+          ws.baseCurrency,
+          now,
+        );
     const realizedIncome = cash.realizedIncome.isZero()
       ? ZERO
       : await convert(
@@ -487,6 +497,8 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
     orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
   });
 
+  const splits = await loadStockSplits(instrumentIds);
+
   const pricesByInstrument = new Map<
     string,
     { date: Date; close: Decimal }[]
@@ -535,7 +547,7 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
       const instSet = Array.from(new Set(gTrades.map((t) => t.instrumentId)));
       let equity = ZERO;
       for (const instrumentId of instSet) {
-        const qty = quantityHeldOn(gTrades, instrumentId, day);
+        const qty = quantityHeldOn(gTrades, instrumentId, day, splits);
         if (qty.isZero()) continue;
         const close = priceOn(pricesByInstrument.get(instrumentId), day);
         if (!close) continue;
@@ -613,6 +625,8 @@ async function buildEquityHistoryCurve(
     orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
   });
 
+  const splits = await loadStockSplits(instrumentIds);
+
   const pricesByInstrument = new Map<
     string,
     { date: Date; close: Decimal }[]
@@ -647,7 +661,7 @@ async function buildEquityHistoryCurve(
   for (const day of dates) {
     let dayValue = ZERO;
     for (const instrumentId of instrumentIds) {
-      const qty = quantityHeldOn(trades, instrumentId, day);
+      const qty = quantityHeldOn(trades, instrumentId, day, splits);
       if (qty.isZero()) continue;
       const close = priceOn(pricesByInstrument.get(instrumentId), day);
       if (!close) continue;
@@ -684,6 +698,10 @@ export async function getPortfolioValueHistory(
     },
   });
 
+  const splits = await loadStockSplits(
+    trades.map((trade) => trade.instrumentId),
+  );
+
   const mapped: TradeForEquityCurve[] = trades.map((t) => ({
     date: t.date,
     instrumentId: t.instrumentId,
@@ -708,6 +726,7 @@ export async function getPortfolioValueHistory(
       prefix.push({
         instrumentId: t.instrumentId,
         type: t.type,
+        date: t.date,
         quantity: t.quantity,
         price: t.price,
         fees: t.fees,
@@ -715,7 +734,7 @@ export async function getPortfolioValueHistory(
         fxRate: t.fxRate,
       });
     }
-    const cost = computeFifoOpenCostBasis(prefix, baseCurrency);
+    const cost = computeFifoOpenCostBasis(prefix, baseCurrency, splits);
     return {
       date,
       equities: Number(curve.equities[i].toFixed(2)),
@@ -795,6 +814,8 @@ export async function getGroupValueHistory(
     where: { instrumentId: { in: instrumentIds }, date: { gte: startDate } },
     orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
   });
+  const splits = await loadStockSplits(instrumentIds);
+
   const pricesByInstrument = new Map<
     string,
     { date: Date; close: Decimal }[]
@@ -835,7 +856,7 @@ export async function getGroupValueHistory(
       const instSet = Array.from(new Set(pt.map((t) => t.instrumentId)));
       let dayValue = ZERO;
       for (const instrumentId of instSet) {
-        const qty = quantityHeldOnForPortfolio(pt, instrumentId, day);
+        const qty = quantityHeldOnForPortfolio(pt, instrumentId, day, splits);
         if (qty.isZero()) continue;
         const close = priceOn(pricesByInstrument.get(instrumentId), day);
         if (!close) continue;
@@ -887,6 +908,7 @@ function quantityHeldOn(
   }[],
   instrumentId: string,
   asOf: Date,
+  splits: StockSplitLike[],
 ): Decimal {
   const through = utcDayStart(asOf);
   let qty = ZERO;
@@ -895,7 +917,12 @@ function quantityHeldOn(
     // Compare by day: a trade is held from its trade date onward, regardless
     // of the intraday time component on the stored timestamp.
     if (utcDayStart(t.date) > through) break;
-    const q = new Decimal(t.quantity.toString());
+    const q = adjustQuantityForSplits(
+      new Decimal(t.quantity.toString()),
+      splits,
+      instrumentId,
+      t.date,
+    );
     qty = t.type === "BUY" ? qty.plus(q) : qty.minus(q);
   }
   return qty;
@@ -905,6 +932,7 @@ function quantityHeldOnForPortfolio(
   trades: TradeForEquityCurve[],
   instrumentId: string,
   asOf: Date,
+  splits: StockSplitLike[],
 ): Decimal {
   const subset = trades
     .filter((t) => t.instrumentId === instrumentId)
@@ -913,7 +941,12 @@ function quantityHeldOnForPortfolio(
   let qty = ZERO;
   for (const t of subset) {
     if (utcDayStart(t.date) > through) break;
-    const q = new Decimal(t.quantity.toString());
+    const q = adjustQuantityForSplits(
+      new Decimal(t.quantity.toString()),
+      splits,
+      instrumentId,
+      t.date,
+    );
     qty = t.type === "BUY" ? qty.plus(q) : qty.minus(q);
   }
   return qty;
