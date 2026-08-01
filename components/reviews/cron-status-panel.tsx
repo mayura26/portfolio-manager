@@ -51,7 +51,10 @@ function isInterrupted(run: CronJobRun): boolean {
   return !run.finishedAt && !isInflight(run);
 }
 
-function deriveStatus(config: CronJobConfig, latest: CronJobRun | null): Status {
+function deriveStatus(
+  config: CronJobConfig,
+  latest: CronJobRun | null,
+): Status {
   if (!latest) return { severity: "muted", label: "Never run" };
   if (isInflight(latest)) return { severity: "running", label: "Running" };
   if (isInterrupted(latest)) return { severity: "loss", label: "Interrupted" };
@@ -111,8 +114,8 @@ export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
         <div>
           <h2 className="display text-xl text-foreground">Scheduled jobs</h2>
           <p className="mt-1 text-xs text-muted">
-            Last recorded Coolify cron runs across sync, alerts, AI, and weekly
-            reporting.
+            Last recorded npm cron command runs across sync, alerts, AI, and
+            weekly reporting.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-px overflow-hidden border border-border bg-border text-center sm:grid-cols-6">
@@ -168,7 +171,9 @@ export function CronStatusPanel({ jobs }: { jobs: CronJobStatus[] }) {
                     )}
                   </td>
                   <td className="max-w-sm px-5 py-4 align-top text-xs text-muted">
-                    {latest ? summaryText(latest) : "Will populate after the next deployed cron run."}
+                    {latest
+                      ? summaryText(latest)
+                      : "Will populate after the next recorded command run."}
                   </td>
                   <td className="px-5 py-4 align-top">
                     <TrendStrip runs={runs} />
@@ -234,7 +239,11 @@ function TrendStrip({ runs }: { runs: CronJobRun[] }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5" role="img" aria-label="Recent cron runs">
+    <div
+      className="flex items-center gap-1.5"
+      role="img"
+      aria-label="Recent cron runs"
+    >
       {[...runs].reverse().map((run) => {
         const sev = runSeverity(run);
         const tip = [

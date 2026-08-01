@@ -1,6 +1,5 @@
 import { CableIcon, KeyRound } from "lucide-react";
 import { Suspense } from "react";
-import type { CronJobRun } from "@/app/generated/prisma/client";
 import {
   type CronJobConfig,
   CronStatusPanel,
@@ -73,43 +72,13 @@ const CRON_JOBS: CronJobConfig[] = [
   },
 ];
 
-type LatestWeeklyReport = {
-  id: string;
-  weekStart: Date;
-  weekEnd: Date;
-  generatedAt: Date;
-};
-
-function weeklyReportFallbackRun(
-  report: LatestWeeklyReport | null,
-): CronJobRun | null {
-  if (!report) return null;
-
-  return {
-    id: `weekly-report:${report.id}`,
-    job: "weekly-report",
-    command: "npm run cron:weekly-report",
-    startedAt: report.generatedAt,
-    finishedAt: report.generatedAt,
-    ok: true,
-    warnings: 0,
-    summary: {
-      source: "saved weekly report",
-      weekStart: report.weekStart.toISOString().slice(0, 10),
-      weekEnd: report.weekEnd.toISOString().slice(0, 10),
-      reportId: report.id,
-    },
-    error: null,
-  };
-}
-
 export default function IbkrSyncPage() {
   return (
     <div>
       <div className="mb-6">
         <p className="label">Data sync</p>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          Status of the Coolify scheduled jobs — global Yahoo Finance price
+          Status of recorded scheduled job commands - global Yahoo Finance price
           refresh and per-group IBKR Flex statement sync. Trigger either
           manually to pull the latest data on demand.
         </p>
@@ -122,7 +91,7 @@ export default function IbkrSyncPage() {
 }
 
 async function IbkrSyncContent() {
-  const [groups, priceRuns, cronRuns, latestWeeklyReport] = await Promise.all([
+  const [groups, priceRuns, cronRuns] = await Promise.all([
     db.portfolioGroup.findMany({
       where: {
         ibkrFlexToken: { not: null },
@@ -140,15 +109,6 @@ async function IbkrSyncContent() {
       orderBy: { startedAt: "desc" },
       take: TREND_RUNS * CRON_JOBS.length,
     }),
-    db.weeklyReport.findFirst({
-      orderBy: { generatedAt: "desc" },
-      select: {
-        id: true,
-        weekStart: true,
-        weekEnd: true,
-        generatedAt: true,
-      },
-    }),
   ]);
 
   const cronRunsByJob = new Map<string, typeof cronRuns>();
@@ -156,11 +116,6 @@ async function IbkrSyncContent() {
   for (const run of cronRuns) {
     const bucket = cronRunsByJob.get(run.job);
     if (bucket && bucket.length < TREND_RUNS) bucket.push(run);
-  }
-  const weeklyRuns = cronRunsByJob.get("weekly-report");
-  const fallbackWeeklyRun = weeklyReportFallbackRun(latestWeeklyReport);
-  if (weeklyRuns && weeklyRuns.length === 0 && fallbackWeeklyRun) {
-    weeklyRuns.push(fallbackWeeklyRun);
   }
 
   const cronSection = (
@@ -276,7 +231,7 @@ async function IbkrSyncContent() {
 
       <p className="flex items-center gap-2 text-xs text-subtle">
         <CableIcon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-        Scheduled tasks write one row to{" "}
+        Scheduled and manual job commands write one row to{" "}
         <code className="font-mono">CronJobRun</code> per command. Price and
         IBKR jobs also keep detailed run tables for drill-down.
       </p>
