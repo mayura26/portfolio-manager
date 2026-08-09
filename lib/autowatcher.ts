@@ -1,6 +1,10 @@
 import Decimal from "decimal.js";
 import { generateDailySummary } from "@/lib/autowatcher-ai";
-import { formatAutoWatcherMilestoneMessage } from "@/lib/autowatcher-format";
+import {
+  formatAutoWatcherCrossingLabel,
+  formatAutoWatcherMilestoneMessage,
+  formatAutoWatcherPositionLabel,
+} from "@/lib/autowatcher-format";
 import { db } from "@/lib/db";
 import type { NotificationBatchCandidate } from "@/lib/notification-batching";
 import { createBatchedNotifications } from "@/lib/notifications";
@@ -108,6 +112,17 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
         } else if (currentBand !== inst.autoWatcherLastBand) {
           const milestonePct = currentBand * thresholdNum;
           const milestoneLabel = `${milestonePct >= 0 ? "+" : ""}${milestonePct}%`;
+          const crossingDirection =
+            currentBand > inst.autoWatcherLastBand ? "upside" : "downside";
+          const crossingLabel = formatAutoWatcherCrossingLabel(
+            inst.symbol,
+            milestoneLabel,
+            crossingDirection,
+          );
+          const positionLabel = formatAutoWatcherPositionLabel(
+            position.unrealizedPnL,
+            position.baseCurrency,
+          );
           const message = formatAutoWatcherMilestoneMessage({
             symbol: inst.symbol,
             pnlPct,
@@ -121,13 +136,14 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
           milestoneNotifications.push({
             type: "AUTO_WATCHER",
             groupKey: "autowatcher:milestone",
-            title: `${inst.symbol} crossed ${milestoneLabel} milestone`,
+            title: crossingLabel,
             message,
             metadata: {
               kind: "milestone",
               symbol: inst.symbol,
               instrumentId: inst.id,
               currentBand,
+              crossingDirection,
               pnlPct: pnlPct.toNumber(),
               unrealizedPnL: position.unrealizedPnL?.toNumber() ?? null,
               pnlCurrency: position.baseCurrency,
@@ -137,7 +153,7 @@ export async function runAutoWatcher(): Promise<AutoWatcherRunResult> {
             },
             url: stockUrl,
             priority: 2,
-            itemLabel: `${inst.symbol}: crossed ${milestoneLabel}`,
+            itemLabel: `${crossingLabel} (${positionLabel})`,
             batchLabelSingular: "AutoWatcher milestone crossed",
             batchLabelPlural: "AutoWatcher milestones crossed",
           });

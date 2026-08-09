@@ -10,6 +10,8 @@ export type AutoWatcherMilestoneMessageInput = {
   instrumentCurrency: string;
 };
 
+export type AutoWatcherCrossingDirection = "upside" | "downside";
+
 export function formatMoney(
   value: Decimal,
   currency: string,
@@ -22,17 +24,36 @@ export function formatMoney(
   }).format(value.toNumber());
 }
 
+export function formatAutoWatcherCrossingLabel(
+  symbol: string,
+  milestoneLabel: string,
+  crossingDirection: AutoWatcherCrossingDirection,
+): string {
+  return `${symbol} crossed ${milestoneLabel} to the ${crossingDirection}`;
+}
+
+export function formatAutoWatcherPositionLabel(
+  unrealizedPnL: Decimal | null,
+  currency: string,
+): string {
+  if (!unrealizedPnL) return "position P&L unavailable";
+
+  const result = unrealizedPnL.isNegative() ? "loss" : "gain";
+  return `${formatMoney(unrealizedPnL, currency, { signed: true })} ${result}`;
+}
+
 export function formatAutoWatcherMilestoneMessage(
   input: AutoWatcherMilestoneMessageInput,
 ): string {
   const direction = input.pnlPct.isNegative() ? "down" : "up";
   const pnlText = `${direction} ${input.pnlPct.abs().toFixed(1)}%`;
-  const absoluteMove = input.unrealizedPnL
-    ? `an unrealized ${input.unrealizedPnL.isNegative() ? "loss" : "gain"} of ${formatMoney(input.unrealizedPnL.abs(), input.pnlCurrency)}`
-    : "unrealized P&L unavailable";
+  const positionText = formatAutoWatcherPositionLabel(
+    input.unrealizedPnL,
+    input.pnlCurrency,
+  );
   const currentPrice = input.currentPrice
     ? formatMoney(input.currentPrice, input.instrumentCurrency)
     : "N/A";
 
-  return `${input.symbol} is ${pnlText} vs cost basis, ${absoluteMove}. Avg cost ${formatMoney(input.avgCost, input.instrumentCurrency)}, current ${currentPrice}.`;
+  return `${input.symbol} is ${pnlText} vs cost basis. Position: ${positionText}. Avg cost ${formatMoney(input.avgCost, input.instrumentCurrency)}, current ${currentPrice}.`;
 }
