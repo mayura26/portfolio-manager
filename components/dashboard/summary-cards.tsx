@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import Link from "next/link";
 import { StatCard } from "@/components/shared/stat-card";
 import { groupColor } from "@/lib/chart-colors";
 import {
@@ -31,6 +32,7 @@ function breakdownFor(
       value: formatCurrency(amount.toString(), baseCurrency, { signed: true }),
       tone: toneOf(amount),
       swatch: groupColor(i),
+      href: `/groups/${g.groupId}`,
     };
   });
 }
@@ -129,41 +131,50 @@ function TotalValueCard({
               : ZERO;
 
             return (
-              <dl key={group.groupId} className="space-y-1.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <dt className="flex min-w-0 items-center gap-1.5 text-muted">
-                    <span
-                      aria-hidden
-                      className="inline-block h-2.5 w-2.5 shrink-0"
-                      style={{ background: groupColor(i) }}
-                    />
-                    <span className="truncate">{group.name}</span>
-                  </dt>
-                  <dd className="tabular shrink-0 text-right text-foreground">
-                    {formatCurrency(group.totalBase.toString(), baseCurrency)}
-                    <span className="ml-2 text-xs text-subtle">
-                      (
-                      {formatPercent(groupPct.dividedBy(100).toString(), {
-                        decimals: 1,
-                        signed: false,
-                      })}
-                      )
-                    </span>
-                  </dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-3 pl-4">
-                  <dt className="text-subtle">Equity</dt>
-                  <dd className="tabular text-right text-muted">
-                    {formatCurrency(group.equityBase.toString(), baseCurrency)}
-                  </dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-3 pl-4">
-                  <dt className="text-subtle">Cash</dt>
-                  <dd className="tabular text-right text-muted">
-                    {formatCurrency(group.cashBase.toString(), baseCurrency)}
-                  </dd>
-                </div>
-              </dl>
+              <Link
+                key={group.groupId}
+                href={`/groups/${group.groupId}`}
+                className="-mx-2 block px-2 py-1.5 transition-colors hover:bg-surface-elevated"
+              >
+                <dl className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="flex min-w-0 items-center gap-1.5 text-muted">
+                      <span
+                        aria-hidden
+                        className="inline-block h-2.5 w-2.5 shrink-0"
+                        style={{ background: groupColor(i) }}
+                      />
+                      <span className="truncate">{group.name}</span>
+                    </dt>
+                    <dd className="tabular shrink-0 text-right text-foreground">
+                      {formatCurrency(group.totalBase.toString(), baseCurrency)}
+                      <span className="ml-2 text-xs text-subtle">
+                        (
+                        {formatPercent(groupPct.dividedBy(100).toString(), {
+                          decimals: 1,
+                          signed: false,
+                        })}
+                        )
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3 pl-4">
+                    <dt className="text-subtle">Equity</dt>
+                    <dd className="tabular text-right text-muted">
+                      {formatCurrency(
+                        group.equityBase.toString(),
+                        baseCurrency,
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3 pl-4">
+                    <dt className="text-subtle">Cash</dt>
+                    <dd className="tabular text-right text-muted">
+                      {formatCurrency(group.cashBase.toString(), baseCurrency)}
+                    </dd>
+                  </div>
+                </dl>
+              </Link>
             );
           })}
         </div>

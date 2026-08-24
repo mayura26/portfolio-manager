@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type Tone = "gain" | "loss" | "neutral";
 
 type BreakdownRow = {
@@ -5,6 +7,7 @@ type BreakdownRow = {
   value: string;
   tone: Tone;
   swatch?: string;
+  href?: string;
 };
 
 type Props = {
@@ -36,34 +39,58 @@ export function StatCard({ label, value, hint, delta, breakdown }: Props) {
         </p>
       ) : null}
       {breakdown && breakdown.length > 0 ? (
-        <dl className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
+        <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
           {breakdown.map((row) => (
-            <div
+            <BreakdownItem
               key={row.label}
-              className="flex items-baseline justify-between gap-3"
-            >
-              <dt className="flex min-w-0 items-center gap-1.5 text-muted">
-                {row.swatch ? (
-                  <span
-                    aria-hidden
-                    className="inline-block h-2.5 w-2.5 shrink-0"
-                    style={{ background: row.swatch }}
-                  />
-                ) : null}
-                <span className="truncate">{row.label}</span>
-              </dt>
-              <dd
-                className={["tabular text-right", toneClass(row.tone)].join(
-                  " ",
-                )}
-              >
-                {row.value}
-              </dd>
-            </div>
+              row={row}
+              valueClass={toneClass(row.tone)}
+            />
           ))}
-        </dl>
+        </div>
       ) : null}
       {hint ? <p className="mt-2 text-xs text-subtle">{hint}</p> : null}
     </div>
+  );
+}
+
+function BreakdownItem({
+  row,
+  valueClass,
+}: {
+  row: BreakdownRow;
+  valueClass: string;
+}) {
+  const content = (
+    <>
+      <span className="flex min-w-0 items-center gap-1.5 text-muted">
+        {row.swatch ? (
+          <span
+            aria-hidden
+            className="inline-block h-2.5 w-2.5 shrink-0"
+            style={{ background: row.swatch }}
+          />
+        ) : null}
+        <span className="truncate">{row.label}</span>
+      </span>
+      <span className={["tabular text-right", valueClass].join(" ")}>
+        {row.value}
+      </span>
+    </>
+  );
+
+  if (row.href) {
+    return (
+      <Link
+        href={row.href}
+        className="-mx-2 flex items-baseline justify-between gap-3 px-2 py-1 transition-colors hover:bg-surface-elevated"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex items-baseline justify-between gap-3">{content}</div>
   );
 }
