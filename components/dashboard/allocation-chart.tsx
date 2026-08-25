@@ -16,6 +16,7 @@ export async function AllocationChart({ groupBy = "portfolio" }: Props) {
         label: s.label,
         value: Number(s.value.toFixed(2)),
         percent: Number(s.percent.toFixed(2)),
+        href: groupBy === "portfolio" ? `/portfolios/${s.key}` : undefined,
       }))}
     />
   );

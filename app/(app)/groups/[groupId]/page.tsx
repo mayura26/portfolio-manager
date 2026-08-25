@@ -1,4 +1,9 @@
-import { Download, Plus, Settings as SettingsIcon, TrendingUp } from "lucide-react";
+import {
+  Download,
+  Plus,
+  Settings as SettingsIcon,
+  TrendingUp,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -60,6 +65,7 @@ async function GroupDetail({ params }: { params: Params }) {
       label: r.kind === "portfolio" ? r.name : "Cash",
       value: Number(r.actualValueBase.toFixed(2)),
       percent: Number(r.actualPercent.toFixed(2)),
+      href: r.kind === "portfolio" ? `/portfolios/${r.portfolioId}` : undefined,
     }));
 
   return (

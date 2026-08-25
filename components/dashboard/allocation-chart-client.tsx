@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 type Slice = {
@@ -7,6 +9,7 @@ type Slice = {
   label: string;
   value: number;
   percent: number;
+  href?: string;
 };
 
 type Props = {
@@ -31,12 +34,18 @@ export function AllocationChartClient({
   baseCurrency,
   percentOnly = false,
 }: Props) {
+  const router = useRouter();
+
   if (slices.length === 0) {
     return (
       <div className="flex h-72 items-center justify-center text-sm text-muted">
         No allocation data
       </div>
     );
+  }
+
+  function navigateToSlice(slice: Slice) {
+    if (slice.href) router.push(slice.href);
   }
 
   return (
@@ -55,7 +64,27 @@ export function AllocationChartClient({
               strokeWidth={1}
             >
               {slices.map((slice, idx) => (
-                <Cell key={slice.key} fill={PALETTE[idx % PALETTE.length]} />
+                <Cell
+                  key={slice.key}
+                  fill={PALETTE[idx % PALETTE.length]}
+                  className={slice.href ? "cursor-pointer" : undefined}
+                  onClick={() => navigateToSlice(slice)}
+                  onKeyDown={(event) => {
+                    if (
+                      !slice.href ||
+                      (event.key !== "Enter" && event.key !== " ")
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    navigateToSlice(slice);
+                  }}
+                  role={slice.href ? "link" : undefined}
+                  tabIndex={slice.href ? 0 : undefined}
+                  aria-label={
+                    slice.href ? `Open ${slice.label} portfolio` : undefined
+                  }
+                />
               ))}
             </Pie>
             <Tooltip
@@ -86,21 +115,44 @@ export function AllocationChartClient({
 
       <ul className="flex flex-col gap-2 self-center text-sm">
         {slices.map((s, idx) => (
-          <li key={s.key} className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 shrink-0"
-                style={{ background: PALETTE[idx % PALETTE.length] }}
-                aria-hidden
-              />
-              <span className="truncate text-foreground">{s.label}</span>
-            </div>
-            <span className="tabular shrink-0 text-muted">
-              {s.percent.toFixed(1)}%
-            </span>
+          <li key={s.key}>
+            <LegendItem slice={s} color={PALETTE[idx % PALETTE.length]} />
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function LegendItem({ slice, color }: { slice: Slice; color: string }) {
+  const content = (
+    <>
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0"
+          style={{ background: color }}
+          aria-hidden
+        />
+        <span className="truncate text-foreground">{slice.label}</span>
+      </div>
+      <span className="tabular shrink-0 text-muted">
+        {slice.percent.toFixed(1)}%
+      </span>
+    </>
+  );
+
+  if (slice.href) {
+    return (
+      <Link
+        href={slice.href}
+        className="-mx-2 flex items-center justify-between gap-3 px-2 py-1.5 transition-colors hover:bg-surface hover:text-accent"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3">{content}</div>
   );
 }
