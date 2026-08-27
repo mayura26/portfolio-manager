@@ -168,7 +168,7 @@ async function GroupDetail({ params }: { params: Params }) {
         </h2>
         <div className="hairline bg-surface px-5 py-5">
           <Suspense fallback={<PerformanceChartSkeleton />}>
-            <PerformanceChart scope="group" groupId={group.id} days={90} />
+            <PerformanceChart scope="group" groupId={group.id} />
           </Suspense>
         </div>
       </section>

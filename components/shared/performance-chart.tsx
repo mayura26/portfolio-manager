@@ -7,11 +7,10 @@ type Props = { days?: number } & (
 );
 
 export async function PerformanceChart(props: Props) {
-  const days = props.days ?? 90;
   const data =
     props.scope === "account"
-      ? await getAccountPerformance(days)
-      : await getGroupPerformance(props.groupId, days);
+      ? await getAccountPerformance(props.days)
+      : await getGroupPerformance(props.groupId, props.days);
 
   return <PerformanceChartClient {...data} />;
 }

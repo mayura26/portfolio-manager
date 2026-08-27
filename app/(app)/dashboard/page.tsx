@@ -57,7 +57,7 @@ export default function DashboardPage() {
           Performance vs S&amp;P 500
         </h2>
         <Suspense fallback={<PerformanceChartSkeleton />}>
-          <PerformanceChart scope="account" days={90} />
+          <PerformanceChart scope="account" />
         </Suspense>
       </section>
 

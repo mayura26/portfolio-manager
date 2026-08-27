@@ -450,7 +450,7 @@ export async function getTopMovers(limit = 5): Promise<{
   return { baseCurrency: ws.baseCurrency, movers: movers.slice(0, limit) };
 }
 
-export async function getValueHistoryByGroup(days = 90): Promise<{
+export async function getValueHistoryByGroup(days?: number): Promise<{
   baseCurrency: string;
   series: GroupValueHistorySeries[];
   points: Array<{ date: Date } & Record<string, number>>;
@@ -485,11 +485,7 @@ export async function getValueHistoryByGroup(days = 90): Promise<{
     arr.push(t);
   }
 
-  const earliestTrade = trades[0].date;
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - days);
-  since.setUTCHours(0, 0, 0, 0);
-  const startDate = earliestTrade > since ? earliestTrade : since;
+  const startDate = valueHistoryStartDate(trades[0].date, days);
 
   const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
   const prices = await db.priceHistory.findMany({
@@ -608,16 +604,12 @@ type TradeForEquityCurve = {
 
 async function buildEquityHistoryCurve(
   trades: TradeForEquityCurve[],
-  days: number,
+  days: number | undefined,
   targetBaseCurrency: string,
 ): Promise<{ dates: Date[]; equities: Decimal[] } | null> {
   if (trades.length === 0) return null;
 
-  const earliestTrade = trades[0].date;
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - days);
-  since.setUTCHours(0, 0, 0, 0);
-  const startDate = earliestTrade > since ? earliestTrade : since;
+  const startDate = valueHistoryStartDate(trades[0].date, days);
 
   const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
   const prices = await db.priceHistory.findMany({
@@ -748,7 +740,7 @@ export async function getPortfolioValueHistory(
 
 export async function getGroupValueHistory(
   groupId: string,
-  days = 90,
+  days?: number,
 ): Promise<{
   baseCurrency: string;
   series: GroupValueHistorySeries[];
@@ -804,11 +796,7 @@ export async function getGroupValueHistory(
   }
 
   const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
-  const earliestTrade = trades[0]?.date ?? new Date();
-  const since = new Date();
-  since.setUTCDate(since.getUTCDate() - days);
-  since.setUTCHours(0, 0, 0, 0);
-  const startDate = earliestTrade > since ? earliestTrade : since;
+  const startDate = valueHistoryStartDate(trades[0]?.date ?? new Date(), days);
 
   const prices = await db.priceHistory.findMany({
     where: { instrumentId: { in: instrumentIds }, date: { gte: startDate } },
@@ -892,6 +880,16 @@ function uniqueSortedDates(dates: Date[], from: Date): Date[] {
   return Array.from(set)
     .sort((a, b) => a - b)
     .map((t) => new Date(t));
+}
+
+function valueHistoryStartDate(earliestTrade: Date, days?: number): Date {
+  const earliestTradeDay = new Date(utcDayStart(earliestTrade));
+  if (days === undefined) return earliestTradeDay;
+
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+  since.setUTCHours(0, 0, 0, 0);
+  return earliestTradeDay > since ? earliestTradeDay : since;
 }
 
 /** UTC midnight of a date, as epoch ms — for day-granular trade comparisons. */

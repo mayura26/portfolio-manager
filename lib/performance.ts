@@ -186,7 +186,7 @@ async function buildPerformance(
 /** Time-weighted return of a group as a whole vs the S&P 500. */
 export async function getGroupPerformance(
   groupId: string,
-  days = 90,
+  days?: number,
 ): Promise<PerformanceData> {
   const group = await db.portfolioGroup.findUnique({
     where: { id: groupId },
@@ -342,7 +342,7 @@ export async function getGroupPortfolioReturnPeriods(
 
 /** Time-weighted return of the whole account vs the S&P 500. */
 export async function getAccountPerformance(
-  days = 90,
+  days?: number,
 ): Promise<PerformanceData> {
   const history = await getValueHistoryByGroup(days);
   const dates = history.points.map((p) => p.date);

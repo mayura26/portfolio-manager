@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -14,6 +14,15 @@ import {
 import { groupColor } from "@/lib/chart-colors";
 
 const BENCHMARK_COLOR = "var(--subtle)";
+
+const RANGE_OPTIONS = [
+  { key: "all", label: "All" },
+  { key: "3m", label: "3M" },
+  { key: "ytd", label: "YTD" },
+  { key: "1y", label: "1Y" },
+] as const;
+
+type RangeKey = (typeof RANGE_OPTIONS)[number]["key"];
 
 type SeriesLine = {
   key: string;
@@ -33,8 +42,91 @@ function formatPct(value: number, decimals: number): string {
   return `${sign}${value.toFixed(decimals)}%`;
 }
 
+function rangeStart(range: RangeKey, latest: Date): Date | null {
+  if (range === "all") return null;
+
+  const start = new Date(latest);
+  start.setUTCHours(0, 0, 0, 0);
+
+  if (range === "3m") {
+    start.setUTCMonth(start.getUTCMonth() - 3);
+    return start;
+  }
+
+  if (range === "1y") {
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
+    return start;
+  }
+
+  return new Date(Date.UTC(latest.getUTCFullYear(), 0, 1));
+}
+
+function rawPointsForRange(points: Point[], range: RangeKey): Point[] {
+  const latestDate = points.at(-1)?.date;
+  if (typeof latestDate !== "string") return points;
+
+  const start = rangeStart(range, new Date(latestDate));
+  if (!start) return points;
+
+  return points.filter((point) => {
+    if (typeof point.date !== "string") return false;
+    return new Date(point.date).getTime() >= start.getTime();
+  });
+}
+
+function filteredPointsForRange(points: Point[], range: RangeKey): Point[] {
+  const filtered = rawPointsForRange(points, range);
+  return filtered.length >= 2 ? filtered : points;
+}
+
+function rebasePoints(points: Point[], lines: SeriesLine[]): Point[] {
+  const anchors = new Map<string, number>();
+
+  for (const line of lines) {
+    for (const point of points) {
+      const value = point[line.key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        anchors.set(line.key, value);
+        break;
+      }
+    }
+  }
+
+  return points.map((point) => {
+    const next: Point = { date: point.date };
+    for (const line of lines) {
+      const value = point[line.key];
+      const anchor = anchors.get(line.key);
+      next[line.key] =
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        anchor !== undefined
+          ? Number(
+              (((1 + value / 100) / (1 + anchor / 100) - 1) * 100).toFixed(4),
+            )
+          : null;
+    }
+    return next;
+  });
+}
+
 export function PerformanceChartClient({ lines, points }: Props) {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [range, setRange] = useState<RangeKey>("all");
+  const rangeCounts = useMemo(
+    () =>
+      new Map(
+        RANGE_OPTIONS.map((option) => [
+          option.key,
+          rawPointsForRange(points, option.key).length,
+        ]),
+      ),
+    [points],
+  );
+  const visiblePoints = useMemo(
+    () => rebasePoints(filteredPointsForRange(points, range), lines),
+    [lines, points, range],
+  );
 
   if (points.length < 2 || lines.length === 0) {
     return (
@@ -67,10 +159,32 @@ export function PerformanceChartClient({ lines, points }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="label">Range</span>
+        <div className="flex min-h-8 flex-wrap items-center gap-1 border border-border bg-surface-elevated p-0.5">
+          {RANGE_OPTIONS.map((option) => {
+            const selected = option.key === range;
+            const disabled = (rangeCounts.get(option.key) ?? 0) < 2;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={selected}
+                disabled={disabled}
+                onClick={() => setRange(option.key)}
+                className="h-6 px-2 text-[11px] font-medium text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={points}
+            data={visiblePoints}
             margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           >
             <CartesianGrid
