@@ -1,11 +1,45 @@
 import assert from "node:assert/strict";
-import ExcelJS from "exceljs";
+import { XMLParser } from "fast-xml-parser";
+import JSZip from "jszip";
 import {
   buildSimplyWallStExportRows,
   createSimplyWallStWorkbook,
   getSimplyWallStTicker,
   SIMPLY_WALL_ST_HEADERS,
 } from "@/lib/simply-wall-st-export";
+
+type ParsedNode = Record<string, unknown>;
+
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "",
+});
+
+function asNode(value: unknown): ParsedNode {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  return value as ParsedNode;
+}
+
+function asArray(value: unknown): ParsedNode[] {
+  if (Array.isArray(value)) {
+    return value.map(asNode);
+  }
+
+  return [asNode(value)];
+}
+
+function getCellValue(cell: ParsedNode): unknown {
+  const inlineString = cell.is;
+  if (inlineString) {
+    const text = asNode(inlineString).t;
+    return typeof text === "object" && text !== null
+      ? asNode(text)["#text"]
+      : text;
+  }
+
+  return cell.v;
+}
 
 const rows = buildSimplyWallStExportRows([
   {
@@ -97,20 +131,36 @@ assert.equal(
 
 async function main() {
   const workbookBuffer = await createSimplyWallStWorkbook(rows);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(workbookBuffer);
-  const sheet = workbook.getWorksheet("Sheet1");
+  const workbookZip = await JSZip.loadAsync(workbookBuffer);
+  const worksheetFile = workbookZip.file("xl/worksheets/sheet1.xml");
+  const stylesFile = workbookZip.file("xl/styles.xml");
 
-  assert.ok(sheet, "Expected Sheet1 in exported workbook");
-  assert.deepEqual((sheet.getRow(1).values as unknown[]).slice(1), [
-    ...SIMPLY_WALL_ST_HEADERS,
-  ]);
-  assert.equal(sheet.getCell("A2").value, "NasdaqGS:AAPL");
-  assert.equal(sheet.getCell("B2").value, "BUY");
-  assert.equal(sheet.getCell("D2").value, 10.5);
-  assert.equal(sheet.getCell("E2").value, 158.32);
-  assert.equal(sheet.getCell("F2").value, "USD");
-  assert.equal(sheet.getColumn(3).numFmt, "yyyy/mm/dd");
+  assert.ok(worksheetFile, "Expected Sheet1 in exported workbook");
+  assert.ok(stylesFile, "Expected workbook styles");
+
+  const worksheetXml = await worksheetFile.async("text");
+  const stylesXml = await stylesFile.async("text");
+  const worksheet = asNode(xmlParser.parse(worksheetXml).worksheet);
+  const styles = asNode(xmlParser.parse(stylesXml).styleSheet);
+  const sheetData = asNode(worksheet.sheetData);
+  const sheetRows = asArray(sheetData.row);
+  const headerCells = asArray(sheetRows[0].c);
+  const firstTradeCells = asArray(sheetRows[1].c);
+
+  assert.deepEqual(headerCells.map(getCellValue), [...SIMPLY_WALL_ST_HEADERS]);
+  assert.equal(getCellValue(firstTradeCells[0]), "NasdaqGS:AAPL");
+  assert.equal(getCellValue(firstTradeCells[1]), "BUY");
+  assert.equal(getCellValue(firstTradeCells[3]), 10.5);
+  assert.equal(getCellValue(firstTradeCells[4]), 158.32);
+  assert.equal(getCellValue(firstTradeCells[5]), "USD");
+  assert.equal(firstTradeCells[2].s, "2");
+  assert.equal(asNode(worksheet.autoFilter).ref, "A1:F3");
+
+  const numberFormats = asArray(asNode(styles.numFmts).numFmt);
+  assert.ok(
+    numberFormats.some((format) => format.formatCode === "yyyy/mm/dd"),
+    "Expected date number format",
+  );
 
   console.log("Simply Wall St export tests passed");
 }
