@@ -102,17 +102,28 @@ function parseTransactionRows(
   sourceAccountKey: string,
 ): ParsedExternalCashTransaction[] {
   const rows: ParsedExternalCashTransaction[] = [];
-  const transactionPattern =
-    /^(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s+(.+?)\s+(-?\$[\d,]+\.\d{2}|\$-\d[\d,]*\.\d{2})\s+(-?\$[\d,]+\.\d{2}|\$-\d[\d,]*\.\d{2})$/gm;
+  const moneyPattern = /-?\$[\d,]+\.\d{2}|\$-\d[\d,]*\.\d{2}/g;
 
-  for (const match of text.matchAll(transactionPattern)) {
-    const [, rawDate, rawDescription, rawAmount, rawBalance] = match;
-    if (!rawDate || !rawDescription || !rawAmount || !rawBalance) continue;
+  for (const rawRow of logicalTransactionRows(text)) {
+    const rowMatch = rawRow.match(/^(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s+(.+)$/);
+    if (!rowMatch?.[1] || !rowMatch?.[2]) continue;
+
+    const rawDate = rowMatch[1];
+    const body = rowMatch[2];
+    const moneyMatches = Array.from(body.matchAll(moneyPattern));
+    if (moneyMatches.length < 2) continue;
+
+    const rawAmount = moneyMatches[moneyMatches.length - 2]?.[0];
+    const rawBalance = moneyMatches[moneyMatches.length - 1]?.[0];
+    if (!rawAmount || !rawBalance) continue;
 
     const amount = parseMoney(rawAmount);
     const balance = parseMoney(rawBalance);
     const date = parseLongDate(rawDate);
-    const description = rawDescription.trim().replace(/\s+/g, " ");
+    const description = body
+      .replace(moneyPattern, " ")
+      .trim()
+      .replace(/\s+/g, " ");
 
     // Detect interest entries by description before falling back to sign.
     // CommBank uses "Credit Interest" and "Bonus Interest"; catch any variant.
@@ -141,6 +152,34 @@ function parseTransactionRows(
   }
 
   rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return rows;
+}
+
+function logicalTransactionRows(text: string): string[] {
+  const rows: string[] = [];
+  let current: string[] = [];
+  const datePrefix = /^\d{1,2}\s+[A-Za-z]+\s+\d{4}\b/;
+
+  for (const line of text.split("\n")) {
+    if (datePrefix.test(line)) {
+      if (current.length > 0) rows.push(current.join(" "));
+      current = [line];
+      continue;
+    }
+
+    if (current.length === 0) continue;
+
+    const joined = current.join(" ");
+    const moneyCount = Array.from(
+      joined.matchAll(/-?\$[\d,]+\.\d{2}|\$-\d[\d,]*\.\d{2}/g),
+    ).length;
+
+    if (moneyCount < 2) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) rows.push(current.join(" "));
   return rows;
 }
 
@@ -233,7 +272,8 @@ function monthNumber(month: string): number {
     "dec",
   ];
   const key = month.toLowerCase();
-  const index = full.indexOf(key) !== -1 ? full.indexOf(key) : abbr.indexOf(key);
+  const index =
+    full.indexOf(key) !== -1 ? full.indexOf(key) : abbr.indexOf(key);
   if (index === -1) throw new Error(`Invalid month: ${month}`);
   return index + 1;
 }

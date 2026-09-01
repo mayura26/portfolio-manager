@@ -61,4 +61,38 @@ assert.deepEqual(
 assert.equal(classifyExternalCashAccountKind("Smart Access"), "CASH");
 assert.equal(classifyExternalCashAccountKind("NetBank Saver"), "HISA");
 
+// CommBank PDFs can wrap transaction descriptions across lines; the continuation
+// must stay attached to the dated row so the transfer is not skipped.
+const wrappedFixture = `
+Created 01/09/26 09:01pm (Sydney/Melbourne time)
+CommBank Transaction Summary v1.0.5
+Account Number 067873 23841332
+Here is your account information and a list of transactions from 01/09/26-01/09/26.
+Account type GoalSaver
+Date Transaction details Amount Balance
+01 Sep 2026 Transfer from xx2394 NetBank $500.00 $61,022.57
+01 Sep 2026 Transfer from xx2394 CommBank app
+savings $8,500.00 $69,522.57
+`;
+
+const parsedWrapped = parseCommBankTransactionSummaryText(wrappedFixture);
+assert.equal(parsedWrapped.transactions.length, 2);
+assert.deepEqual(
+  parsedWrapped.transactions.map((tx) => [
+    tx.type,
+    tx.description,
+    tx.amount,
+    tx.balance,
+  ]),
+  [
+    ["DEPOSIT", "Transfer from xx2394 NetBank", "500.0000", "61022.5700"],
+    [
+      "DEPOSIT",
+      "Transfer from xx2394 CommBank app savings",
+      "8500.0000",
+      "69522.5700",
+    ],
+  ],
+);
+
 console.log("external cash parser tests passed");
