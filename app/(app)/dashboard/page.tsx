@@ -63,9 +63,9 @@ export default function DashboardPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="flex flex-col gap-3">
-          <h2 className="display text-2xl text-foreground">Allocation</h2>
+          <h2 className="display text-2xl text-foreground">Asset mix</h2>
           <Suspense fallback={<AllocationChartSkeleton />}>
-            <AllocationChart groupBy="portfolio" />
+            <AllocationChart groupBy="assetClass" />
           </Suspense>
         </section>
 

@@ -101,6 +101,8 @@ export const groupTargetsSchema = z
   .object({
     cashTargetMinPercent: percentString,
     cashTargetMaxPercent: percentString,
+    hisaTargetMinPercent: percentString,
+    hisaTargetMaxPercent: percentString,
     portfolios: z
       .array(
         z
@@ -133,12 +135,21 @@ export const groupTargetsSchema = z
     },
   )
   .refine(
+    (d) => Number(d.hisaTargetMinPercent) <= Number(d.hisaTargetMaxPercent),
+    {
+      message: "HISA min must be less than or equal to max",
+      path: ["hisaTargetMaxPercent"],
+    },
+  )
+  .refine(
     (d) => {
       const minSum =
         Number(d.cashTargetMinPercent) +
+        Number(d.hisaTargetMinPercent) +
         d.portfolios.reduce((acc, p) => acc + Number(p.targetMinPercent), 0);
       const maxSum =
         Number(d.cashTargetMaxPercent) +
+        Number(d.hisaTargetMaxPercent) +
         d.portfolios.reduce((acc, p) => acc + Number(p.targetMaxPercent), 0);
       return minSum <= 100.0001 && maxSum >= 99.9999;
     },
@@ -150,8 +161,14 @@ export const groupTargetsSchema = z
   .transform((d) => ({
     cashTargetMinPercent: d.cashTargetMinPercent,
     cashTargetMaxPercent: d.cashTargetMaxPercent,
+    hisaTargetMinPercent: d.hisaTargetMinPercent,
+    hisaTargetMaxPercent: d.hisaTargetMaxPercent,
     cashTargetPercent: (
       (Number(d.cashTargetMinPercent) + Number(d.cashTargetMaxPercent)) /
+      2
+    ).toString(),
+    hisaTargetPercent: (
+      (Number(d.hisaTargetMinPercent) + Number(d.hisaTargetMaxPercent)) /
       2
     ).toString(),
     portfolios: d.portfolios,

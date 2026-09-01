@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import {
-  cashBalanceInGroupBaseThroughUtcDay,
+  cashBalancesByVehicleInGroupBaseThroughUtcDay,
   computeGroupCash,
   getGroupCashLedger,
 } from "@/lib/cash";
@@ -12,6 +12,7 @@ import {
   type FifoCostTradeInput,
   type Holding,
 } from "@/lib/holdings";
+import { assetClassForInstrumentType } from "@/lib/instrument-types";
 import {
   excludeEmptyUnassignedWhere,
   visibleTradeWhere,
@@ -71,7 +72,11 @@ export type AllocationSlice = {
   percent: Decimal;
 };
 
-export type AllocationGroupBy = "portfolio" | "sector" | "currency";
+export type AllocationGroupBy =
+  | "portfolio"
+  | "sector"
+  | "currency"
+  | "assetClass";
 
 export type TopMover = {
   instrumentId: string;
@@ -95,8 +100,8 @@ export type GroupValueHistorySeries = {
   label: string;
   /** Index of the owning group; drives a stable color in the chart. */
   groupIndex?: number;
-  /** Visual treatment: equities band or cash band. */
-  variant?: "equities" | "cash";
+  /** Visual treatment: equities, pure cash, or HISA band. */
+  variant?: "equities" | "cash" | "hisa";
 };
 
 type EnrichedHolding = Holding & {
@@ -412,6 +417,10 @@ export async function getAllocation(
         key = h.currency;
         label = h.currency;
         break;
+      case "assetClass":
+        key = `asset:${assetClassForInstrumentType(h.instrumentType)}`;
+        label = assetClassForInstrumentType(h.instrumentType);
+        break;
       default:
         key = h.portfolioId;
         label = h.portfolioName;
@@ -422,8 +431,41 @@ export async function getAllocation(
     } else {
       buckets.set(key, { label, value: h.marketValueGlobal });
     }
-    total = total.plus(h.marketValueGlobal);
   }
+
+  if (groupBy === "assetClass") {
+    const groups = await db.portfolioGroup.findMany({
+      select: { id: true, baseCurrency: true },
+    });
+    const now = new Date();
+    for (const group of groups) {
+      const cash = await computeGroupCash(group.id);
+      const pureCashBase = cash.pureCash.isZero()
+        ? ZERO
+        : await convert(
+            cash.pureCash,
+            group.baseCurrency,
+            ws.baseCurrency,
+            now,
+          );
+      const hisaBase = cash.cashInvestments.isZero()
+        ? ZERO
+        : await convert(
+            cash.cashInvestments,
+            group.baseCurrency,
+            ws.baseCurrency,
+            now,
+          );
+
+      addAllocationBucket(buckets, "cash:pure", "Pure cash", pureCashBase);
+      addAllocationBucket(buckets, "cash:hisa", "HISA", hisaBase);
+    }
+  }
+
+  total = Array.from(buckets.values()).reduce(
+    (sum, bucket) => sum.plus(bucket.value),
+    ZERO,
+  );
 
   const slices: AllocationSlice[] = Array.from(buckets.entries()).map(
     ([key, b]) => ({
@@ -437,6 +479,21 @@ export async function getAllocation(
   slices.sort((a, b) => b.value.comparedTo(a.value));
 
   return { baseCurrency: ws.baseCurrency, total, slices };
+}
+
+function addAllocationBucket(
+  buckets: Map<string, { label: string; value: Decimal }>,
+  key: string,
+  label: string,
+  value: Decimal,
+) {
+  if (value.isZero()) return;
+  const existing = buckets.get(key);
+  if (existing) {
+    existing.value = existing.value.plus(value);
+  } else {
+    buckets.set(key, { label, value });
+  }
 }
 
 export async function getTopMovers(limit = 5): Promise<{
@@ -576,17 +633,35 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
         equity = equity.plus(qty.times(close).times(fx));
       }
 
-      let cash = ZERO;
+      let pureCash = ZERO;
+      let hisa = ZERO;
       const gl = ledgers.get(g.id);
       if (gl) {
-        const bal = cashBalanceInGroupBaseThroughUtcDay(gl.ledger, day);
-        if (!bal.isZero()) {
-          cash = await convert(bal, gl.baseCurrency, baseCurrency, day);
+        const balances = cashBalancesByVehicleInGroupBaseThroughUtcDay(
+          gl.ledger,
+          day,
+        );
+        if (!balances.pureCash.isZero()) {
+          pureCash = await convert(
+            balances.pureCash,
+            gl.baseCurrency,
+            baseCurrency,
+            day,
+          );
+        }
+        if (!balances.cashInvestments.isZero()) {
+          hisa = await convert(
+            balances.cashInvestments,
+            gl.baseCurrency,
+            baseCurrency,
+            day,
+          );
         }
       }
 
       row[`g_${g.id}_eq`] = Number(equity.toFixed(2));
-      row[`g_${g.id}_cash`] = Number(cash.toFixed(2));
+      row[`g_${g.id}_cash`] = Number(pureCash.toFixed(2));
+      row[`g_${g.id}_hisa`] = Number(hisa.toFixed(2));
     }
     points.push(row);
   }
@@ -594,7 +669,9 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
   const activeGroups = groups.filter((g) =>
     points.some(
       (row) =>
-        (row[`g_${g.id}_eq`] ?? 0) !== 0 || (row[`g_${g.id}_cash`] ?? 0) !== 0,
+        (row[`g_${g.id}_eq`] ?? 0) !== 0 ||
+        (row[`g_${g.id}_cash`] ?? 0) !== 0 ||
+        (row[`g_${g.id}_hisa`] ?? 0) !== 0,
     ),
   );
   const series: GroupValueHistorySeries[] = [];
@@ -610,6 +687,12 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
       label: `${g.name} — Cash-like`,
       groupIndex: gi,
       variant: "cash",
+    });
+    series.push({
+      key: `g_${g.id}_hisa`,
+      label: `${g.name} — HISA`,
+      groupIndex: gi,
+      variant: "hisa",
     });
   });
 
@@ -809,7 +892,8 @@ export async function getGroupValueHistory(
   if (!curve) {
     const series: GroupValueHistorySeries[] = [
       ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-      { key: "cash", label: "Cash-like", variant: "cash" as const },
+      { key: "cash", label: "Pure cash", variant: "cash" as const },
+      { key: "hisa", label: "HISA", variant: "hisa" as const },
     ];
     return {
       baseCurrency: groupBase,
@@ -853,7 +937,8 @@ export async function getGroupValueHistory(
 
   const series: GroupValueHistorySeries[] = [
     ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-    { key: "cash", label: "Cash-like", variant: "cash" as const },
+    { key: "cash", label: "Pure cash", variant: "cash" as const },
+    { key: "hisa", label: "HISA", variant: "hisa" as const },
   ];
 
   const points: Array<{ date: Date } & Record<string, number>> = [];
@@ -883,8 +968,12 @@ export async function getGroupValueHistory(
       row[`p_${p.id}`] = Number(inGroupBase.toFixed(2));
     }
 
-    const cashB = cashBalanceInGroupBaseThroughUtcDay(ledger, day);
-    row.cash = Number(cashB.toFixed(2));
+    const cashBalances = cashBalancesByVehicleInGroupBaseThroughUtcDay(
+      ledger,
+      day,
+    );
+    row.cash = Number(cashBalances.pureCash.toFixed(2));
+    row.hisa = Number(cashBalances.cashInvestments.toFixed(2));
 
     points.push(row);
   }
@@ -1061,7 +1150,10 @@ export async function getGroupCardSummaries(): Promise<
   const sparkByGroup = new Map<string, number[]>();
   for (const g of groups) {
     const series = history.points.map(
-      (p) => (p[`g_${g.id}_eq`] ?? 0) + (p[`g_${g.id}_cash`] ?? 0),
+      (p) =>
+        (p[`g_${g.id}_eq`] ?? 0) +
+        (p[`g_${g.id}_cash`] ?? 0) +
+        (p[`g_${g.id}_hisa`] ?? 0),
     );
     // Trim leading zeros (group started recently); keep at least 2 points
     // so the sparkline can render a line.

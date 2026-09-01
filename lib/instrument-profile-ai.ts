@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import {
+  INSTRUMENT_TYPE_OPTIONS,
+  isInstrumentTypeOption,
+} from "@/lib/instrument-types";
 
 export type InstrumentProfileDraftInput = {
   symbol: string;
@@ -18,24 +22,12 @@ export type InstrumentProfileDraft = {
   rationale: string;
 };
 
-const INSTRUMENT_TYPES = [
-  "EQUITY",
-  "ETF",
-  "MUTUALFUND",
-  "INDEX",
-  "CRYPTOCURRENCY",
-  "CURRENCY",
-  "FUTURE",
-  "OPTION",
-  "OTHER",
-] as const;
-
 const SYSTEM_PROMPT = `You classify portfolio instruments for exposure reporting.
 
 Return concise profile fields:
 - sector: a practical exposure bucket. Use a standard equity sector for operating companies, but for funds/products use useful portfolio buckets such as Fixed Income, Gold / Commodities, Broad Market Equity, Country / Regional Equity, Cash / Currency, Crypto, or Other.
 - industry: a more specific description of the business or fund/product exposure.
-- instrumentType: one of the allowed enum values.
+- instrumentType: one of the allowed enum values. Use INCOME_EQUITY for ordinary listed companies whose main portfolio role is dividend/income generation, INCOME_ETF for income-oriented equity funds, and BOND/BOND_ETF for fixed-income exposure.
 - rationale: one plain-English sentence explaining the classification.
 
 Prefer useful portfolio exposure over overly literal exchange metadata. Do not use markdown.`;
@@ -53,7 +45,7 @@ function buildUserMessage(input: InstrumentProfileDraftInput): string {
         industry: input.currentIndustry,
         instrumentType: input.currentInstrumentType,
       },
-      allowedInstrumentTypes: INSTRUMENT_TYPES,
+      allowedInstrumentTypes: INSTRUMENT_TYPE_OPTIONS,
     },
     null,
     2,
@@ -91,7 +83,7 @@ export async function generateInstrumentProfileDraft(
             industry: { type: "string" },
             instrumentType: {
               type: "string",
-              enum: [...INSTRUMENT_TYPES],
+              enum: [...INSTRUMENT_TYPE_OPTIONS],
             },
             rationale: { type: "string" },
           },
@@ -124,7 +116,7 @@ export async function generateInstrumentProfileDraft(
   }
 
   const draft = parsed as Record<string, string>;
-  if (!INSTRUMENT_TYPES.includes(draft.instrumentType as never)) {
+  if (!isInstrumentTypeOption(draft.instrumentType)) {
     throw new Error(
       `AI returned invalid instrument type: ${draft.instrumentType}`,
     );

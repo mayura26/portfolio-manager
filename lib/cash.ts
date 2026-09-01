@@ -118,6 +118,12 @@ const groupCashInclude = {
       },
     },
   },
+  cashStatementImports: {
+    select: {
+      sourceAccountKey: true,
+      accountType: true,
+    },
+  },
   portfolios: {
     include: {
       trades: {
@@ -148,6 +154,14 @@ async function materializeLedgerForGroup(
 ): Promise<CashLedgerEntry[]> {
   const baseCurrency = group.baseCurrency;
   const ledger: CashLedgerEntry[] = [];
+  const accountTypeBySourceAccount = new Map<string, string>();
+  for (const statementImport of group.cashStatementImports) {
+    if (!statementImport.accountType) continue;
+    accountTypeBySourceAccount.set(
+      statementImport.sourceAccountKey,
+      statementImport.accountType,
+    );
+  }
 
   for (const ct of group.cashTransactions) {
     const stored = new Decimal(ct.amount.toString());
@@ -165,7 +179,12 @@ async function materializeLedgerForGroup(
       baseCurrency,
       ct.date,
     );
-    const accountType = ct.statementImport?.accountType ?? null;
+    const accountType =
+      ct.statementImport?.accountType ??
+      (ct.sourceAccountKey
+        ? accountTypeBySourceAccount.get(ct.sourceAccountKey)
+        : null) ??
+      null;
     const vehicleKind = classifyExternalCashAccountKind(accountType);
     ledger.push({
       id: ct.id,
@@ -444,6 +463,24 @@ export function cashBalanceInGroupBaseThroughUtcDay(
     }
   }
   return sum;
+}
+
+export function cashBalancesByVehicleInGroupBaseThroughUtcDay(
+  ledger: CashLedgerEntry[],
+  throughDay: Date,
+): { pureCash: Decimal; cashInvestments: Decimal } {
+  const through = utcDayKey(throughDay);
+  let pureCash = ZERO;
+  let cashInvestments = ZERO;
+  for (const e of ledger) {
+    if (utcDayKey(e.date) > through) continue;
+    if (e.vehicleKind === "HISA") {
+      cashInvestments = cashInvestments.plus(e.amountBase);
+    } else {
+      pureCash = pureCash.plus(e.amountBase);
+    }
+  }
+  return { pureCash, cashInvestments };
 }
 
 export function utcDayKey(d: Date): string {

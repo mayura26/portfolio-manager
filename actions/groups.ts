@@ -123,6 +123,10 @@ export async function setGroupTargets(
     formData.get("cashTargetMinPercent")?.toString() ?? "0";
   const cashTargetMaxPercent =
     formData.get("cashTargetMaxPercent")?.toString() ?? "0";
+  const hisaTargetMinPercent =
+    formData.get("hisaTargetMinPercent")?.toString() ?? "0";
+  const hisaTargetMaxPercent =
+    formData.get("hisaTargetMaxPercent")?.toString() ?? "0";
   const portfolioIds = formData.getAll("portfolioId").map((v) => v.toString());
   const portfolioMinTargets = formData
     .getAll("portfolioTargetMinPercent")
@@ -141,6 +145,8 @@ export async function setGroupTargets(
   const parsed = groupTargetsSchema.safeParse({
     cashTargetMinPercent,
     cashTargetMaxPercent,
+    hisaTargetMinPercent,
+    hisaTargetMaxPercent,
     portfolios: portfolioIds.map((id, i) => ({
       portfolioId: id,
       targetMinPercent: portfolioMinTargets[i],
@@ -165,6 +171,9 @@ export async function setGroupTargets(
         cashTargetPercent: parsed.data.cashTargetPercent,
         cashTargetMinPercent: parsed.data.cashTargetMinPercent,
         cashTargetMaxPercent: parsed.data.cashTargetMaxPercent,
+        hisaTargetPercent: parsed.data.hisaTargetPercent,
+        hisaTargetMinPercent: parsed.data.hisaTargetMinPercent,
+        hisaTargetMaxPercent: parsed.data.hisaTargetMaxPercent,
       },
     });
     for (const p of parsed.data.portfolios) {

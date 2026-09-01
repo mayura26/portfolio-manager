@@ -10,15 +10,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { cashColor, groupColor } from "@/lib/chart-colors";
+import { cashColor, groupColor, hisaColor } from "@/lib/chart-colors";
 
 export type GroupValueChartSeries = {
   key: string;
   label: string;
   /** Index of the owning group; drives a stable, paired color. */
   groupIndex?: number;
-  /** Visual treatment: equities band or cash band. */
-  variant?: "equities" | "cash";
+  /** Visual treatment: equities, pure cash, or HISA band. */
+  variant?: "equities" | "cash" | "hisa";
 };
 
 type Point = Record<string, string | number>;
@@ -31,6 +31,7 @@ type Props = {
 
 function seriesColor(s: GroupValueChartSeries, idx: number): string {
   const gi = s.groupIndex ?? idx;
+  if (s.variant === "hisa") return hisaColor(gi);
   return s.variant === "cash" ? cashColor(gi) : groupColor(gi);
 }
 
@@ -160,7 +161,13 @@ export function GroupValueChartClient({ baseCurrency, series, points }: Props) {
                   stroke={color}
                   strokeWidth={1.5}
                   fill={color}
-                  fillOpacity={s.variant === "cash" ? 0.32 : 0.5}
+                  fillOpacity={
+                    s.variant === "cash"
+                      ? 0.32
+                      : s.variant === "hisa"
+                        ? 0.38
+                        : 0.5
+                  }
                 />
               );
             })}

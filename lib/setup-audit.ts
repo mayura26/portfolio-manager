@@ -1,3 +1,4 @@
+import { computeGroupCash } from "@/lib/cash";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
@@ -138,6 +139,7 @@ export async function runSetupAudit(): Promise<AuditResult> {
 
   // ── Allocation targets ─────────────────────────────────────
   for (const group of groups) {
+    const cash = await computeGroupCash(group.id);
     if (
       isZero(group.cashTargetMinPercent) &&
       isZero(group.cashTargetMaxPercent)
@@ -148,6 +150,20 @@ export async function runSetupAudit(): Promise<AuditResult> {
         title: `No cash target band — ${group.name}`,
         detail:
           "Set a min/max cash weight so allocation drift can flag when this group runs hot or cash-heavy.",
+        fixHref: `/groups/${group.id}/settings`,
+      });
+    }
+    if (
+      !cash.cashInvestments.isZero() &&
+      isZero(group.hisaTargetMinPercent) &&
+      isZero(group.hisaTargetMaxPercent)
+    ) {
+      gaps.push({
+        key: `group-hisa:${group.id}`,
+        category: "allocation",
+        title: `No HISA target band - ${group.name}`,
+        detail:
+          "This group has a HISA balance from imported savings statements. Set a min/max HISA weight so it is measured separately from pure cash.",
         fixHref: `/groups/${group.id}/settings`,
       });
     }

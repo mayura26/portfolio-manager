@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatCurrency, formatNumber, formatQuantity } from "@/lib/format";
+import { instrumentTypeLabel } from "@/lib/instrument-types";
 import type { PortfolioAllocation } from "@/lib/portfolio-allocation";
 import { BuyPlanCell } from "./buy-plan-cell";
 
@@ -56,7 +57,7 @@ export function AllocationTable({
                     <span className="ml-2 text-muted">{r.name}</span>
                   </Link>
                   <div className="label mt-0.5 text-subtle">
-                    {r.currency}
+                    {instrumentTypeLabel(r.instrumentType)} · {r.currency}
                     {!r.isHeld ? " - target only" : ""}
                   </div>
                 </Td>

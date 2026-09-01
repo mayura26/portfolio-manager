@@ -31,6 +31,18 @@ export const CASH_PALETTE = [
   "#42607d", // steel blue
 ];
 
+/** HISA / income-cash colors, kept distinct from pure cash blue. */
+export const HISA_PALETTE = [
+  "#2f6f4a", // forest green
+  "#5f8c6b", // sage
+  "#3f7f5a", // mid green
+  "#7aa37e", // pale green
+  "#265a3d", // deep green
+  "#6f986e", // muted green
+  "#3b6f54", // blue-green
+  "#8aae87", // soft green
+];
+
 /** Identity color for the group at `index`, cycling through the palette. */
 export function groupColor(index: number): string {
   return GROUP_PALETTE[index % GROUP_PALETTE.length];
@@ -39,4 +51,9 @@ export function groupColor(index: number): string {
 /** Cash-band blue for the group at `index`, cycling through the palette. */
 export function cashColor(index: number): string {
   return CASH_PALETTE[index % CASH_PALETTE.length];
+}
+
+/** HISA color for the group at `index`, cycling through the palette. */
+export function hisaColor(index: number): string {
+  return HISA_PALETTE[index % HISA_PALETTE.length];
 }

@@ -6,6 +6,11 @@ import {
   generateInstrumentProfile,
   updateInstrumentProfile,
 } from "@/actions/instruments";
+import {
+  INSTRUMENT_TYPE_OPTIONS,
+  instrumentTypeLabel,
+  isInstrumentTypeOption,
+} from "@/lib/instrument-types";
 
 type Props = {
   instrument: {
@@ -16,18 +21,6 @@ type Props = {
   };
 };
 
-const INSTRUMENT_TYPE_OPTIONS = [
-  "EQUITY",
-  "ETF",
-  "MUTUALFUND",
-  "INDEX",
-  "CRYPTOCURRENCY",
-  "CURRENCY",
-  "FUTURE",
-  "OPTION",
-  "OTHER",
-];
-
 export function InstrumentProfileForm({ instrument }: Props) {
   const saveProfile = updateInstrumentProfile.bind(null, instrument.id);
   const currentType = instrument.instrumentType || "EQUITY";
@@ -37,7 +30,7 @@ export function InstrumentProfileForm({ instrument }: Props) {
   const [rationale, setRationale] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const hasCustomType = !INSTRUMENT_TYPE_OPTIONS.includes(instrumentType);
+  const hasCustomType = !isInstrumentTypeOption(instrumentType);
 
   return (
     <form
@@ -90,7 +83,7 @@ export function InstrumentProfileForm({ instrument }: Props) {
           ) : null}
           {INSTRUMENT_TYPE_OPTIONS.map((type) => (
             <option key={type} value={type}>
-              {type}
+              {instrumentTypeLabel(type)}
             </option>
           ))}
         </select>

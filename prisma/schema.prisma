@@ -413,6 +413,11 @@ model PortfolioGroup {
   cashTargetMinPercent Decimal @default(0) @db.Decimal(8, 4)
   cashTargetMaxPercent Decimal @default(0) @db.Decimal(8, 4)
 
+  // Target weight reserved for HISA / yield-bearing cash vehicles (0-100).
+  hisaTargetPercent    Decimal @default(0) @db.Decimal(8, 4)
+  hisaTargetMinPercent Decimal @default(0) @db.Decimal(8, 4)
+  hisaTargetMaxPercent Decimal @default(0) @db.Decimal(8, 4)
+
   investmentObjective     String?
   riskTolerance           String?
   timeHorizon             String?

@@ -180,21 +180,29 @@ export async function computeGroupAllocation(
     rebalanceTargetPercent: cashRangeDrift.rebalanceTargetPercent,
   });
 
-  if (!cashInfo.cashInvestments.isZero()) {
+  const hisaTargetMin = new Decimal(group.hisaTargetMinPercent.toString());
+  const hisaTargetMax = new Decimal(group.hisaTargetMaxPercent.toString());
+  const hisaTarget = midpointPercent(hisaTargetMin, hisaTargetMax);
+
+  if (
+    !cashInfo.cashInvestments.isZero() ||
+    !hisaTargetMin.isZero() ||
+    !hisaTargetMax.isZero()
+  ) {
     const cashInvestmentActual = totalValueBase.gt(0)
       ? cashInfo.cashInvestments.dividedBy(totalValueBase).times(100)
       : ZERO;
     const cashInvestmentRangeDrift = computeRangeDrift({
       actualPercent: cashInvestmentActual,
-      targetMinPercent: ZERO,
-      targetMaxPercent: ZERO,
+      targetMinPercent: hisaTargetMin,
+      targetMaxPercent: hisaTargetMax,
     });
     rows.push({
       kind: "cash-investment",
       name: "HISA",
-      targetPercent: ZERO,
-      targetMinPercent: ZERO,
-      targetMaxPercent: ZERO,
+      targetPercent: hisaTarget,
+      targetMinPercent: hisaTargetMin,
+      targetMaxPercent: hisaTargetMax,
       actualValueBase: cashInfo.cashInvestments,
       actualPercent: cashInvestmentActual,
       driftPercent: cashInvestmentRangeDrift.driftPercent,

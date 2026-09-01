@@ -16,6 +16,7 @@ export type AllocationRow = {
   name: string;
   currency: string;
   sector: string | null;
+  instrumentType: string;
   quantity: Decimal;
   marketPrice: Decimal | null;
   marketValueBase: Decimal;
@@ -102,6 +103,7 @@ export async function computePortfolioAllocation(
       name: h.name,
       currency: h.currency,
       sector: h.sector,
+      instrumentType: h.instrumentType,
       quantity: h.quantity,
       marketPrice: h.marketPrice,
       marketValueBase: h.marketValueBase ?? ZERO,
@@ -151,6 +153,7 @@ export async function computePortfolioAllocation(
       name: t.instrument.name,
       currency: t.instrument.currency,
       sector: t.instrument.sector,
+      instrumentType: t.instrument.instrumentType,
       quantity: ZERO,
       marketPrice: null,
       marketValueBase: ZERO,

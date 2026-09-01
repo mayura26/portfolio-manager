@@ -12,10 +12,17 @@ type Portfolio = {
   targetMaxPercentInGroup: string;
 };
 
+type TargetRange = {
+  min: string;
+  max: string;
+};
+
 type Props = {
   groupId: string;
   cashTargetMinPercent: string;
   cashTargetMaxPercent: string;
+  hisaTargetMinPercent: string;
+  hisaTargetMaxPercent: string;
   portfolios: Portfolio[];
   action: (
     groupId: string,
@@ -28,6 +35,8 @@ export function GroupTargetsEditor({
   groupId,
   cashTargetMinPercent,
   cashTargetMaxPercent,
+  hisaTargetMinPercent,
+  hisaTargetMaxPercent,
   portfolios,
   action,
 }: Props) {
@@ -41,9 +50,11 @@ export function GroupTargetsEditor({
     min: cashTargetMinPercent,
     max: cashTargetMaxPercent,
   });
-  const [values, setValues] = useState<
-    Record<string, { min: string; max: string }>
-  >(
+  const [hisa, setHisa] = useState({
+    min: hisaTargetMinPercent,
+    max: hisaTargetMaxPercent,
+  });
+  const [values, setValues] = useState<Record<string, TargetRange>>(
     Object.fromEntries(
       portfolios.map((p) => [
         p.id,
@@ -57,12 +68,15 @@ export function GroupTargetsEditor({
 
   const minSum =
     Number(cash.min || 0) +
+    Number(hisa.min || 0) +
     portfolios.reduce((acc, p) => acc + Number(values[p.id]?.min || 0), 0);
   const maxSum =
     Number(cash.max || 0) +
+    Number(hisa.max || 0) +
     portfolios.reduce((acc, p) => acc + Number(values[p.id]?.max || 0), 0);
   const midpointSum =
     (Number(cash.min || 0) + Number(cash.max || 0)) / 2 +
+    (Number(hisa.min || 0) + Number(hisa.max || 0)) / 2 +
     portfolios.reduce(
       (acc, p) =>
         acc +
@@ -72,6 +86,7 @@ export function GroupTargetsEditor({
   const rangeOk = minSum <= 100.0001 && maxSum >= 99.9999;
   const rowsOk =
     Number(cash.min || 0) <= Number(cash.max || 0) &&
+    Number(hisa.min || 0) <= Number(hisa.max || 0) &&
     portfolios.every(
       (p) => Number(values[p.id]?.min || 0) <= Number(values[p.id]?.max || 0),
     );
@@ -189,6 +204,39 @@ export function GroupTargetsEditor({
                   value={cash.max}
                   onChange={(e) =>
                     setCash((prev) => ({ ...prev, max: e.target.value }))
+                  }
+                  className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
+                />
+              </td>
+            </tr>
+            <tr className="bg-surface">
+              <td className="px-3 py-3 text-foreground">HISA</td>
+              <td className="px-3 py-3 text-right">
+                <input
+                  name="hisaTargetMinPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  required
+                  value={hisa.min}
+                  onChange={(e) =>
+                    setHisa((prev) => ({ ...prev, min: e.target.value }))
+                  }
+                  className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
+                />
+              </td>
+              <td className="px-3 py-3 text-right">
+                <input
+                  name="hisaTargetMaxPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  required
+                  value={hisa.max}
+                  onChange={(e) =>
+                    setHisa((prev) => ({ ...prev, max: e.target.value }))
                   }
                   className="hairline tabular w-24 bg-surface px-2 py-1 text-right text-sm"
                 />

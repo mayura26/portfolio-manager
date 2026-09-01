@@ -51,8 +51,8 @@ async function GroupSettings({ params }: { params: Params }) {
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="display text-4xl text-foreground">Group settings</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Edit metadata, investment profile, and bulk-set target ranges. Pure
-          cash + portfolio ranges must allow a 100% allocation.
+          Edit metadata, investment profile, and bulk-set target ranges.
+          Portfolios, pure cash, and HISA ranges must allow a 100% allocation.
         </p>
       </header>
 
@@ -81,6 +81,8 @@ async function GroupSettings({ params }: { params: Params }) {
           groupId={groupId}
           cashTargetMinPercent={group.cashTargetMinPercent.toString()}
           cashTargetMaxPercent={group.cashTargetMaxPercent.toString()}
+          hisaTargetMinPercent={group.hisaTargetMinPercent.toString()}
+          hisaTargetMaxPercent={group.hisaTargetMaxPercent.toString()}
           portfolios={group.portfolios.map((p) => ({
             id: p.id,
             name: p.name,
