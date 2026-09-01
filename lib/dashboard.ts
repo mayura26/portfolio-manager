@@ -105,8 +105,8 @@ export type GroupValueHistorySeries = {
   label: string;
   /** Index of the owning group; drives a stable color in the chart. */
   groupIndex?: number;
-  /** Visual treatment: equities, pure cash, or HISA band. */
-  variant?: "equities" | "cash" | "hisa" | "income";
+  /** Visual treatment for chart color and opacity. */
+  variant?: "equities" | "cash" | "hisa" | "income" | "alternatives";
   /** Fixed color bucket for the dashboard asset-mix timeline. */
   homeBucket?: HomeAssetBucketKey;
 };
@@ -629,9 +629,10 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
     const row = { date: day } as { date: Date } & Record<string, number>;
     const bucketValues: Record<HomeAssetBucketKey, Decimal> = {
       equities: ZERO,
+      income: ZERO,
+      alternatives: ZERO,
       cash: ZERO,
       hisa: ZERO,
-      income: ZERO,
     };
 
     for (const instrumentId of instrumentIds) {
@@ -677,14 +678,21 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
     }
 
     row.equities = Number(bucketValues.equities.toFixed(2));
+    row.income = Number(bucketValues.income.toFixed(2));
+    row.alternatives = Number(bucketValues.alternatives.toFixed(2));
     row.cash = Number(bucketValues.cash.toFixed(2));
     row.hisa = Number(bucketValues.hisa.toFixed(2));
-    row.income = Number(bucketValues.income.toFixed(2));
     points.push(row);
   }
 
   const series: GroupValueHistorySeries[] = (
-    ["equities", "cash", "hisa", "income"] satisfies HomeAssetBucketKey[]
+    [
+      "equities",
+      "income",
+      "alternatives",
+      "cash",
+      "hisa",
+    ] satisfies HomeAssetBucketKey[]
   )
     .filter((key) => points.some((row) => (row[key] ?? 0) > 0))
     .map((key) => ({

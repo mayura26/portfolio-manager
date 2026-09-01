@@ -40,6 +40,9 @@ function colorForSlice(slice: Slice, idx: number): string {
   if (slice.label === "Income / bonds") {
     return homeAssetBucketColor("income");
   }
+  if (slice.label === "Gold / alternatives") {
+    return homeAssetBucketColor("alternatives");
+  }
   if (slice.label === "Equities") {
     return homeAssetBucketColor("equities");
   }

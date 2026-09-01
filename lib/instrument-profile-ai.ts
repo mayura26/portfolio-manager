@@ -27,7 +27,7 @@ const SYSTEM_PROMPT = `You classify portfolio instruments for exposure reporting
 Return concise profile fields:
 - sector: a practical exposure bucket. Use a standard equity sector for operating companies, but for funds/products use useful portfolio buckets such as Fixed Income, Gold / Commodities, Broad Market Equity, Country / Regional Equity, Cash / Currency, Crypto, or Other.
 - industry: a more specific description of the business or fund/product exposure.
-- instrumentType: one of the allowed enum values. Use INCOME_EQUITY for ordinary listed companies whose main portfolio role is dividend/income generation, INCOME_ETF for income-oriented equity funds, and BOND/BOND_ETF for fixed-income exposure.
+- instrumentType: one of the allowed enum values. Use INCOME_EQUITY for ordinary listed companies whose main portfolio role is dividend/income generation, INCOME_ETF for income-oriented equity funds, BOND/BOND_ETF for fixed-income exposure, and COMMODITY for gold, commodity, or precious-metal products.
 - rationale: one plain-English sentence explaining the classification.
 
 Prefer useful portfolio exposure over overly literal exchange metadata. Do not use markdown.`;

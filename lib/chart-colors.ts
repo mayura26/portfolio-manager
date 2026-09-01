@@ -46,9 +46,10 @@ export const HISA_PALETTE = [
 /** Fixed colors for the home asset-mix timeline and allocation buckets. */
 export const HOME_ASSET_BUCKET_COLORS = {
   equities: "#c9512e",
+  income: "#b88a3e",
+  alternatives: "#7d5a86",
   cash: "#4a6b8a",
   hisa: "#2f6f4a",
-  income: "#b88a3e",
 } as const;
 
 /** Identity color for the group at `index`, cycling through the palette. */

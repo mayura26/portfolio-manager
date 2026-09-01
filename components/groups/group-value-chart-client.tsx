@@ -23,9 +23,9 @@ export type GroupValueChartSeries = {
   /** Index of the owning group; drives a stable, paired color. */
   groupIndex?: number;
   /** Visual treatment: equities, pure cash, or HISA band. */
-  variant?: "equities" | "cash" | "hisa" | "income";
+  variant?: "equities" | "cash" | "hisa" | "income" | "alternatives";
   /** Fixed color bucket for the home asset-mix timeline. */
-  homeBucket?: "equities" | "cash" | "hisa" | "income";
+  homeBucket?: "equities" | "income" | "alternatives" | "cash" | "hisa";
 };
 
 type Point = Record<string, string | number>;
@@ -41,6 +41,9 @@ function seriesColor(s: GroupValueChartSeries, idx: number): string {
   const gi = s.groupIndex ?? idx;
   if (s.variant === "hisa") return hisaColor(gi);
   if (s.variant === "income") return homeAssetBucketColor("income");
+  if (s.variant === "alternatives") {
+    return homeAssetBucketColor("alternatives");
+  }
   return s.variant === "cash" ? cashColor(gi) : groupColor(gi);
 }
 
@@ -177,7 +180,9 @@ export function GroupValueChartClient({ baseCurrency, series, points }: Props) {
                         ? 0.38
                         : s.variant === "income"
                           ? 0.44
-                          : 0.5
+                          : s.variant === "alternatives"
+                            ? 0.42
+                            : 0.5
                   }
                 />
               );

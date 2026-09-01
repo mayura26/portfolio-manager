@@ -5,6 +5,7 @@ export const INSTRUMENT_TYPE_OPTIONS = [
   "INCOME_ETF",
   "BOND",
   "BOND_ETF",
+  "COMMODITY",
   "MUTUALFUND",
   "INDEX",
   "CRYPTOCURRENCY",
@@ -23,6 +24,7 @@ export const INSTRUMENT_TYPE_LABELS: Record<InstrumentTypeOption, string> = {
   INCOME_ETF: "Income ETF / fund",
   BOND: "Bond / fixed income",
   BOND_ETF: "Bond ETF / fund",
+  COMMODITY: "Commodity / real asset",
   MUTUALFUND: "Mutual fund",
   INDEX: "Index",
   CRYPTOCURRENCY: "Crypto",
@@ -44,13 +46,19 @@ export function instrumentTypeLabel(type: string): string {
     : type.replace(/_/g, " ");
 }
 
-export type HomeAssetBucketKey = "equities" | "cash" | "hisa" | "income";
+export type HomeAssetBucketKey =
+  | "equities"
+  | "income"
+  | "alternatives"
+  | "cash"
+  | "hisa";
 
 export const HOME_ASSET_BUCKET_LABELS: Record<HomeAssetBucketKey, string> = {
   equities: "Equities",
+  income: "Income / bonds",
+  alternatives: "Gold / alternatives",
   cash: "Cash",
   hisa: "HISA",
-  income: "Income / bonds",
 };
 
 export type InstrumentAssetProfile = {
@@ -70,6 +78,14 @@ export function homeAssetBucketForInstrumentProfile(
   profile: InstrumentAssetProfile,
 ): Exclude<HomeAssetBucketKey, "cash" | "hisa"> {
   const normalized = profile.instrumentType.toUpperCase();
+  if (
+    normalized === "COMMODITY" ||
+    normalized === "CRYPTOCURRENCY" ||
+    normalized === "CURRENCY"
+  ) {
+    return "alternatives";
+  }
+
   if (
     normalized === "INCOME_EQUITY" ||
     normalized === "INCOME_ETF" ||
@@ -100,10 +116,36 @@ export function homeAssetBucketForInstrumentProfile(
     "DISTRIBUTION",
     "DIVIDEND",
     "INCOME",
+    "CASH / CURRENCY",
+    "CASH MANAGEMENT",
+    "CASH ETF",
+    "MONEY MARKET",
+    "SHORT TERM",
+    "TERM DEPOSIT",
   ];
 
   if (incomeSignals.some((signal) => profileText.includes(signal))) {
     return "income";
+  }
+
+  const alternativeSignals = [
+    "GOLD / COMMODITIES",
+    "GOLD",
+    "COMMODITY",
+    "COMMODITIES",
+    "PRECIOUS METAL",
+    "SILVER",
+    "BULLION",
+    "PERTH MINT",
+    "STRUCTURED PRODUCT",
+    "CRYPTO",
+    "BITCOIN",
+    "CURRENCY ETF",
+    "FOREIGN CURRENCY",
+  ];
+
+  if (alternativeSignals.some((signal) => profileText.includes(signal))) {
+    return "alternatives";
   }
 
   return "equities";
