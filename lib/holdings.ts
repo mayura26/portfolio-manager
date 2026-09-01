@@ -26,6 +26,7 @@ export type Holding = {
   name: string;
   currency: string;
   sector: string | null;
+  industry: string | null;
   instrumentType: string;
   quantity: Decimal;
   costBase: Decimal;
@@ -280,6 +281,7 @@ export async function computeHoldings(
       name: bucket.instrument.name,
       currency: bucket.instrument.currency,
       sector: bucket.instrument.sector,
+      industry: bucket.instrument.industry,
       instrumentType: bucket.instrument.instrumentType,
       quantity,
       costBase,

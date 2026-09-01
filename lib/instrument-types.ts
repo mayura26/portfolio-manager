@@ -53,10 +53,23 @@ export const HOME_ASSET_BUCKET_LABELS: Record<HomeAssetBucketKey, string> = {
   income: "Income / bonds",
 };
 
+export type InstrumentAssetProfile = {
+  instrumentType: string;
+  sector?: string | null;
+  industry?: string | null;
+  name?: string | null;
+};
+
 export function homeAssetBucketForInstrumentType(
   type: string,
 ): Exclude<HomeAssetBucketKey, "cash" | "hisa"> {
-  const normalized = type.toUpperCase();
+  return homeAssetBucketForInstrumentProfile({ instrumentType: type });
+}
+
+export function homeAssetBucketForInstrumentProfile(
+  profile: InstrumentAssetProfile,
+): Exclude<HomeAssetBucketKey, "cash" | "hisa"> {
+  const normalized = profile.instrumentType.toUpperCase();
   if (
     normalized === "INCOME_EQUITY" ||
     normalized === "INCOME_ETF" ||
@@ -68,9 +81,40 @@ export function homeAssetBucketForInstrumentType(
   ) {
     return "income";
   }
+
+  const profileText = [profile.sector, profile.industry, profile.name]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(" ")
+    .toUpperCase();
+
+  const incomeSignals = [
+    "FIXED INCOME",
+    "BOND",
+    "BONDS",
+    "FLOATING RATE",
+    "SENIOR LOAN",
+    "CREDIT",
+    "TREASURY",
+    "HIGH YIELD",
+    "COVERED CALL",
+    "DISTRIBUTION",
+    "DIVIDEND",
+    "INCOME",
+  ];
+
+  if (incomeSignals.some((signal) => profileText.includes(signal))) {
+    return "income";
+  }
+
   return "equities";
 }
 
 export function assetClassForInstrumentType(type: string): string {
   return HOME_ASSET_BUCKET_LABELS[homeAssetBucketForInstrumentType(type)];
+}
+
+export function assetClassForInstrumentProfile(
+  profile: InstrumentAssetProfile,
+): string {
+  return HOME_ASSET_BUCKET_LABELS[homeAssetBucketForInstrumentProfile(profile)];
 }

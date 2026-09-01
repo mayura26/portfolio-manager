@@ -13,10 +13,10 @@ import {
   type Holding,
 } from "@/lib/holdings";
 import {
-  assetClassForInstrumentType,
+  assetClassForInstrumentProfile,
   HOME_ASSET_BUCKET_LABELS,
   type HomeAssetBucketKey,
-  homeAssetBucketForInstrumentType,
+  homeAssetBucketForInstrumentProfile,
 } from "@/lib/instrument-types";
 import {
   excludeEmptyUnassignedWhere,
@@ -425,8 +425,8 @@ export async function getAllocation(
         label = h.currency;
         break;
       case "assetClass":
-        key = `asset:${assetClassForInstrumentType(h.instrumentType)}`;
-        label = assetClassForInstrumentType(h.instrumentType);
+        label = assetClassForInstrumentProfile(h);
+        key = `asset:${label}`;
         break;
       default:
         key = h.portfolioId;
@@ -641,9 +641,7 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
       if (!close) continue;
       const tr = trades.find((t) => t.instrumentId === instrumentId);
       if (!tr) continue;
-      const bucket = homeAssetBucketForInstrumentType(
-        tr.instrument.instrumentType,
-      );
+      const bucket = homeAssetBucketForInstrumentProfile(tr.instrument);
       const fx = await fxOn(tr.instrument.currency, baseCurrency, day);
       bucketValues[bucket] = bucketValues[bucket].plus(
         qty.times(close).times(fx),
