@@ -45,10 +45,27 @@ async function GroupCash({ params }: { params: Params }) {
       </nav>
 
       <header className="mb-8 border-b border-border pb-6">
-        <p className="label">Cash · {cash.baseCurrency}</p>
+        <p className="label">Cash-like assets · {cash.baseCurrency}</p>
         <h1 className="display mt-2 text-4xl text-foreground">
           {formatCurrency(cash.currentCash.toString(), cash.baseCurrency)}
         </h1>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="hairline bg-surface px-4 py-3">
+            <p className="label">Pure cash</p>
+            <p className="display tabular mt-2 text-xl text-foreground">
+              {formatCurrency(cash.pureCash.toString(), cash.baseCurrency)}
+            </p>
+          </div>
+          <div className="hairline bg-surface px-4 py-3">
+            <p className="label">HISA</p>
+            <p className="display tabular mt-2 text-xl text-foreground">
+              {formatCurrency(
+                cash.cashInvestments.toString(),
+                cash.baseCurrency,
+              )}
+            </p>
+          </div>
+        </div>
         {cash.byCurrency.length > 0 && (
           <p className="mt-2 text-sm text-muted">
             {cash.byCurrency.map((b, i) => (
@@ -67,6 +84,38 @@ async function GroupCash({ params }: { params: Params }) {
             <span className="text-subtle"> · @ today's FX</span>
           </p>
         )}
+        {cash.byVehicle.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
+            {cash.byVehicle.map((vehicle) => (
+              <span key={vehicle.key}>
+                {vehicle.label}:{" "}
+                {formatCurrency(vehicle.balance.toString(), vehicle.currency)}
+                {vehicle.currency !== cash.baseCurrency ? (
+                  <span className="text-subtle">
+                    {" "}
+                    ≈{" "}
+                    {formatCurrency(
+                      vehicle.baseValue.toString(),
+                      cash.baseCurrency,
+                    )}
+                  </span>
+                ) : null}
+                {vehicle.kind === "HISA" &&
+                !vehicle.realizedIncomeBase.isZero() ? (
+                  <span className="text-gain">
+                    {" "}
+                    · interest{" "}
+                    {formatCurrency(
+                      vehicle.realizedIncomeBase.toString(),
+                      cash.baseCurrency,
+                      { signed: true },
+                    )}
+                  </span>
+                ) : null}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
           <span>
             Seeded + deposits:{" "}
@@ -121,6 +170,7 @@ async function GroupCash({ params }: { params: Params }) {
               <tr className="border-b border-border text-left text-muted">
                 <th className="label px-3 py-3">Date</th>
                 <th className="label px-3 py-3">Type</th>
+                <th className="label px-3 py-3">Vehicle</th>
                 <th className="label px-3 py-3 text-right">Amount</th>
                 <th className="label px-3 py-3 text-right">
                   In {cash.baseCurrency}
@@ -133,7 +183,7 @@ async function GroupCash({ params }: { params: Params }) {
               {cash.ledger.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-3 py-8 text-center text-sm text-muted"
                   >
                     No cash movements yet. Seed the group to get started.
@@ -153,6 +203,13 @@ async function GroupCash({ params }: { params: Params }) {
                       <div className="mt-1 text-xs text-subtle">
                         {cashSourceLabel(e)}
                       </div>
+                    </td>
+                    <td className="px-3 py-3 text-muted">
+                      {e.vehicleKind === "HISA" ? (
+                        <span className="text-gain">{e.vehicleLabel}</span>
+                      ) : (
+                        e.vehicleLabel
+                      )}
                     </td>
                     <td className="px-3 py-3 text-right tabular">
                       {formatCurrency(e.amountCurrency.toString(), e.currency)}

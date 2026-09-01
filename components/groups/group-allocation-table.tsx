@@ -24,12 +24,20 @@ export function GroupAllocationTable({ allocation }: Props) {
         <tbody>
           {rows.map((r) => (
             <tr
-              key={r.kind === "cash" ? "cash" : r.portfolioId}
+              key={
+                r.kind === "portfolio"
+                  ? r.portfolioId
+                  : r.kind === "cash"
+                    ? "cash"
+                    : "cash-investment"
+              }
               className="border-b border-border last:border-b-0"
             >
               <Td>
                 {r.kind === "cash" ? (
-                  <span className="text-foreground">Cash</span>
+                  <span className="text-foreground">Pure cash</span>
+                ) : r.kind === "cash-investment" ? (
+                  <span className="text-foreground">{r.name}</span>
                 ) : (
                   <Link
                     href={`/portfolios/${r.portfolioId}`}

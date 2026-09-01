@@ -18,6 +18,9 @@ type ImportResponse =
       reconciliationDelta: string;
       statementEndingBalance: string;
       accountLast4: string;
+      accountType: string | null;
+      cashVehicleKind: "CASH" | "HISA";
+      cashVehicleLabel: string;
     }
   | { ok: false; error: string };
 
@@ -90,7 +93,8 @@ export function ExternalCashImportForm({ groupId, statementCurrency }: Props) {
         result.ok ? (
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
             <span className="text-gain">
-              <strong>{result.imported}</strong> cash row
+              <strong>{result.imported}</strong>{" "}
+              {result.cashVehicleKind === "HISA" ? "HISA" : "cash"} row
               {result.imported !== 1 ? "s" : ""} imported
             </span>
             {result.skipped > 0 ? (
@@ -99,7 +103,7 @@ export function ExternalCashImportForm({ groupId, statementCurrency }: Props) {
               </span>
             ) : null}
             <span className="text-muted">
-              Account ending {result.accountLast4}:{" "}
+              {result.cashVehicleLabel} ending {result.accountLast4}:{" "}
               {formatCurrency(result.statementEndingBalance, statementCurrency)}
             </span>
             <span

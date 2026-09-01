@@ -1,5 +1,10 @@
 import Decimal from "decimal.js";
 import type { Prisma } from "@/app/generated/prisma/client";
+import {
+  type CashVehicleKind,
+  cashVehicleLabel,
+  classifyExternalCashAccountKind,
+} from "@/lib/cash-vehicles";
 import { db } from "@/lib/db";
 import { convert } from "@/lib/fx";
 import { visibleTradeWhere } from "@/lib/portfolio-visibility";
@@ -20,6 +25,9 @@ export type CashLedgerEntry = {
   notes: string | null;
   source: string | null;
   sourceAccountKey: string | null;
+  accountType: string | null;
+  vehicleKind: CashVehicleKind;
+  vehicleLabel: string;
 };
 
 export type CurrencyBalance = {
@@ -30,13 +38,31 @@ export type CurrencyBalance = {
   baseValue: Decimal;
 };
 
+export type CashVehicleBalance = {
+  key: string;
+  kind: CashVehicleKind;
+  label: string;
+  accountType: string | null;
+  sourceAccountKey: string | null;
+  currency: string;
+  balance: Decimal;
+  baseValue: Decimal;
+  realizedIncomeBase: Decimal;
+};
+
 export type GroupCash = {
   groupId: string;
   baseCurrency: string;
-  /** Total cash in base currency, valued at today's FX rate. */
+  /** Total cash and cash-like investments in base currency, valued at today's FX rate. */
   currentCash: Decimal;
+  /** Plain cash only, excluding HISA / yield-bearing cash vehicles. */
+  pureCash: Decimal;
+  /** HISA / yield-bearing cash vehicles, valued at today's FX rate. */
+  cashInvestments: Decimal;
   /** Per-currency balances (current-rate valuation). */
   byCurrency: CurrencyBalance[];
+  /** Per-currency balances split by cash vehicle. */
+  byVehicle: CashVehicleBalance[];
   seededAndDeposits: Decimal;
   withdrawals: Decimal;
   tradeOutflows: Decimal;
@@ -79,7 +105,19 @@ export function isRealizedCashIncome(e: CashLedgerEntry): boolean {
 }
 
 const groupCashInclude = {
-  cashTransactions: { orderBy: { date: "asc" as const } },
+  cashTransactions: {
+    orderBy: { date: "asc" as const },
+    include: {
+      statementImport: {
+        select: {
+          accountType: true,
+          provider: true,
+          accountLast4: true,
+          sourceAccountKey: true,
+        },
+      },
+    },
+  },
   portfolios: {
     include: {
       trades: {
@@ -127,6 +165,8 @@ async function materializeLedgerForGroup(
       baseCurrency,
       ct.date,
     );
+    const accountType = ct.statementImport?.accountType ?? null;
+    const vehicleKind = classifyExternalCashAccountKind(accountType);
     ledger.push({
       id: ct.id,
       kind: "transaction",
@@ -139,6 +179,9 @@ async function materializeLedgerForGroup(
       notes: ct.notes,
       source: ct.source,
       sourceAccountKey: ct.sourceAccountKey,
+      accountType,
+      vehicleKind,
+      vehicleLabel: cashVehicleLabel(vehicleKind, accountType),
     });
   }
 
@@ -175,6 +218,9 @@ async function materializeLedgerForGroup(
           notes: null,
           source: null,
           sourceAccountKey: null,
+          accountType: null,
+          vehicleKind: "CASH",
+          vehicleLabel: cashVehicleLabel("CASH", null),
         });
       } else {
         const proceeds = grossBase.minus(feesBase);
@@ -191,6 +237,9 @@ async function materializeLedgerForGroup(
           notes: null,
           source: null,
           sourceAccountKey: null,
+          accountType: null,
+          vehicleKind: "CASH",
+          vehicleLabel: cashVehicleLabel("CASH", null),
         });
       }
     }
@@ -283,11 +332,22 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
   }
   byCurrency.sort((a, b) => b.baseValue.abs().comparedTo(a.baseValue.abs()));
 
+  const byVehicle = await cashVehicleBalances(ledger, base, now);
+  const pureCash = byVehicle
+    .filter((v) => v.kind === "CASH")
+    .reduce((sum, v) => sum.plus(v.baseValue), ZERO);
+  const cashInvestments = byVehicle
+    .filter((v) => v.kind === "HISA")
+    .reduce((sum, v) => sum.plus(v.baseValue), ZERO);
+
   return {
     groupId,
     baseCurrency: base,
     currentCash,
+    pureCash,
+    cashInvestments,
     byCurrency,
+    byVehicle,
     seededAndDeposits: agg.seededAndDeposits,
     withdrawals: agg.withdrawals,
     tradeOutflows: agg.tradeOutflows,
@@ -295,6 +355,66 @@ export async function computeGroupCash(groupId: string): Promise<GroupCash> {
     realizedIncome: agg.realizedIncome,
     ledger,
   };
+}
+
+async function cashVehicleBalances(
+  ledger: CashLedgerEntry[],
+  baseCurrency: string,
+  asOf: Date,
+): Promise<CashVehicleBalance[]> {
+  const map = new Map<
+    string,
+    {
+      kind: CashVehicleKind;
+      label: string;
+      accountType: string | null;
+      sourceAccountKey: string | null;
+      currency: string;
+      balance: Decimal;
+      realizedIncomeBase: Decimal;
+    }
+  >();
+
+  for (const e of ledger) {
+    const currency = e.currency.toUpperCase();
+    const sourceKey = e.sourceAccountKey ?? "manual";
+    const key = `${e.vehicleKind}:${sourceKey}:${currency}`;
+    const existing = map.get(key);
+    const realizedIncomeBase = isRealizedCashIncome(e) ? e.amountBase : ZERO;
+    if (existing) {
+      existing.balance = existing.balance.plus(e.amountCurrencySigned);
+      existing.realizedIncomeBase =
+        existing.realizedIncomeBase.plus(realizedIncomeBase);
+    } else {
+      map.set(key, {
+        kind: e.vehicleKind,
+        label: e.vehicleLabel,
+        accountType: e.accountType,
+        sourceAccountKey: e.sourceAccountKey,
+        currency,
+        balance: e.amountCurrencySigned,
+        realizedIncomeBase,
+      });
+    }
+  }
+
+  const rows: CashVehicleBalance[] = [];
+  for (const [key, row] of map) {
+    if (row.balance.isZero()) continue;
+    rows.push({
+      key,
+      kind: row.kind,
+      label: row.label,
+      accountType: row.accountType,
+      sourceAccountKey: row.sourceAccountKey,
+      currency: row.currency,
+      balance: row.balance,
+      baseValue: await convert(row.balance, row.currency, baseCurrency, asOf),
+      realizedIncomeBase: row.realizedIncomeBase,
+    });
+  }
+  rows.sort((a, b) => b.baseValue.abs().comparedTo(a.baseValue.abs()));
+  return rows;
 }
 
 /**

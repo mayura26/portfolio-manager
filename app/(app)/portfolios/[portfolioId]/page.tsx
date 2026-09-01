@@ -83,9 +83,9 @@ async function PortfolioOverview({ params }: { params: Params }) {
           tone={pnlClass(holdings.totalUnrealizedPnL.toString())}
         />
         <Stat
-          label={`Group cash · ${groupCash.baseCurrency}`}
+          label={`Group pure cash · ${groupCash.baseCurrency}`}
           value={formatCurrency(
-            groupCash.currentCash.toString(),
+            groupCash.pureCash.toString(),
             groupCash.baseCurrency,
           )}
         />
@@ -153,7 +153,7 @@ async function PortfolioOverview({ params }: { params: Params }) {
         </div>
         <AllocationTable
           allocation={allocation}
-          groupCashBase={groupCash.currentCash.toString()}
+          groupCashBase={groupCash.pureCash.toString()}
           groupBaseCurrency={groupCash.baseCurrency}
         />
         <p className="text-xs text-subtle">

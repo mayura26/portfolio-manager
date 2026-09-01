@@ -68,6 +68,7 @@ type GroupCompositionInput = {
     topPortfolioPercent: number;
     portfolioCount: number;
     cashPercent: number;
+    cashInvestmentPercent: number;
   };
   rows: {
     rowKey: string;
@@ -80,7 +81,7 @@ type GroupCompositionInput = {
     rangeStatus: "on-target" | "underweight" | "overweight";
     rebalanceTargetPercent: number;
     valueBase: number;
-    kind: "portfolio" | "cash";
+    kind: "portfolio" | "cash" | "cash-investment";
   }[];
   model: string;
   reasoningEffort: "minimal" | "low" | "medium" | "high";

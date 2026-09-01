@@ -39,13 +39,30 @@ export type GroupCashRow = {
   rebalanceTargetPercent: Decimal;
 };
 
-export type GroupRow = GroupPortfolioRow | GroupCashRow;
+export type GroupCashInvestmentRow = {
+  kind: "cash-investment";
+  name: string;
+  targetPercent: Decimal;
+  targetMinPercent: Decimal;
+  targetMaxPercent: Decimal;
+  actualValueBase: Decimal;
+  actualPercent: Decimal;
+  driftPercent: Decimal;
+  rangeStatus: AllocationRangeStatus;
+  rebalanceTargetPercent: Decimal;
+};
+
+export type GroupRow =
+  | GroupPortfolioRow
+  | GroupCashRow
+  | GroupCashInvestmentRow;
 
 export type GroupAllocation = {
   groupId: string;
   name: string;
   baseCurrency: string;
   cashBase: Decimal;
+  cashInvestmentBase: Decimal;
   totalValueBase: Decimal;
   rows: GroupRow[];
   targetSum: Decimal;
@@ -144,7 +161,7 @@ export async function computeGroupAllocation(
   const cashTargetMax = new Decimal(group.cashTargetMaxPercent.toString());
   const cashTarget = midpointPercent(cashTargetMin, cashTargetMax);
   const cashActual = totalValueBase.gt(0)
-    ? cashInfo.currentCash.dividedBy(totalValueBase).times(100)
+    ? cashInfo.pureCash.dividedBy(totalValueBase).times(100)
     : ZERO;
   const cashRangeDrift = computeRangeDrift({
     actualPercent: cashActual,
@@ -156,12 +173,35 @@ export async function computeGroupAllocation(
     targetPercent: cashTarget,
     targetMinPercent: cashTargetMin,
     targetMaxPercent: cashTargetMax,
-    actualValueBase: cashInfo.currentCash,
+    actualValueBase: cashInfo.pureCash,
     actualPercent: cashActual,
     driftPercent: cashRangeDrift.driftPercent,
     rangeStatus: cashRangeDrift.status,
     rebalanceTargetPercent: cashRangeDrift.rebalanceTargetPercent,
   });
+
+  if (!cashInfo.cashInvestments.isZero()) {
+    const cashInvestmentActual = totalValueBase.gt(0)
+      ? cashInfo.cashInvestments.dividedBy(totalValueBase).times(100)
+      : ZERO;
+    const cashInvestmentRangeDrift = computeRangeDrift({
+      actualPercent: cashInvestmentActual,
+      targetMinPercent: ZERO,
+      targetMaxPercent: ZERO,
+    });
+    rows.push({
+      kind: "cash-investment",
+      name: "HISA",
+      targetPercent: ZERO,
+      targetMinPercent: ZERO,
+      targetMaxPercent: ZERO,
+      actualValueBase: cashInfo.cashInvestments,
+      actualPercent: cashInvestmentActual,
+      driftPercent: cashInvestmentRangeDrift.driftPercent,
+      rangeStatus: cashInvestmentRangeDrift.status,
+      rebalanceTargetPercent: cashInvestmentRangeDrift.rebalanceTargetPercent,
+    });
+  }
 
   const targetSum = rows.reduce((acc, r) => acc.plus(r.targetPercent), ZERO);
   const targetMinSum = rows.reduce(
@@ -177,7 +217,8 @@ export async function computeGroupAllocation(
     groupId,
     name: group.name,
     baseCurrency,
-    cashBase: cashInfo.currentCash,
+    cashBase: cashInfo.pureCash,
+    cashInvestmentBase: cashInfo.cashInvestments,
     totalValueBase,
     rows,
     targetSum,

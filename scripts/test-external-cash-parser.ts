@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { classifyExternalCashAccountKind } from "@/lib/cash-vehicles";
 import { parseCommBankTransactionSummaryText } from "@/lib/import/external-cash-parser";
 
 const fixture = `
@@ -18,6 +19,7 @@ const parsed = parseCommBankTransactionSummaryText(fixture);
 assert.equal(parsed.provider, "COMMBANK");
 assert.equal(parsed.accountLast4, "1332");
 assert.equal(parsed.accountType, "GoalSaver");
+assert.equal(classifyExternalCashAccountKind(parsed.accountType), "HISA");
 assert.equal(parsed.currency, "AUD");
 assert.equal(parsed.endingBalance, "10005.0000");
 assert.equal(parsed.transactions.length, 3);
@@ -56,5 +58,7 @@ assert.deepEqual(
     ["INTEREST", "78.3800"],
   ],
 );
+assert.equal(classifyExternalCashAccountKind("Smart Access"), "CASH");
+assert.equal(classifyExternalCashAccountKind("NetBank Saver"), "HISA");
 
 console.log("external cash parser tests passed");

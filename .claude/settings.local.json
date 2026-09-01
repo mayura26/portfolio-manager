@@ -62,7 +62,24 @@
       "Bash(netstat -ano)",
       "PowerShell(git add *)",
       "PowerShell(git push *)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "PowerShell(npx prisma generate --no-hints)",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npx biome check lib/cash.ts lib/performance.ts lib/import/ibkr-flex.ts lib/import/ibkr-csv.ts lib/import/ibkr-engine.ts \"app/\\(app\\)/groups/[groupId]/cash/page.tsx\" scripts/diagnose-group-cash.ts scripts/debug-flex-xml.ts scripts/test-ibkr-cash-events.ts 2>&1 | Select-Object -Last 40)",
+      "PowerShell(npx biome check --write lib/cash.ts lib/performance.ts lib/import/ibkr-flex.ts lib/import/ibkr-csv.ts lib/import/ibkr-engine.ts \"app/\\(app\\)/groups/[groupId]/cash/page.tsx\" scripts/diagnose-group-cash.ts scripts/debug-flex-xml.ts scripts/test-ibkr-cash-events.ts 2>&1 | Select-Object -Last 15)",
+      "PowerShell(npm run *)",
+      "PowerShell(npx prisma migrate deploy 2>&1 | Select-Object -Last 10)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 5)",
+      "Read(//tmp/**)",
+      "Read(//d/tmp/**)",
+      "Bash(unzip -l 2025FD.zip)",
+      "Bash(unzip -p 2025FD.zip 2025FD.xml)",
+      "Bash(unzip -l /tmp/2024FD.zip)",
+      "Bash(unzip -p 2024FD.zip 2024FD.xml)",
+      "PowerShell(npx tsc --noEmit; if \\($?\\) { \"tsc OK\" }; npx biome check --write scripts/cron-trades.ts actions/cron-jobs.ts lib/cron-runs.ts \"app/\\(app\\)/reviews/\\(tabs\\)/ibkr/page.tsx\" 2>&1 | Select-Object -Last 2)",
+      "PowerShell(git status --short; \"---\"; git log --oneline -1)",
+      "PowerShell(git diff TODO.md; \"==== settings ====\"; git diff .claude/settings.local.json)",
+      "PowerShell(git status --short; \"---\"; git log --oneline -3)"
     ]
   }
 }

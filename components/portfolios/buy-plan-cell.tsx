@@ -92,7 +92,7 @@ export function BuyPlanCell({
       )}
       {!plan.cashSufficient ? (
         <span className="text-warning">
-          group cash {formatCurrency(groupCashBase, groupBaseCurrency)}
+          pure cash {formatCurrency(groupCashBase, groupBaseCurrency)}
         </span>
       ) : null}
     </div>
@@ -128,7 +128,10 @@ function computeTrimPlan(
 
   if (basePrice.lte(0)) return null;
 
-  const quantity = Decimal.min(quantityHeld, trimValueBase.dividedBy(basePrice));
+  const quantity = Decimal.min(
+    quantityHeld,
+    trimValueBase.dividedBy(basePrice),
+  );
   return { quantity, price: quotePrice };
 }
 

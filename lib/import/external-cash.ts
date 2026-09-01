@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
+import {
+  cashVehicleLabel,
+  classifyExternalCashAccountKind,
+} from "@/lib/cash-vehicles";
 import { db } from "@/lib/db";
 import { parseExternalCashStatementPdf } from "@/lib/import/external-cash-parser";
 
@@ -9,6 +13,9 @@ export type ExternalCashImportResult = {
   reconciliationDelta: string;
   statementEndingBalance: string;
   accountLast4: string;
+  accountType: string | null;
+  cashVehicleKind: "CASH" | "HISA";
+  cashVehicleLabel: string;
 };
 
 export async function importExternalCashStatement(
@@ -35,12 +42,21 @@ export async function importExternalCashStatement(
   });
 
   if (existingImport) {
+    const cashVehicleKind = classifyExternalCashAccountKind(
+      existingImport.accountType,
+    );
     return {
       imported: 0,
       skipped: parsed.transactions.length,
       reconciliationDelta: existingImport.reconciliationDelta.toString(),
       statementEndingBalance: parsed.endingBalance,
       accountLast4: parsed.accountLast4,
+      accountType: existingImport.accountType,
+      cashVehicleKind,
+      cashVehicleLabel: cashVehicleLabel(
+        cashVehicleKind,
+        existingImport.accountType,
+      ),
     };
   }
 
@@ -152,12 +168,17 @@ export async function importExternalCashStatement(
       },
     });
 
+    const cashVehicleKind = classifyExternalCashAccountKind(parsed.accountType);
+
     return {
       imported: created.count,
       skipped,
       reconciliationDelta: reconciliationDelta.toFixed(4),
       statementEndingBalance: parsed.endingBalance,
       accountLast4: parsed.accountLast4,
+      accountType: parsed.accountType,
+      cashVehicleKind,
+      cashVehicleLabel: cashVehicleLabel(cashVehicleKind, parsed.accountType),
     };
   });
 }

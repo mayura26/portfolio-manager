@@ -120,7 +120,7 @@ export function ValueChartClient({
 
               const labelFor = (key: string) => {
                 if (key === "equities") return equitiesLabel;
-                if (key === "cash") return "Cash";
+                if (key === "cash") return "Cash-like";
                 if (key === "costBasis") return "Cost basis";
                 return String(key);
               };
@@ -196,7 +196,7 @@ export function ValueChartClient({
               <Area
                 type="monotone"
                 dataKey="cash"
-                name="Cash"
+                name="Cash-like"
                 stackId="stack"
                 stroke="var(--info)"
                 strokeWidth={2}

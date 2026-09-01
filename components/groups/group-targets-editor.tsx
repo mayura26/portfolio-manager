@@ -162,7 +162,7 @@ export function GroupTargetsEditor({
               ))
             )}
             <tr className="bg-surface">
-              <td className="px-3 py-3 text-foreground">Cash</td>
+              <td className="px-3 py-3 text-foreground">Pure cash</td>
               <td className="px-3 py-3 text-right">
                 <input
                   name="cashTargetMinPercent"

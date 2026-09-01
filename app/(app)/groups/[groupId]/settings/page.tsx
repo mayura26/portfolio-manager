@@ -51,8 +51,8 @@ async function GroupSettings({ params }: { params: Params }) {
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="display text-4xl text-foreground">Group settings</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
-          Edit metadata, investment profile, and bulk-set target ranges. Cash +
-          portfolio ranges must allow a 100% allocation.
+          Edit metadata, investment profile, and bulk-set target ranges. Pure
+          cash + portfolio ranges must allow a 100% allocation.
         </p>
       </header>
 

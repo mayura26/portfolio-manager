@@ -133,8 +133,17 @@ export function GroupCard({ group }: Props) {
         <span className="label truncate">
           {group.portfolios.length} portfolio
           {group.portfolios.length === 1 ? "" : "s"} · {group.baseCurrency}
-          {s?.cashPercent?.gt(0)
-            ? ` · cash ${formatPercent(s.cashPercent.dividedBy(100), {
+          {s?.pureCashBase.gt(0) && s.cashPercent?.gt(0)
+            ? ` · cash ${formatPercent(
+                s.pureCashBase.dividedBy(s.totalValueBase),
+                {
+                  signed: false,
+                  decimals: 0,
+                },
+              )}`
+            : ""}
+          {s?.cashInvestmentPercent?.gt(0)
+            ? ` · HISA ${formatPercent(s.cashInvestmentPercent.dividedBy(100), {
                 signed: false,
                 decimals: 0,
               })}`

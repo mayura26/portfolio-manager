@@ -39,6 +39,8 @@ export type GroupValueRow = {
   name: string;
   equityBase: Decimal;
   cashBase: Decimal;
+  pureCashBase: Decimal;
+  cashInvestmentBase: Decimal;
   totalBase: Decimal;
 };
 
@@ -49,6 +51,8 @@ export type DashboardSummary = {
   totalCostBase: Decimal;
   totalMarketValueBase: Decimal;
   totalCashBase: Decimal;
+  totalPureCashBase: Decimal;
+  totalCashInvestmentBase: Decimal;
   totalUnrealizedPnL: Decimal;
   totalRealizedPnL: Decimal;
   totalDailyChange: Decimal;
@@ -304,6 +308,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   });
   const now = new Date();
   let totalCashBase = ZERO;
+  let totalPureCashBase = ZERO;
+  let totalCashInvestmentBase = ZERO;
   const groupValueBreakdown: GroupValueRow[] = [];
   for (const g of groups) {
     const cash = await computeGroupCash(g.id);
@@ -311,6 +317,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       ? ZERO
       : await convert(
           cash.currentCash,
+          cash.baseCurrency,
+          ws.baseCurrency,
+          now,
+        );
+    const pureCashBase = cash.pureCash.isZero()
+      ? ZERO
+      : await convert(cash.pureCash, cash.baseCurrency, ws.baseCurrency, now);
+    const cashInvestmentBase = cash.cashInvestments.isZero()
+      ? ZERO
+      : await convert(
+          cash.cashInvestments,
           cash.baseCurrency,
           ws.baseCurrency,
           now,
@@ -329,11 +346,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     totalRealizedCashIncome = totalRealizedCashIncome.plus(realizedIncome);
 
     totalCashBase = totalCashBase.plus(cashBase);
+    totalPureCashBase = totalPureCashBase.plus(pureCashBase);
+    totalCashInvestmentBase = totalCashInvestmentBase.plus(cashInvestmentBase);
     groupValueBreakdown.push({
       groupId: g.id,
       name: g.name,
       equityBase,
       cashBase,
+      pureCashBase,
+      cashInvestmentBase,
       totalBase: equityBase.plus(cashBase),
     });
   }
@@ -355,6 +376,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     totalCostBase,
     totalMarketValueBase,
     totalCashBase,
+    totalPureCashBase,
+    totalCashInvestmentBase,
     totalUnrealizedPnL,
     totalRealizedPnL: ws.totalRealizedGlobal.plus(totalRealizedCashIncome),
     totalDailyChange: canComputeDaily ? totalDailyChange : ZERO,
@@ -584,7 +607,7 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
     });
     series.push({
       key: `g_${g.id}_cash`,
-      label: `${g.name} — Cash`,
+      label: `${g.name} — Cash-like`,
       groupIndex: gi,
       variant: "cash",
     });
@@ -786,7 +809,7 @@ export async function getGroupValueHistory(
   if (!curve) {
     const series: GroupValueHistorySeries[] = [
       ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-      { key: "cash", label: "Cash", variant: "cash" as const },
+      { key: "cash", label: "Cash-like", variant: "cash" as const },
     ];
     return {
       baseCurrency: groupBase,
@@ -830,7 +853,7 @@ export async function getGroupValueHistory(
 
   const series: GroupValueHistorySeries[] = [
     ...portfolioMeta.map((p) => ({ key: `p_${p.id}`, label: p.name })),
-    { key: "cash", label: "Cash", variant: "cash" as const },
+    { key: "cash", label: "Cash-like", variant: "cash" as const },
   ];
 
   const points: Array<{ date: Date } & Record<string, number>> = [];
@@ -1007,7 +1030,10 @@ export type GroupCardSummary = {
   baseCurrency: string;
   totalValueBase: Decimal;
   cashBase: Decimal;
+  pureCashBase: Decimal;
+  cashInvestmentBase: Decimal;
   cashPercent: Decimal | null;
+  cashInvestmentPercent: Decimal | null;
   costBase: Decimal;
   unrealizedPnL: Decimal;
   unrealizedPercent: Decimal | null;
@@ -1102,9 +1128,14 @@ export async function getGroupCardSummaries(): Promise<
 
     const cash = await computeGroupCash(g.id);
     const cashBase = cash.currentCash;
+    const pureCashBase = cash.pureCash;
+    const cashInvestmentBase = cash.cashInvestments;
     const totalValueBase = marketValueBase.plus(cashBase);
     const cashPercent = totalValueBase.gt(0)
       ? cashBase.dividedBy(totalValueBase).times(100)
+      : null;
+    const cashInvestmentPercent = totalValueBase.gt(0)
+      ? cashInvestmentBase.dividedBy(totalValueBase).times(100)
       : null;
     const unrealizedPercent = costBase.gt(0)
       ? unrealizedPnLBase.dividedBy(costBase).times(100)
@@ -1119,7 +1150,10 @@ export async function getGroupCardSummaries(): Promise<
       baseCurrency: g.baseCurrency,
       totalValueBase,
       cashBase,
+      pureCashBase,
+      cashInvestmentBase,
       cashPercent,
+      cashInvestmentPercent,
       costBase,
       unrealizedPnL: unrealizedPnLBase,
       unrealizedPercent,

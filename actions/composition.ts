@@ -148,6 +148,10 @@ export async function analyzeGroupComposition(
           allocation.rows
             .find((r) => r.kind === "cash")
             ?.actualPercent.toNumber() ?? 0,
+        cashInvestmentPercent:
+          allocation.rows
+            .find((r) => r.kind === "cash-investment")
+            ?.actualPercent.toNumber() ?? 0,
       },
       rows: allocation.rows.map((r) =>
         r.kind === "cash"
@@ -164,19 +168,33 @@ export async function analyzeGroupComposition(
               rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
               valueBase: r.actualValueBase.toNumber(),
             }
-          : {
-              rowKey: r.portfolioId,
-              label: r.name,
-              kind: "portfolio" as const,
-              targetPercent: r.targetPercent.toNumber(),
-              targetMinPercent: r.targetMinPercent.toNumber(),
-              targetMaxPercent: r.targetMaxPercent.toNumber(),
-              actualPercent: r.actualPercent.toNumber(),
-              driftPercent: r.driftPercent.toNumber(),
-              rangeStatus: r.rangeStatus,
-              rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
-              valueBase: r.actualValueBase.toNumber(),
-            },
+          : r.kind === "cash-investment"
+            ? {
+                rowKey: "cash-investment",
+                label: r.name,
+                kind: "cash-investment" as const,
+                targetPercent: r.targetPercent.toNumber(),
+                targetMinPercent: r.targetMinPercent.toNumber(),
+                targetMaxPercent: r.targetMaxPercent.toNumber(),
+                actualPercent: r.actualPercent.toNumber(),
+                driftPercent: r.driftPercent.toNumber(),
+                rangeStatus: r.rangeStatus,
+                rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
+                valueBase: r.actualValueBase.toNumber(),
+              }
+            : {
+                rowKey: r.portfolioId,
+                label: r.name,
+                kind: "portfolio" as const,
+                targetPercent: r.targetPercent.toNumber(),
+                targetMinPercent: r.targetMinPercent.toNumber(),
+                targetMaxPercent: r.targetMaxPercent.toNumber(),
+                actualPercent: r.actualPercent.toNumber(),
+                driftPercent: r.driftPercent.toNumber(),
+                rangeStatus: r.rangeStatus,
+                rebalanceTargetPercent: r.rebalanceTargetPercent.toNumber(),
+                valueBase: r.actualValueBase.toNumber(),
+              },
       ),
       model,
       reasoningEffort,

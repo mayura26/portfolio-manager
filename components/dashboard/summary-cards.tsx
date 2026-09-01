@@ -40,30 +40,39 @@ function breakdownFor(
 function TotalValueCard({
   stocksBase,
   cashBase,
+  pureCashBase,
+  cashInvestmentBase,
   baseCurrency,
   groupValues,
   hint,
 }: {
   stocksBase: string;
   cashBase: string;
+  pureCashBase: string;
+  cashInvestmentBase: string;
   baseCurrency: string;
   groupValues: GroupValueRow[];
   hint: string;
 }) {
   const stocks = new Decimal(stocksBase);
   const cash = new Decimal(cashBase);
+  const pureCash = new Decimal(pureCashBase);
+  const cashInvestment = new Decimal(cashInvestmentBase);
   const total = stocks.plus(cash);
   const stocksPct = total.gt(0) ? stocks.dividedBy(total).times(100) : ZERO;
-  const cashPct = total.gt(0) ? cash.dividedBy(total).times(100) : ZERO;
+  const pureCashPct = total.gt(0) ? pureCash.dividedBy(total).times(100) : ZERO;
+  const cashInvestmentPct = total.gt(0)
+    ? cashInvestment.dividedBy(total).times(100)
+    : ZERO;
   const stocksBar = total.gt(0)
     ? Number(stocks.dividedBy(total).times(100).toFixed(2))
     : 0;
-  let cashBar = total.gt(0)
-    ? Number(cash.dividedBy(total).times(100).toFixed(2))
+  const pureCashBar = total.gt(0)
+    ? Number(pureCash.dividedBy(total).times(100).toFixed(2))
     : 0;
-  if (stocksBar > 0 && cashBar > 0) {
-    cashBar = Number((100 - stocksBar).toFixed(2));
-  }
+  const cashInvestmentBar = cashInvestment.gt(0)
+    ? Number(Math.max(0, 100 - stocksBar - pureCashBar).toFixed(2))
+    : 0;
   const showGroupValues = groupValues.length >= 2;
 
   return (
@@ -76,7 +85,7 @@ function TotalValueCard({
       <div
         className="mt-4 flex h-2 w-full overflow-hidden bg-border"
         role="img"
-        aria-label={`Stocks ${stocksBar.toFixed(0)}%, cash ${cashBar.toFixed(0)}%`}
+        aria-label={`Stocks ${stocksBar.toFixed(0)}%, pure cash ${pureCashBar.toFixed(0)}%, HISA ${cashInvestmentBar.toFixed(0)}%`}
       >
         {stocksBar > 0 ? (
           <div
@@ -84,10 +93,16 @@ function TotalValueCard({
             style={{ width: `${stocksBar}%` }}
           />
         ) : null}
-        {cashBar > 0 ? (
+        {pureCashBar > 0 ? (
           <div
             className="h-full shrink-0 bg-[var(--info)]"
-            style={{ width: `${cashBar}%` }}
+            style={{ width: `${pureCashBar}%` }}
+          />
+        ) : null}
+        {cashInvestmentBar > 0 ? (
+          <div
+            className="h-full shrink-0 bg-[var(--gain)]"
+            style={{ width: `${cashInvestmentBar}%` }}
           />
         ) : null}
       </div>
@@ -108,12 +123,12 @@ function TotalValueCard({
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-4">
-          <dt className="text-muted">Cash</dt>
+          <dt className="text-muted">Pure cash</dt>
           <dd className="tabular text-right text-foreground">
-            {formatCurrency(cash.toString(), baseCurrency)}
+            {formatCurrency(pureCash.toString(), baseCurrency)}
             <span className="ml-2 text-xs text-subtle">
               (
-              {formatPercent(cashPct.dividedBy(100).toString(), {
+              {formatPercent(pureCashPct.dividedBy(100).toString(), {
                 decimals: 1,
                 signed: false,
               })}
@@ -121,6 +136,22 @@ function TotalValueCard({
             </span>
           </dd>
         </div>
+        {cashInvestment.gt(0) ? (
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-muted">HISA</dt>
+            <dd className="tabular text-right text-foreground">
+              {formatCurrency(cashInvestment.toString(), baseCurrency)}
+              <span className="ml-2 text-xs text-subtle">
+                (
+                {formatPercent(cashInvestmentPct.dividedBy(100).toString(), {
+                  decimals: 1,
+                  signed: false,
+                })}
+                )
+              </span>
+            </dd>
+          </div>
+        ) : null}
       </dl>
 
       {showGroupValues ? (
@@ -168,11 +199,25 @@ function TotalValueCard({
                     </dd>
                   </div>
                   <div className="flex items-baseline justify-between gap-3 pl-4">
-                    <dt className="text-subtle">Cash</dt>
+                    <dt className="text-subtle">Pure cash</dt>
                     <dd className="tabular text-right text-muted">
-                      {formatCurrency(group.cashBase.toString(), baseCurrency)}
+                      {formatCurrency(
+                        group.pureCashBase.toString(),
+                        baseCurrency,
+                      )}
                     </dd>
                   </div>
+                  {group.cashInvestmentBase.gt(0) ? (
+                    <div className="flex items-baseline justify-between gap-3 pl-4">
+                      <dt className="text-subtle">HISA</dt>
+                      <dd className="tabular text-right text-muted">
+                        {formatCurrency(
+                          group.cashInvestmentBase.toString(),
+                          baseCurrency,
+                        )}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
               </Link>
             );
@@ -209,6 +254,8 @@ export async function SummaryCards() {
       <TotalValueCard
         stocksBase={data.totalMarketValueBase.toString()}
         cashBase={data.totalCashBase.toString()}
+        pureCashBase={data.totalPureCashBase.toString()}
+        cashInvestmentBase={data.totalCashInvestmentBase.toString()}
         baseCurrency={data.baseCurrency}
         groupValues={data.groupValueBreakdown}
         hint={`${data.portfolioCount} ${data.portfolioCount === 1 ? "portfolio" : "portfolios"} · ${data.holdingCount} ${data.holdingCount === 1 ? "holding" : "holdings"}`}

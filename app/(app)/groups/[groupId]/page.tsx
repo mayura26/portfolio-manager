@@ -52,7 +52,8 @@ async function GroupDetail({ params }: { params: Params }) {
   for (const r of allocation.rows) {
     if (r.kind === "portfolio") rowLabelMap.set(r.portfolioId, r.name);
   }
-  rowLabelMap.set("cash", "Cash");
+  rowLabelMap.set("cash", "Pure cash");
+  rowLabelMap.set("cash-investment", "HISA");
 
   const analysis = group.aiCompositionAnalysis as
     | Parameters<typeof CompositionPanel>[0]["analysis"]
@@ -61,8 +62,18 @@ async function GroupDetail({ params }: { params: Params }) {
   const groupSlices = allocation.rows
     .filter((r) => r.actualValueBase.gt(0))
     .map((r) => ({
-      key: r.kind === "portfolio" ? r.portfolioId : "cash",
-      label: r.kind === "portfolio" ? r.name : "Cash",
+      key:
+        r.kind === "portfolio"
+          ? r.portfolioId
+          : r.kind === "cash"
+            ? "cash"
+            : "cash-investment",
+      label:
+        r.kind === "portfolio"
+          ? r.name
+          : r.kind === "cash"
+            ? "Pure cash"
+            : r.name,
       value: Number(r.actualValueBase.toFixed(2)),
       percent: Number(r.actualPercent.toFixed(2)),
       href: r.kind === "portfolio" ? `/portfolios/${r.portfolioId}` : undefined,
@@ -125,7 +136,7 @@ async function GroupDetail({ params }: { params: Params }) {
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Total value"
           value={formatCurrency(
@@ -134,12 +145,21 @@ async function GroupDetail({ params }: { params: Params }) {
           )}
         />
         <Stat
-          label="Cash"
+          label="Pure cash"
           value={formatCurrency(
             allocation.cashBase.toString(),
             allocation.baseCurrency,
           )}
         />
+        {allocation.cashInvestmentBase.gt(0) ? (
+          <Stat
+            label="HISA"
+            value={formatCurrency(
+              allocation.cashInvestmentBase.toString(),
+              allocation.baseCurrency,
+            )}
+          />
+        ) : null}
         <Stat
           label="Portfolios"
           value={`${allocation.rows.filter((r) => r.kind === "portfolio").length}`}
