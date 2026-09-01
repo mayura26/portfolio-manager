@@ -44,24 +44,33 @@ export function instrumentTypeLabel(type: string): string {
     : type.replace(/_/g, " ");
 }
 
-export function assetClassForInstrumentType(type: string): string {
+export type HomeAssetBucketKey = "equities" | "cash" | "hisa" | "income";
+
+export const HOME_ASSET_BUCKET_LABELS: Record<HomeAssetBucketKey, string> = {
+  equities: "Equities",
+  cash: "Cash",
+  hisa: "HISA",
+  income: "Income / bonds",
+};
+
+export function homeAssetBucketForInstrumentType(
+  type: string,
+): Exclude<HomeAssetBucketKey, "cash" | "hisa"> {
   const normalized = type.toUpperCase();
-  if (normalized === "INCOME_EQUITY") return "Income equity";
   if (
+    normalized === "INCOME_EQUITY" ||
+    normalized === "INCOME_ETF" ||
     normalized === "BOND" ||
     normalized === "BOND_ETF" ||
     normalized.includes("BOND") ||
-    normalized.includes("FIXED")
+    normalized.includes("FIXED") ||
+    normalized.includes("INCOME")
   ) {
-    return "Bonds / fixed income";
+    return "income";
   }
-  if (normalized === "INCOME_ETF" || normalized.includes("INCOME")) {
-    return "Income funds";
-  }
-  if (normalized === "CRYPTOCURRENCY") return "Crypto";
-  if (normalized === "CURRENCY") return "Cash / currency";
-  if (normalized === "FUTURE" || normalized === "OPTION") return "Derivatives";
-  if (normalized === "INDEX") return "Index";
-  if (normalized === "OTHER") return "Other";
-  return "Equity";
+  return "equities";
+}
+
+export function assetClassForInstrumentType(type: string): string {
+  return HOME_ASSET_BUCKET_LABELS[homeAssetBucketForInstrumentType(type)];
 }

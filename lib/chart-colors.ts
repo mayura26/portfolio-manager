@@ -43,6 +43,14 @@ export const HISA_PALETTE = [
   "#8aae87", // soft green
 ];
 
+/** Fixed colors for the home asset-mix timeline and allocation buckets. */
+export const HOME_ASSET_BUCKET_COLORS = {
+  equities: "#c9512e",
+  cash: "#4a6b8a",
+  hisa: "#2f6f4a",
+  income: "#b88a3e",
+} as const;
+
 /** Identity color for the group at `index`, cycling through the palette. */
 export function groupColor(index: number): string {
   return GROUP_PALETTE[index % GROUP_PALETTE.length];
@@ -56,4 +64,10 @@ export function cashColor(index: number): string {
 /** HISA color for the group at `index`, cycling through the palette. */
 export function hisaColor(index: number): string {
   return HISA_PALETTE[index % HISA_PALETTE.length];
+}
+
+export function homeAssetBucketColor(
+  bucket: keyof typeof HOME_ASSET_BUCKET_COLORS,
+): string {
+  return HOME_ASSET_BUCKET_COLORS[bucket];
 }

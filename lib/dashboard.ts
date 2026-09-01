@@ -12,7 +12,12 @@ import {
   type FifoCostTradeInput,
   type Holding,
 } from "@/lib/holdings";
-import { assetClassForInstrumentType } from "@/lib/instrument-types";
+import {
+  assetClassForInstrumentType,
+  HOME_ASSET_BUCKET_LABELS,
+  type HomeAssetBucketKey,
+  homeAssetBucketForInstrumentType,
+} from "@/lib/instrument-types";
 import {
   excludeEmptyUnassignedWhere,
   visibleTradeWhere,
@@ -101,7 +106,9 @@ export type GroupValueHistorySeries = {
   /** Index of the owning group; drives a stable color in the chart. */
   groupIndex?: number;
   /** Visual treatment: equities, pure cash, or HISA band. */
-  variant?: "equities" | "cash" | "hisa";
+  variant?: "equities" | "cash" | "hisa" | "income";
+  /** Fixed color bucket for the dashboard asset-mix timeline. */
+  homeBucket?: HomeAssetBucketKey;
 };
 
 type EnrichedHolding = Holding & {
@@ -457,7 +464,7 @@ export async function getAllocation(
             now,
           );
 
-      addAllocationBucket(buckets, "cash:pure", "Pure cash", pureCashBase);
+      addAllocationBucket(buckets, "cash:pure", "Cash", pureCashBase);
       addAllocationBucket(buckets, "cash:hisa", "HISA", hisaBase);
     }
   }
@@ -544,6 +551,16 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
   });
   if (groups.length === 0) return { baseCurrency, series: [], points: [] };
 
+  const ledgers = new Map<
+    string,
+    Awaited<ReturnType<typeof getGroupCashLedger>>
+  >();
+  await Promise.all(
+    groups.map(async (g) => {
+      ledgers.set(g.id, await getGroupCashLedger(g.id));
+    }),
+  );
+
   const trades = await db.trade.findMany({
     where: visibleTradeWhere,
     orderBy: { date: "asc" },
@@ -552,20 +569,17 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
       portfolio: { select: { groupId: true } },
     },
   });
-  if (trades.length === 0) return { baseCurrency, series: [], points: [] };
 
-  const tradesByGroup = new Map<string, typeof trades>();
-  for (const t of trades) {
-    const gid = t.portfolio.groupId;
-    let arr = tradesByGroup.get(gid);
-    if (!arr) {
-      arr = [];
-      tradesByGroup.set(gid, arr);
-    }
-    arr.push(t);
-  }
+  const earliestLedgerDate = Array.from(ledgers.values())
+    .flatMap((gl) => gl.ledger.map((entry) => entry.date))
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const earliestSourceDate = [trades[0]?.date, earliestLedgerDate]
+    .filter((date): date is Date => date instanceof Date)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
 
-  const startDate = valueHistoryStartDate(trades[0].date, days);
+  if (!earliestSourceDate) return { baseCurrency, series: [], points: [] };
+
+  const startDate = valueHistoryStartDate(earliestSourceDate, days);
 
   const instrumentIds = Array.from(new Set(trades.map((t) => t.instrumentId)));
   const prices = await db.priceHistory.findMany({
@@ -589,7 +603,12 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
   }
 
   const dates = uniqueSortedDates(
-    prices.map((p) => p.date),
+    [
+      ...prices.map((p) => p.date),
+      ...Array.from(ledgers.values()).flatMap((gl) =>
+        gl.ledger.map((entry) => entry.date),
+      ),
+    ],
     startDate,
   );
   if (dates.length === 0) return { baseCurrency, series: [], points: [] };
@@ -605,36 +624,33 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
     return rate;
   }
 
-  const ledgers = new Map<
-    string,
-    Awaited<ReturnType<typeof getGroupCashLedger>>
-  >();
-  await Promise.all(
-    groups.map(async (g) => {
-      ledgers.set(g.id, await getGroupCashLedger(g.id));
-    }),
-  );
-
   const points: Array<{ date: Date } & Record<string, number>> = [];
   for (const day of dates) {
     const row = { date: day } as { date: Date } & Record<string, number>;
-    for (const g of groups) {
-      const gTrades = tradesByGroup.get(g.id) ?? [];
-      const instSet = Array.from(new Set(gTrades.map((t) => t.instrumentId)));
-      let equity = ZERO;
-      for (const instrumentId of instSet) {
-        const qty = quantityHeldOn(gTrades, instrumentId, day, splits);
-        if (qty.isZero()) continue;
-        const close = priceOn(pricesByInstrument.get(instrumentId), day);
-        if (!close) continue;
-        const tr = gTrades.find((t) => t.instrumentId === instrumentId);
-        if (!tr) continue;
-        const fx = await fxOn(tr.instrument.currency, baseCurrency, day);
-        equity = equity.plus(qty.times(close).times(fx));
-      }
+    const bucketValues: Record<HomeAssetBucketKey, Decimal> = {
+      equities: ZERO,
+      cash: ZERO,
+      hisa: ZERO,
+      income: ZERO,
+    };
 
-      let pureCash = ZERO;
-      let hisa = ZERO;
+    for (const instrumentId of instrumentIds) {
+      const qty = quantityHeldOn(trades, instrumentId, day, splits);
+      if (qty.lte(0)) continue;
+      const close = priceOn(pricesByInstrument.get(instrumentId), day);
+      if (!close) continue;
+      const tr = trades.find((t) => t.instrumentId === instrumentId);
+      if (!tr) continue;
+      const bucket = homeAssetBucketForInstrumentType(
+        tr.instrument.instrumentType,
+      );
+      const fx = await fxOn(tr.instrument.currency, baseCurrency, day);
+      bucketValues[bucket] = bucketValues[bucket].plus(
+        qty.times(close).times(fx),
+      );
+    }
+
+    for (const g of groups) {
       const gl = ledgers.get(g.id);
       if (gl) {
         const balances = cashBalancesByVehicleInGroupBaseThroughUtcDay(
@@ -642,59 +658,43 @@ export async function getValueHistoryByGroup(days?: number): Promise<{
           day,
         );
         if (!balances.pureCash.isZero()) {
-          pureCash = await convert(
+          const pureCash = await convert(
             balances.pureCash,
             gl.baseCurrency,
             baseCurrency,
             day,
           );
+          bucketValues.cash = bucketValues.cash.plus(pureCash);
         }
         if (!balances.cashInvestments.isZero()) {
-          hisa = await convert(
+          const hisa = await convert(
             balances.cashInvestments,
             gl.baseCurrency,
             baseCurrency,
             day,
           );
+          bucketValues.hisa = bucketValues.hisa.plus(hisa);
         }
       }
-
-      row[`g_${g.id}_eq`] = Number(equity.toFixed(2));
-      row[`g_${g.id}_cash`] = Number(pureCash.toFixed(2));
-      row[`g_${g.id}_hisa`] = Number(hisa.toFixed(2));
     }
+
+    row.equities = Number(bucketValues.equities.toFixed(2));
+    row.cash = Number(bucketValues.cash.toFixed(2));
+    row.hisa = Number(bucketValues.hisa.toFixed(2));
+    row.income = Number(bucketValues.income.toFixed(2));
     points.push(row);
   }
 
-  const activeGroups = groups.filter((g) =>
-    points.some(
-      (row) =>
-        (row[`g_${g.id}_eq`] ?? 0) !== 0 ||
-        (row[`g_${g.id}_cash`] ?? 0) !== 0 ||
-        (row[`g_${g.id}_hisa`] ?? 0) !== 0,
-    ),
-  );
-  const series: GroupValueHistorySeries[] = [];
-  activeGroups.forEach((g, gi) => {
-    series.push({
-      key: `g_${g.id}_eq`,
-      label: `${g.name} — Equities`,
-      groupIndex: gi,
-      variant: "equities",
-    });
-    series.push({
-      key: `g_${g.id}_cash`,
-      label: `${g.name} — Cash-like`,
-      groupIndex: gi,
-      variant: "cash",
-    });
-    series.push({
-      key: `g_${g.id}_hisa`,
-      label: `${g.name} — HISA`,
-      groupIndex: gi,
-      variant: "hisa",
-    });
-  });
+  const series: GroupValueHistorySeries[] = (
+    ["equities", "cash", "hisa", "income"] satisfies HomeAssetBucketKey[]
+  )
+    .filter((key) => points.some((row) => (row[key] ?? 0) > 0))
+    .map((key) => ({
+      key,
+      label: HOME_ASSET_BUCKET_LABELS[key],
+      variant: key === "income" ? "income" : key,
+      homeBucket: key,
+    }));
 
   return { baseCurrency, series, points };
 }

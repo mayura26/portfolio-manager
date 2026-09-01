@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { homeAssetBucketColor } from "@/lib/chart-colors";
 
 type Slice = {
   key: string;
@@ -28,6 +29,22 @@ const PALETTE = [
   "#8a8378", // muted
   "#3a4a5a",
 ];
+
+function colorForSlice(slice: Slice, idx: number): string {
+  if (slice.key === "cash:hisa" || slice.label === "HISA") {
+    return homeAssetBucketColor("hisa");
+  }
+  if (slice.key === "cash:pure" || slice.label === "Cash") {
+    return homeAssetBucketColor("cash");
+  }
+  if (slice.label === "Income / bonds") {
+    return homeAssetBucketColor("income");
+  }
+  if (slice.label === "Equities") {
+    return homeAssetBucketColor("equities");
+  }
+  return PALETTE[idx % PALETTE.length];
+}
 
 export function AllocationChartClient({
   slices,
@@ -66,7 +83,7 @@ export function AllocationChartClient({
               {slices.map((slice, idx) => (
                 <Cell
                   key={slice.key}
-                  fill={PALETTE[idx % PALETTE.length]}
+                  fill={colorForSlice(slice, idx)}
                   className={slice.href ? "cursor-pointer" : undefined}
                   onClick={() => navigateToSlice(slice)}
                   onKeyDown={(event) => {
@@ -116,7 +133,7 @@ export function AllocationChartClient({
       <ul className="flex flex-col gap-2 self-center text-sm">
         {slices.map((s, idx) => (
           <li key={s.key}>
-            <LegendItem slice={s} color={PALETTE[idx % PALETTE.length]} />
+            <LegendItem slice={s} color={colorForSlice(s, idx)} />
           </li>
         ))}
       </ul>
