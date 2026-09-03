@@ -30,13 +30,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (
-    file.type &&
-    file.type !== "application/pdf" &&
-    !file.name.toLowerCase().endsWith(".pdf")
-  ) {
+  const lowerName = file.name.toLowerCase();
+  const lowerType = file.type.split(";")[0]?.trim().toLowerCase();
+  const acceptedTypes = new Set([
+    "",
+    "application/pdf",
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+  ]);
+  const acceptedExtension =
+    lowerName.endsWith(".pdf") || lowerName.endsWith(".csv");
+
+  if (!acceptedTypes.has(lowerType ?? "") && !acceptedExtension) {
     return NextResponse.json(
-      { ok: false, error: "Please upload a PDF statement." },
+      { ok: false, error: "Please upload a PDF or CSV statement." },
       { status: 400 },
     );
   }

@@ -5,7 +5,7 @@ import {
   classifyExternalCashAccountKind,
 } from "@/lib/cash-vehicles";
 import { db } from "@/lib/db";
-import { parseExternalCashStatementPdf } from "@/lib/import/external-cash-parser";
+import { parseExternalCashStatementFile } from "@/lib/import/external-cash-parser";
 
 export type ExternalCashImportResult = {
   imported: number;
@@ -30,7 +30,12 @@ export async function importExternalCashStatement(
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileHash = createHash("sha256").update(buffer).digest("hex");
-  const parsed = await parseExternalCashStatementPdf(buffer);
+  const parsed = await parseExternalCashStatementFile(
+    buffer,
+    file.name,
+    file.type,
+  );
+  const parserSkipped = parsed.ignoredTransactionsCount ?? 0;
 
   const existingImport = await db.cashStatementImport.findUnique({
     where: {
@@ -47,7 +52,7 @@ export async function importExternalCashStatement(
     );
     return {
       imported: 0,
-      skipped: parsed.transactions.length,
+      skipped: parsed.transactions.length + parserSkipped,
       reconciliationDelta: existingImport.reconciliationDelta.toString(),
       statementEndingBalance: parsed.endingBalance,
       accountLast4: parsed.accountLast4,
@@ -91,72 +96,78 @@ export async function importExternalCashStatement(
       statementImportId: statementImport.id,
     }));
 
-    const created = await tx.cashTransaction.createMany({
-      data: rows,
-      skipDuplicates: true,
-    });
+    const created =
+      rows.length > 0
+        ? await tx.cashTransaction.createMany({
+            data: rows,
+            skipDuplicates: true,
+          })
+        : { count: 0 };
 
-    const skipped = parsed.transactions.length - created.count;
+    const skipped = parsed.transactions.length - created.count + parserSkipped;
 
-    const existingAccountTxs = await tx.cashTransaction.findMany({
-      where: {
-        groupId,
-        source: "EXTERNAL_STATEMENT",
-        sourceAccountKey: parsed.sourceAccountKey,
-        date: { lte: endOfUtcDay(parsed.periodEnd) },
-      },
-      select: {
-        type: true,
-        amount: true,
-        currency: true,
-      },
-    });
-
-    const knownBalance = existingAccountTxs.reduce((sum, row) => {
-      if (row.currency !== parsed.currency) return sum;
-      const amount = new Decimal(row.amount.toString());
-      // INTEREST and DEPOSIT/SEED are all inflows; only WITHDRAWAL is an outflow.
-      return row.type === "WITHDRAWAL" ? sum.minus(amount) : sum.plus(amount);
-    }, new Decimal(0));
-
-    const endingBalance = new Decimal(parsed.endingBalance);
-    const reconciliationDelta = endingBalance.minus(knownBalance);
-    const hasPriorAccountTx = await tx.cashTransaction.findFirst({
-      where: {
-        groupId,
-        source: "EXTERNAL_STATEMENT",
-        sourceAccountKey: parsed.sourceAccountKey,
-        statementImportId: { not: statementImport.id },
-      },
-      select: { id: true },
-    });
-
-    if (!reconciliationDelta.abs().lt(new Decimal("0.0001"))) {
-      const type = !hasPriorAccountTx
-        ? "SEED"
-        : reconciliationDelta.gt(0)
-          ? "DEPOSIT"
-          : "WITHDRAWAL";
-      const amount = reconciliationDelta.abs();
-      await tx.cashTransaction.create({
-        data: {
+    let reconciliationDelta = new Decimal(0);
+    if (parsed.reconcileEndingBalance !== false) {
+      const existingAccountTxs = await tx.cashTransaction.findMany({
+        where: {
           groupId,
-          type,
-          amount: amount.toFixed(4),
-          currency: parsed.currency,
-          date: parsed.periodStart,
-          notes: `Reconciliation adjustment for ${parsed.provider} account ending ${parsed.accountLast4}`,
-          externalRef: fingerprint(
-            "reconcile",
-            parsed.sourceAccountKey,
-            parsed.periodEnd.toISOString(),
-            parsed.endingBalance,
-          ),
           source: "EXTERNAL_STATEMENT",
           sourceAccountKey: parsed.sourceAccountKey,
-          statementImportId: statementImport.id,
+          date: { lte: endOfUtcDay(parsed.periodEnd) },
+        },
+        select: {
+          type: true,
+          amount: true,
+          currency: true,
         },
       });
+
+      const knownBalance = existingAccountTxs.reduce((sum, row) => {
+        if (row.currency !== parsed.currency) return sum;
+        const amount = new Decimal(row.amount.toString());
+        // INTEREST and DEPOSIT/SEED are all inflows; only WITHDRAWAL is an outflow.
+        return row.type === "WITHDRAWAL" ? sum.minus(amount) : sum.plus(amount);
+      }, new Decimal(0));
+
+      const endingBalance = new Decimal(parsed.endingBalance);
+      reconciliationDelta = endingBalance.minus(knownBalance);
+      const hasPriorAccountTx = await tx.cashTransaction.findFirst({
+        where: {
+          groupId,
+          source: "EXTERNAL_STATEMENT",
+          sourceAccountKey: parsed.sourceAccountKey,
+          statementImportId: { not: statementImport.id },
+        },
+        select: { id: true },
+      });
+
+      if (!reconciliationDelta.abs().lt(new Decimal("0.0001"))) {
+        const type = !hasPriorAccountTx
+          ? "SEED"
+          : reconciliationDelta.gt(0)
+            ? "DEPOSIT"
+            : "WITHDRAWAL";
+        const amount = reconciliationDelta.abs();
+        await tx.cashTransaction.create({
+          data: {
+            groupId,
+            type,
+            amount: amount.toFixed(4),
+            currency: parsed.currency,
+            date: parsed.periodStart,
+            notes: `Reconciliation adjustment for ${parsed.provider} account ending ${parsed.accountLast4}`,
+            externalRef: fingerprint(
+              "reconcile",
+              parsed.sourceAccountKey,
+              parsed.periodEnd.toISOString(),
+              parsed.endingBalance,
+            ),
+            source: "EXTERNAL_STATEMENT",
+            sourceAccountKey: parsed.sourceAccountKey,
+            statementImportId: statementImport.id,
+          },
+        });
+      }
     }
 
     await tx.cashStatementImport.update({

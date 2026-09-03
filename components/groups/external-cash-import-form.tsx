@@ -36,7 +36,7 @@ export function ExternalCashImportForm({ groupId, statementCurrency }: Props) {
 
     const file = fileRef.current?.files?.[0];
     if (!file) {
-      setResult({ ok: false, error: "Please select a PDF statement." });
+      setResult({ ok: false, error: "Please select a PDF or CSV statement." });
       return;
     }
 
@@ -67,14 +67,14 @@ export function ExternalCashImportForm({ groupId, statementCurrency }: Props) {
       <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
         <div className="flex flex-col gap-2">
           <label htmlFor="external-cash-file" className="label">
-            CommBank Transaction Summary PDF
+            CommBank PDF or ING CSV
           </label>
           <input
             ref={fileRef}
             id="external-cash-file"
             name="file"
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,text/csv,.csv"
             required
             className="hairline w-full bg-surface px-3 py-2 text-sm text-foreground file:mr-4 file:border-0 file:bg-transparent file:text-sm file:text-muted"
           />

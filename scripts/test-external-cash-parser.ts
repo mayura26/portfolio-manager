@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { classifyExternalCashAccountKind } from "@/lib/cash-vehicles";
-import { parseCommBankTransactionSummaryText } from "@/lib/import/external-cash-parser";
+import {
+  parseCommBankTransactionSummaryText,
+  parseIngCashTransactionsCsv,
+} from "@/lib/import/external-cash-parser";
 
 const fixture = `
 Created 18/05/26 06:11pm (Sydney/Melbourne time)
@@ -60,6 +63,7 @@ assert.deepEqual(
 );
 assert.equal(classifyExternalCashAccountKind("Smart Access"), "CASH");
 assert.equal(classifyExternalCashAccountKind("NetBank Saver"), "HISA");
+assert.equal(classifyExternalCashAccountKind("ING HISA"), "HISA");
 
 // CommBank PDFs can wrap transaction descriptions across lines; the continuation
 // must stay attached to the dated row so the transfer is not skipped.
@@ -91,6 +95,40 @@ assert.deepEqual(
       "Transfer from xx2394 CommBank app savings",
       "8500.0000",
       "69522.5700",
+    ],
+  ],
+);
+
+const ingCsv = `Date,Description,Credit,Debit,Balance
+02/09/2026,"KANTHAVEL VIVEKANANDA Savings - Osko Payment - Receipt 602944 ",3000.00,,72522.57
+02/09/2026,"KANTHAVEL VIVEKANANDA Transfer - Osko Payment - Receipt 567384 ",31222.57,,69522.57
+02/09/2026,"KANTHAVEL VIVEKANANDA Transfer - Osko Payment - Receipt 136637 ",38200.00,,38300.00
+01/09/2026,"KANTHAVEL VIVEKANANDA Transfer - Osko Payment - Receipt 572352 ",100.00,,100.00
+`;
+
+const parsedIng = parseIngCashTransactionsCsv(ingCsv);
+assert.equal(parsedIng.provider, "ING");
+assert.equal(parsedIng.accountLast4, "HISA");
+assert.equal(parsedIng.sourceAccountKey, "ING:HISA");
+assert.equal(parsedIng.accountType, "ING HISA");
+assert.equal(parsedIng.currency, "AUD");
+assert.equal(parsedIng.endingBalance, "72522.5700");
+assert.equal(parsedIng.ignoredTransactionsCount, 3);
+assert.equal(parsedIng.reconcileEndingBalance, false);
+assert.equal(parsedIng.transactions.length, 1);
+assert.deepEqual(
+  parsedIng.transactions.map((tx) => [
+    tx.type,
+    tx.description,
+    tx.amount,
+    tx.balance,
+  ]),
+  [
+    [
+      "DEPOSIT",
+      "KANTHAVEL VIVEKANANDA Savings - Osko Payment - Receipt 602944",
+      "3000.0000",
+      "72522.5700",
     ],
   ],
 );
