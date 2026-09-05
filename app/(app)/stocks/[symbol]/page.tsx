@@ -24,7 +24,14 @@ import { SignalsCard } from "@/components/stocks/signals-card";
 import { SmartMoneyCard } from "@/components/stocks/smart-money-card";
 import { db } from "@/lib/db";
 import { resolveActiveForecast } from "@/lib/forecasts";
+import {
+  formatCurrency,
+  formatPercent,
+  formatQuantity,
+  pnlClass,
+} from "@/lib/format";
 import { resolveInstrumentYahooSymbolFromUrlPath } from "@/lib/instruments";
+import { type AggregatePosition, aggregateOpenPositions } from "@/lib/signals";
 
 type Params = Promise<{ symbol: string }>;
 type SearchParams = Promise<{ range?: string | string[] }>;
@@ -38,6 +45,9 @@ export default function StockOverviewPage({
       <div className="flex flex-col gap-10 lg:col-span-2">
         <section>
           <h2 className="display mb-4 text-2xl text-foreground">Price</h2>
+          <Suspense fallback={null}>
+            <ActivePositionLoader params={params} />
+          </Suspense>
           <div className="flex flex-col gap-4">
             <Suspense fallback={<PriceChartSkeleton />}>
               <PriceChartLoader params={params} searchParams={searchParams} />
@@ -89,6 +99,103 @@ export default function StockOverviewPage({
           <NewsLoader params={params} />
         </Suspense>
       </aside>
+    </div>
+  );
+}
+
+async function ActivePositionLoader({ params }: { params: Params }) {
+  const { symbol } = await params;
+  const yahooSymbol = await resolveInstrumentYahooSymbolFromUrlPath(symbol);
+  if (!yahooSymbol) return null;
+  const instrument = await db.instrument.findUnique({
+    where: { yahooSymbol },
+    select: { id: true },
+  });
+  if (!instrument) return null;
+
+  const position =
+    (await aggregateOpenPositions()).find(
+      (p) => p.instrumentId === instrument.id,
+    ) ?? null;
+  if (!position) return null;
+
+  return <ActivePositionBanner position={position} />;
+}
+
+function ActivePositionBanner({ position }: { position: AggregatePosition }) {
+  const pnl = position.unrealizedPnL;
+  const pnlPercent = position.unrealizedPnLPercent;
+  const pnlTone = pnl ? pnlClass(pnl) : "text-muted";
+
+  return (
+    <div className="hairline mb-4 bg-surface px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="label text-[0.65rem] text-subtle">Active position</p>
+          <p className="mt-1 truncate text-sm text-foreground">
+            <span className="tabular font-medium">
+              {formatQuantity(position.quantity)}
+            </span>{" "}
+            shares @{" "}
+            <span className="tabular">
+              {formatCurrency(position.avgCostInstrument, position.currency)}
+            </span>
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-sm sm:min-w-72">
+          <PositionMetric
+            label="Value"
+            value={
+              position.marketValueBase
+                ? formatCurrency(
+                    position.marketValueBase,
+                    position.baseCurrency,
+                  )
+                : "-"
+            }
+          />
+          <PositionMetric
+            label="P&L"
+            value={
+              pnl
+                ? formatCurrency(pnl, position.baseCurrency, { signed: true })
+                : "-"
+            }
+            detail={
+              pnlPercent
+                ? formatPercent(pnlPercent.dividedBy(100), {
+                    decimals: 1,
+                    signed: true,
+                  })
+                : null
+            }
+            valueClassName={pnlTone}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PositionMetric({
+  label,
+  value,
+  detail,
+  valueClassName = "text-foreground",
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="label text-[0.65rem] text-subtle">{label}</p>
+      <p className={`tabular truncate font-medium ${valueClassName}`}>
+        {value}
+      </p>
+      {detail ? <p className="tabular text-xs text-subtle">{detail}</p> : null}
     </div>
   );
 }

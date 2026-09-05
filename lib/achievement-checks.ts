@@ -70,6 +70,32 @@ function achievementMetadata(
   };
 }
 
+function formatPortfolioHighMessage(
+  prev: AchievementRecordSnapshot | null,
+  value: Decimal,
+  date: Date,
+): { message: string; itemLabel: string; increasePercent: string | null } {
+  if (!prev || prev.value.lte(0)) {
+    return {
+      message: `Your portfolio set its first recorded all-time high on ${formatDate(date)}`,
+      itemLabel: "All-time high: first recorded high",
+      increasePercent: null,
+    };
+  }
+
+  const increasePercent = value.minus(prev.value).dividedBy(prev.value);
+  const formattedIncrease = formatPercent(increasePercent, {
+    decimals: 2,
+    signed: false,
+  });
+
+  return {
+    message: `Your portfolio set a new record, ${formattedIncrease} higher than the last portfolio high, on ${formatDate(date)}`,
+    itemLabel: `All-time high: ${formattedIncrease} higher than previous`,
+    increasePercent: increasePercent.times(100).toFixed(4),
+  };
+}
+
 export async function checkAndUpdateAchievements(): Promise<{
   updated: string[];
   errors: string[];
@@ -95,7 +121,12 @@ export async function checkAndUpdateAchievements(): Promise<{
             achievementMetadata(prev, { currency }, shouldNotify, now),
           );
           if (shouldNotify) {
-            const message = `Your portfolio hit a new record: ${formatCurrency(stats.allTimeHigh.value, currency)} on ${formatDate(stats.allTimeHigh.date)}`;
+            const { message, itemLabel, increasePercent } =
+              formatPortfolioHighMessage(
+                prev,
+                stats.allTimeHigh.value,
+                stats.allTimeHigh.date,
+              );
             notifications.push({
               type: "ACHIEVEMENT",
               groupKey: "achievements",
@@ -105,9 +136,10 @@ export async function checkAndUpdateAchievements(): Promise<{
                 key: "portfolio_ath",
                 value: stats.allTimeHigh.value.toString(),
                 currency,
+                increasePercent,
               },
               priority: 2,
-              itemLabel: `All-time high: ${formatCurrency(stats.allTimeHigh.value, currency)}`,
+              itemLabel,
               batchLabelSingular: "achievement unlocked",
               batchLabelPlural: "achievements unlocked",
             });
