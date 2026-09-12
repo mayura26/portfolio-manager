@@ -3,6 +3,7 @@ import { AchievementRecords } from "@/components/stats/achievement-records";
 import { ActivityPanel } from "@/components/stats/activity-panel";
 import { PositionRecords } from "@/components/stats/position-records";
 import { StatsSkeleton } from "@/components/stats/stats-skeleton";
+import { getDashboardSummary } from "@/lib/dashboard";
 
 export default function StatsPage() {
   return (
@@ -24,20 +25,32 @@ export default function StatsPage() {
 
 async function StatsContent() {
   const { getPortfolioStats } = await import("@/lib/stats");
-  const stats = await getPortfolioStats();
+  const [stats, summary] = await Promise.all([
+    getPortfolioStats(),
+    getDashboardSummary(),
+  ]);
 
   return (
     <div className="flex flex-col gap-10">
       <section className="flex flex-col gap-4">
         <h2 className="display text-2xl text-foreground">Portfolio records</h2>
         <p className="text-sm text-muted">
-          All-time highs and biggest single-day swings across your entire account.
+          All-time highs and biggest single-day swings across your entire
+          account.
         </p>
-        <AchievementRecords stats={stats} />
+        <AchievementRecords
+          stats={stats}
+          currentValue={summary.totalMarketValueBase.plus(
+            summary.totalCashBase,
+          )}
+          hasMissingPrices={summary.hasMissingPrices}
+        />
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="display text-2xl text-foreground">Position hall of fame</h2>
+        <h2 className="display text-2xl text-foreground">
+          Position hall of fame
+        </h2>
         <p className="text-sm text-muted">
           Your best and worst positions, by unrealized and realized P&amp;L.
         </p>

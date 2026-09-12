@@ -1,11 +1,20 @@
+import type Decimal from "decimal.js";
 import { ArrowDownRight, ArrowUpRight, Trophy } from "lucide-react";
 import Link from "next/link";
-import type { DayContributor, PortfolioStats } from "@/lib/stats";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import type { DayContributor, PortfolioStats } from "@/lib/stats";
 
-type Props = { stats: PortfolioStats };
+type Props = {
+  stats: PortfolioStats;
+  currentValue: Decimal;
+  hasMissingPrices: boolean;
+};
 
-export function AchievementRecords({ stats }: Props) {
+export function AchievementRecords({
+  stats,
+  currentValue,
+  hasMissingPrices,
+}: Props) {
   const { baseCurrency, allTimeHigh, bestDay, worstDay } = stats;
 
   const cards: Array<{
@@ -13,18 +22,30 @@ export function AchievementRecords({ stats }: Props) {
     value: string;
     sub?: string;
     hint?: string;
+    distance?: string;
     tone: "gain" | "loss" | "neutral";
     icon?: React.ReactNode;
     contributors?: DayContributor[];
   }> = [];
 
   if (allTimeHigh) {
+    const gap = allTimeHigh.value.minus(currentValue).toDecimalPlaces(2);
+    const percentage = allTimeHigh.value.gt(0)
+      ? ` (${formatPercent(gap.abs().dividedBy(allTimeHigh.value), { signed: false })})`
+      : "";
     cards.push({
       label: "All-time high",
       value: formatCurrency(allTimeHigh.value, baseCurrency),
       hint: formatDate(allTimeHigh.date),
+      distance: hasMissingPrices
+        ? "Distance unavailable — missing prices"
+        : gap.isZero()
+          ? "Currently at all-time high"
+          : `${formatCurrency(gap.abs(), baseCurrency)}${percentage} ${gap.gt(0) ? "below" : "above"} ATH`,
       tone: "gain",
-      icon: <Trophy className="h-4 w-4 text-[var(--warning)]" strokeWidth={1.5} />,
+      icon: (
+        <Trophy className="h-4 w-4 text-[var(--warning)]" strokeWidth={1.5} />
+      ),
     });
   }
 
@@ -32,7 +53,9 @@ export function AchievementRecords({ stats }: Props) {
     cards.push({
       label: "Best single day",
       value: formatCurrency(bestDay.changeBase, baseCurrency, { signed: true }),
-      sub: formatPercent(bestDay.changePercent.dividedBy(100), { signed: true }),
+      sub: formatPercent(bestDay.changePercent.dividedBy(100), {
+        signed: true,
+      }),
       hint: formatDate(bestDay.date),
       tone: "gain",
       icon: <ArrowUpRight className="h-4 w-4 text-gain" strokeWidth={1.5} />,
@@ -43,8 +66,12 @@ export function AchievementRecords({ stats }: Props) {
   if (worstDay) {
     cards.push({
       label: "Worst single day",
-      value: formatCurrency(worstDay.changeBase, baseCurrency, { signed: true }),
-      sub: formatPercent(worstDay.changePercent.dividedBy(100), { signed: true }),
+      value: formatCurrency(worstDay.changeBase, baseCurrency, {
+        signed: true,
+      }),
+      sub: formatPercent(worstDay.changePercent.dividedBy(100), {
+        signed: true,
+      }),
       hint: formatDate(worstDay.date),
       tone: "loss",
       icon: <ArrowDownRight className="h-4 w-4 text-loss" strokeWidth={1.5} />,
@@ -87,6 +114,14 @@ export function AchievementRecords({ stats }: Props) {
           {card.hint ? (
             <p className="mt-2 text-xs text-subtle">{card.hint}</p>
           ) : null}
+          {card.distance ? (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="label text-[0.65rem]">Current distance</p>
+              <p className="tabular mt-2 text-sm text-foreground">
+                {card.distance}
+              </p>
+            </div>
+          ) : null}
           {card.contributors && card.contributors.length > 0 ? (
             <ContributionList
               contributors={card.contributors.slice(0, 3)}
@@ -110,7 +145,11 @@ function ContributionList({
   tone: "gain" | "loss" | "neutral";
 }) {
   const toneClass =
-    tone === "gain" ? "text-gain" : tone === "loss" ? "text-loss" : "text-muted";
+    tone === "gain"
+      ? "text-gain"
+      : tone === "loss"
+        ? "text-loss"
+        : "text-muted";
 
   return (
     <div className="mt-4 border-t border-border pt-3">
