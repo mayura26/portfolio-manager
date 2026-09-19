@@ -1,9 +1,11 @@
+import Decimal from "decimal.js";
+import Link from "next/link";
 import { Suspense } from "react";
-import { AchievementRecords } from "@/components/stats/achievement-records";
-import { ActivityPanel } from "@/components/stats/activity-panel";
-import { PositionRecords } from "@/components/stats/position-records";
+import { StatsRecordSections } from "@/components/stats/stats-record-sections";
 import { StatsSkeleton } from "@/components/stats/stats-skeleton";
 import { getDashboardSummary } from "@/lib/dashboard";
+
+const ZERO = new Decimal(0);
 
 export default function StatsPage() {
   return (
@@ -30,37 +32,52 @@ async function StatsContent() {
     getDashboardSummary(),
   ]);
 
+  const accountCurrent = summary.totalMarketValueBase.plus(
+    summary.totalCashBase,
+  );
+  const groupCurrent = new Map(
+    summary.groupValueBreakdown.map((row) => [row.groupId, row.totalBase]),
+  );
+
   return (
-    <div className="flex flex-col gap-10">
-      <section className="flex flex-col gap-4">
-        <h2 className="display text-2xl text-foreground">Portfolio records</h2>
-        <p className="text-sm text-muted">
-          All-time highs and biggest single-day swings across your entire
-          account.
-        </p>
-        <AchievementRecords
-          stats={stats}
-          currentValue={summary.totalMarketValueBase.plus(
-            summary.totalCashBase,
-          )}
-          hasMissingPrices={summary.hasMissingPrices}
-        />
-      </section>
+    <div className="flex flex-col gap-16">
+      <StatsRecordSections
+        stats={stats}
+        currentValue={accountCurrent}
+        hasMissingPrices={summary.hasMissingPrices}
+        recordsDescription="All-time highs and biggest single-day swings across your entire account."
+      />
 
-      <section className="flex flex-col gap-4">
-        <h2 className="display text-2xl text-foreground">
-          Position hall of fame
-        </h2>
-        <p className="text-sm text-muted">
-          Your best and worst positions, by unrealized and realized P&amp;L.
-        </p>
-        <PositionRecords stats={stats} />
-      </section>
+      {stats.groups.length >= 2 ? (
+        <div className="flex flex-col gap-16 border-t border-border pt-10">
+          <header>
+            <p className="label">Allocation buckets</p>
+            <h2 className="display mt-2 text-2xl text-foreground">By group</h2>
+            <p className="mt-2 max-w-prose text-sm text-muted">
+              The same records, scoped to each group&apos;s holdings and cash.
+            </p>
+          </header>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="display text-2xl text-foreground">Activity</h2>
-        <ActivityPanel stats={stats} />
-      </section>
+          {stats.groups.map((group) => (
+            <section key={group.groupId} className="flex flex-col gap-10">
+              <h3 className="display text-2xl text-foreground">
+                <Link
+                  href={`/groups/${group.groupId}`}
+                  className="hover:text-accent"
+                >
+                  {group.name}
+                </Link>
+              </h3>
+              <StatsRecordSections
+                stats={{ ...group, baseCurrency: stats.baseCurrency }}
+                currentValue={groupCurrent.get(group.groupId) ?? ZERO}
+                hasMissingPrices={summary.hasMissingPrices}
+                compact
+              />
+            </section>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

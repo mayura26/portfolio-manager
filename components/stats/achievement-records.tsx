@@ -2,10 +2,10 @@ import type Decimal from "decimal.js";
 import { ArrowDownRight, ArrowUpRight, Trophy } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
-import type { DayContributor, PortfolioStats } from "@/lib/stats";
+import type { DayContributor, StatsView } from "@/lib/stats";
 
 type Props = {
-  stats: PortfolioStats;
+  stats: StatsView;
   currentValue: Decimal;
   hasMissingPrices: boolean;
 };

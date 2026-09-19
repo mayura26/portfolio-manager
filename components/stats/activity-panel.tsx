@@ -1,6 +1,6 @@
-import type { PortfolioStats } from "@/lib/stats";
+import type { StatsView } from "@/lib/stats";
 
-type Props = { stats: PortfolioStats };
+type Props = { stats: StatsView };
 
 function pluralDays(n: number): string {
   return n === 1 ? "1 day" : `${n.toLocaleString()} days`;

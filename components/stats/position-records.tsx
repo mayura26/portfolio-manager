@@ -7,10 +7,10 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import type { PositionStat, PortfolioStats } from "@/lib/stats";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import type { PositionStat, StatsView } from "@/lib/stats";
 
-type Props = { stats: PortfolioStats };
+type Props = { stats: StatsView };
 
 type RecordRow = {
   label: string;
@@ -30,9 +30,13 @@ export function PositionRecords({ stats }: Props) {
     rows.push({
       label: "Biggest unrealized gain ($)",
       stat: stats.bestUnrealizedAbs,
-      primaryValue: formatCurrency(stats.bestUnrealizedAbs.value, baseCurrency, {
-        signed: true,
-      }),
+      primaryValue: formatCurrency(
+        stats.bestUnrealizedAbs.value,
+        baseCurrency,
+        {
+          signed: true,
+        },
+      ),
       secondaryValue: stats.bestUnrealizedAbs.percent
         ? formatPercent(stats.bestUnrealizedAbs.percent.dividedBy(100), {
             signed: true,
@@ -52,10 +56,14 @@ export function PositionRecords({ stats }: Props) {
             signed: true,
           })
         : "—",
-      secondaryValue: formatCurrency(stats.bestUnrealizedPct.value, baseCurrency, {
-        signed: true,
-        compact: true,
-      }),
+      secondaryValue: formatCurrency(
+        stats.bestUnrealizedPct.value,
+        baseCurrency,
+        {
+          signed: true,
+          compact: true,
+        },
+      ),
       tone: "gain",
       icon: <Percent className="h-4 w-4" strokeWidth={1.5} />,
     });
@@ -101,10 +109,7 @@ export function PositionRecords({ stats }: Props) {
   return (
     <ul className="hairline divide-y divide-border bg-surface-elevated">
       {rows.map((row) => (
-        <li
-          key={row.label}
-          className="flex items-center gap-4 px-5 py-4"
-        >
+        <li key={row.label} className="flex items-center gap-4 px-5 py-4">
           <div
             className={`flex h-9 w-9 shrink-0 items-center justify-center ${
               row.tone === "gain"
@@ -135,11 +140,15 @@ export function PositionRecords({ stats }: Props) {
               {row.primaryValue}
             </p>
             {row.secondaryValue ? (
-              <p className="tabular text-xs text-subtle">{row.secondaryValue}</p>
+              <p className="tabular text-xs text-subtle">
+                {row.secondaryValue}
+              </p>
             ) : null}
           </div>
 
-          <div className={`shrink-0 ${row.tone === "gain" ? "text-gain" : "text-loss"}`}>
+          <div
+            className={`shrink-0 ${row.tone === "gain" ? "text-gain" : "text-loss"}`}
+          >
             {row.tone === "gain" ? (
               <ArrowUpRight className="h-5 w-5" strokeWidth={1.5} />
             ) : (

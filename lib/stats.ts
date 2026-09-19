@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { getValueHistoryByGroup } from "@/lib/dashboard";
+import { getGroupValueHistory, getValueHistoryByGroup } from "@/lib/dashboard";
 import { db } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { computeHoldings } from "@/lib/holdings";
@@ -52,8 +52,7 @@ export type ActivityStats = {
   longestHoldingSymbol: string | null;
 };
 
-export type PortfolioStats = {
-  baseCurrency: string;
+export type RecordStats = {
   allTimeHigh: { value: Decimal; date: Date } | null;
   bestDay: DayStat | null;
   worstDay: DayStat | null;
@@ -63,6 +62,18 @@ export type PortfolioStats = {
   worstPositionAbs: PositionStat | null;
   activity: ActivityStats;
 };
+
+export type GroupRecordStats = RecordStats & {
+  groupId: string;
+  name: string;
+};
+
+export type PortfolioStats = RecordStats & {
+  baseCurrency: string;
+  groups: GroupRecordStats[];
+};
+
+export type StatsView = RecordStats & { baseCurrency: string };
 
 type SimpleLot = { qty: Decimal; unitCost: Decimal };
 type RealizedSplitState = {
@@ -378,147 +389,55 @@ function computeRealizedPnL(
   return realized;
 }
 
-export async function getPortfolioStats(): Promise<PortfolioStats> {
-  const settings = await getSettings();
-  const baseCurrency = settings.defaultBaseCurrency;
+type InstrumentEntry = {
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  unrealizedPnL: Decimal;
+  costBase: Decimal;
+};
 
-  // ── 1. All-time high + best/worst day from full value history ──────────
-  // Build a shared FX cache used across all sections
-  const fxCache = new Map<string, Decimal>();
-  async function cachedFx(
-    from: string,
-    to: string,
-    asOf?: Date,
-  ): Promise<Decimal> {
-    if (from === to) return ONE;
-    const dateKey = asOf ? utcDayKey(asOf) : "spot";
-    const key = `${from}-${to}-${dateKey}`;
-    const cached = fxCache.get(key);
-    if (cached) return cached;
-    const rate = await getFxRate(from, to, asOf);
-    fxCache.set(key, rate);
-    return rate;
+type RealizedEntry = {
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  realizedPnL: Decimal;
+};
+
+function historyPointTotal(
+  pt: { date: Date } & Record<string, number>,
+): Decimal {
+  let total = ZERO;
+  for (const [key, val] of Object.entries(pt)) {
+    if (key === "date") continue;
+    if (typeof val !== "number") continue;
+    total = total.plus(val);
   }
+  return total;
+}
 
-  // Daily records use market P&L only: prior-close quantity times the price/FX
-  // move to the current close. This excludes deposits, trades, and import jumps.
-  const allTrades = await db.trade.findMany({
-    where: visibleTradeWhere,
-    orderBy: [{ portfolioId: "asc" }, { instrumentId: "asc" }, { date: "asc" }],
-    include: {
-      instrument: {
-        select: { id: true, symbol: true, name: true, currency: true },
-      },
-      portfolio: { select: { baseCurrency: true } },
-    },
-  });
-
-  const history = await getValueHistoryByGroup(36500);
-
+function allTimeHighFromTotals(
+  totals: Array<{ date: Date; total: Decimal }>,
+): { value: Decimal; date: Date } | null {
   let allTimeHigh: { value: Decimal; date: Date } | null = null;
-  let bestDay: DayStat | null = null;
-  let worstDay: DayStat | null = null;
-
-  const totals = history.points.map((pt) => {
-    let total = ZERO;
-    for (const [key, val] of Object.entries(pt)) {
-      if (key === "date") continue;
-      total = total.plus(new Decimal(val as number));
-    }
-    return { date: pt.date, total };
-  });
-
-  for (let i = 0; i < totals.length; i++) {
-    const { date, total } = totals[i];
-
+  for (const { date, total } of totals) {
     if (!allTimeHigh || total.gt(allTimeHigh.value)) {
       allTimeHigh = { value: total, date };
     }
   }
+  return allTimeHigh;
+}
 
-  const instrumentIds = Array.from(
-    new Set(allTrades.map((trade) => trade.instrumentId)),
-  );
-  const splits = await loadStockSplits(instrumentIds);
-  const earliestTradeDate =
-    allTrades.length > 0
-      ? allTrades
-          .map((trade) => utcDayStart(trade.date))
-          .reduce((earliest, date) =>
-            date.getTime() < earliest.getTime() ? date : earliest,
-          )
-      : null;
-  const dailyPriceRows =
-    instrumentIds.length > 0 && earliestTradeDate
-      ? await db.priceHistory.findMany({
-          where: {
-            instrumentId: { in: instrumentIds },
-            date: { gte: earliestTradeDate },
-          },
-          orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
-        })
-      : [];
-  const marketRecords = await computeMarketDayRecords({
-    trades: allTrades,
-    prices: dailyPriceRows,
-    baseCurrency,
-    fxOn: cachedFx,
-    splits,
-  });
-  bestDay = marketRecords.bestDay;
-  worstDay = marketRecords.worstDay;
-
-  // ── 2. Per-position unrealized P&L (open positions) ───────────────────
-  const portfolios = await db.portfolio.findMany({
-    where: excludeEmptyUnassignedWhere,
-    select: { id: true, baseCurrency: true },
-  });
-
-  type InstrumentEntry = {
-    instrumentId: string;
-    symbol: string;
-    name: string;
-    unrealizedPnL: Decimal;
-    costBase: Decimal;
-  };
-  const unrealizedMap = new Map<string, InstrumentEntry>();
-  const openInstrumentIds = new Set<string>();
-
-  for (const portfolio of portfolios) {
-    const data = await computeHoldings(portfolio.id);
-    const toGlobal =
-      portfolio.baseCurrency === baseCurrency
-        ? ONE
-        : await getFxRate(portfolio.baseCurrency, baseCurrency);
-
-    for (const h of data.holdings) {
-      if (h.unrealizedPnL === null) continue;
-      openInstrumentIds.add(h.instrumentId);
-
-      const unrealizedGlobal = h.unrealizedPnL.times(toGlobal);
-      const costGlobal = h.costBase.times(toGlobal);
-
-      const existing = unrealizedMap.get(h.instrumentId);
-      if (existing) {
-        existing.unrealizedPnL = existing.unrealizedPnL.plus(unrealizedGlobal);
-        existing.costBase = existing.costBase.plus(costGlobal);
-      } else {
-        unrealizedMap.set(h.instrumentId, {
-          instrumentId: h.instrumentId,
-          symbol: h.symbol,
-          name: h.name,
-          unrealizedPnL: unrealizedGlobal,
-          costBase: costGlobal,
-        });
-      }
-    }
-  }
-
+function pickUnrealizedRecords(map: Map<string, InstrumentEntry>): {
+  bestUnrealizedAbs: PositionStat | null;
+  bestUnrealizedPct: PositionStat | null;
+  worstPositionAbs: PositionStat | null;
+} {
   let bestUnrealizedAbs: PositionStat | null = null;
   let bestUnrealizedPct: PositionStat | null = null;
   let worstPositionAbs: PositionStat | null = null;
 
-  for (const entry of unrealizedMap.values()) {
+  for (const entry of map.values()) {
     const pct = entry.costBase.gt(0)
       ? entry.unrealizedPnL.dividedBy(entry.costBase).times(100)
       : null;
@@ -555,21 +474,283 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
     }
   }
 
-  // Only show worst if it's actually negative
   if (worstPositionAbs?.value.gte(0)) {
     worstPositionAbs = null;
   }
 
-  // ── 3. Per-instrument realized P&L (all instruments, open + closed) ────
-  type RealizedEntry = {
+  return { bestUnrealizedAbs, bestUnrealizedPct, worstPositionAbs };
+}
+
+function pickBestRealized(
+  map: Map<string, RealizedEntry>,
+): PositionStat | null {
+  let bestRealizedAbs: PositionStat | null = null;
+  for (const entry of map.values()) {
+    if (entry.realizedPnL.lte(0)) continue;
+    if (!bestRealizedAbs || entry.realizedPnL.gt(bestRealizedAbs.value)) {
+      bestRealizedAbs = {
+        instrumentId: entry.instrumentId,
+        symbol: entry.symbol,
+        name: entry.name,
+        value: entry.realizedPnL,
+        percent: null,
+      };
+    }
+  }
+  return bestRealizedAbs;
+}
+
+function addUnrealized(
+  map: Map<string, InstrumentEntry>,
+  holding: {
     instrumentId: string;
     symbol: string;
     name: string;
-    realizedPnL: Decimal;
-  };
-  const realizedMap = new Map<string, RealizedEntry>();
+    unrealizedPnL: Decimal;
+    costBase: Decimal;
+  },
+) {
+  const existing = map.get(holding.instrumentId);
+  if (existing) {
+    existing.unrealizedPnL = existing.unrealizedPnL.plus(holding.unrealizedPnL);
+    existing.costBase = existing.costBase.plus(holding.costBase);
+    return;
+  }
+  map.set(holding.instrumentId, {
+    instrumentId: holding.instrumentId,
+    symbol: holding.symbol,
+    name: holding.name,
+    unrealizedPnL: holding.unrealizedPnL,
+    costBase: holding.costBase,
+  });
+}
 
-  // Group by (portfolioId, instrumentId) to run FIFO per portfolio
+function addRealized(map: Map<string, RealizedEntry>, entry: RealizedEntry) {
+  const existing = map.get(entry.instrumentId);
+  if (existing) {
+    existing.realizedPnL = existing.realizedPnL.plus(entry.realizedPnL);
+    return;
+  }
+  map.set(entry.instrumentId, { ...entry });
+}
+
+function computeActivity(
+  trades: Array<{
+    instrumentId: string;
+    type: string;
+    date: Date;
+    instrument: { symbol: string };
+  }>,
+  openInstrumentIds: Set<string>,
+): ActivityStats {
+  const uniqueInstruments = new Set(trades.map((t) => t.instrumentId)).size;
+  let longestHoldingDays: number | null = null;
+  let longestHoldingSymbol: string | null = null;
+
+  if (openInstrumentIds.size > 0) {
+    const oldestByInstrument = new Map<
+      string,
+      { date: Date; symbol: string }
+    >();
+    for (const trade of trades) {
+      if (trade.type !== "BUY" || !openInstrumentIds.has(trade.instrumentId)) {
+        continue;
+      }
+      const existing = oldestByInstrument.get(trade.instrumentId);
+      if (!existing || trade.date.getTime() < existing.date.getTime()) {
+        oldestByInstrument.set(trade.instrumentId, {
+          date: trade.date,
+          symbol: trade.instrument.symbol,
+        });
+      }
+    }
+
+    const now = Date.now();
+    for (const { date, symbol } of oldestByInstrument.values()) {
+      const days = Math.floor((now - date.getTime()) / (1000 * 60 * 60 * 24));
+      if (longestHoldingDays === null || days > longestHoldingDays) {
+        longestHoldingDays = days;
+        longestHoldingSymbol = symbol;
+      }
+    }
+  }
+
+  return {
+    totalTrades: trades.length,
+    uniqueInstruments,
+    longestHoldingDays,
+    longestHoldingSymbol,
+  };
+}
+
+export async function getPortfolioStats(): Promise<PortfolioStats> {
+  const settings = await getSettings();
+  const baseCurrency = settings.defaultBaseCurrency;
+
+  const fxCache = new Map<string, Decimal>();
+  async function cachedFx(
+    from: string,
+    to: string,
+    asOf?: Date,
+  ): Promise<Decimal> {
+    if (from.toUpperCase() === to.toUpperCase()) return ONE;
+    const dateKey = asOf ? utcDayKey(asOf) : "spot";
+    const key = `${from}-${to}-${dateKey}`;
+    const cached = fxCache.get(key);
+    if (cached) return cached;
+    const rate = await getFxRate(from, to, asOf);
+    fxCache.set(key, rate);
+    return rate;
+  }
+
+  const [groups, allTrades, history, portfolios] = await Promise.all([
+    db.portfolioGroup.findMany({
+      select: { id: true, name: true, baseCurrency: true },
+      orderBy: { name: "asc" },
+    }),
+    db.trade.findMany({
+      where: visibleTradeWhere,
+      orderBy: [
+        { portfolioId: "asc" },
+        { instrumentId: "asc" },
+        { date: "asc" },
+      ],
+      include: {
+        instrument: {
+          select: { id: true, symbol: true, name: true, currency: true },
+        },
+        portfolio: { select: { baseCurrency: true, groupId: true } },
+      },
+    }),
+    getValueHistoryByGroup(36500),
+    db.portfolio.findMany({
+      where: excludeEmptyUnassignedWhere,
+      select: { id: true, baseCurrency: true, groupId: true },
+    }),
+  ]);
+
+  const allTimeHigh = allTimeHighFromTotals(
+    history.points.map((pt) => ({
+      date: pt.date,
+      total: historyPointTotal(pt),
+    })),
+  );
+
+  const instrumentIds = Array.from(
+    new Set(allTrades.map((trade) => trade.instrumentId)),
+  );
+  const splits = await loadStockSplits(instrumentIds);
+  const earliestTradeDate =
+    allTrades.length > 0
+      ? allTrades
+          .map((trade) => utcDayStart(trade.date))
+          .reduce((earliest, date) =>
+            date.getTime() < earliest.getTime() ? date : earliest,
+          )
+      : null;
+  const dailyPriceRows =
+    instrumentIds.length > 0 && earliestTradeDate
+      ? await db.priceHistory.findMany({
+          where: {
+            instrumentId: { in: instrumentIds },
+            date: { gte: earliestTradeDate },
+          },
+          orderBy: [{ instrumentId: "asc" }, { date: "asc" }],
+        })
+      : [];
+
+  // Daily records use market P&L only: prior-close quantity times the price/FX
+  // move to the current close. This excludes deposits, trades, and import jumps.
+  const [marketRecords, groupHistories, groupMarketRecords] = await Promise.all(
+    [
+      computeMarketDayRecords({
+        trades: allTrades,
+        prices: dailyPriceRows,
+        baseCurrency,
+        fxOn: cachedFx,
+        splits,
+      }),
+      Promise.all(
+        groups.map(async (group) => ({
+          group,
+          history: await getGroupValueHistory(group.id, 36500),
+        })),
+      ),
+      Promise.all(
+        groups.map((group) =>
+          computeMarketDayRecords({
+            trades: allTrades.filter(
+              (trade) => trade.portfolio.groupId === group.id,
+            ),
+            prices: dailyPriceRows,
+            baseCurrency,
+            fxOn: cachedFx,
+            splits,
+          }),
+        ),
+      ),
+    ],
+  );
+
+  const groupAllTimeHighs = await Promise.all(
+    groupHistories.map(async ({ group, history: groupHistory }) => {
+      const totals = [];
+      for (const pt of groupHistory.points) {
+        let total = historyPointTotal(pt);
+        if (group.baseCurrency.toUpperCase() !== baseCurrency.toUpperCase()) {
+          total = total.times(
+            await cachedFx(group.baseCurrency, baseCurrency, pt.date),
+          );
+        }
+        totals.push({ date: pt.date, total });
+      }
+      return allTimeHighFromTotals(totals);
+    }),
+  );
+
+  const unrealizedMap = new Map<string, InstrumentEntry>();
+  const openInstrumentIds = new Set<string>();
+  const groupUnrealized = new Map<string, Map<string, InstrumentEntry>>();
+  const groupOpenInstrumentIds = new Map<string, Set<string>>();
+  for (const group of groups) {
+    groupUnrealized.set(group.id, new Map());
+    groupOpenInstrumentIds.set(group.id, new Set());
+  }
+
+  for (const portfolio of portfolios) {
+    const data = await computeHoldings(portfolio.id);
+    const toGlobal =
+      portfolio.baseCurrency === baseCurrency
+        ? ONE
+        : await getFxRate(portfolio.baseCurrency, baseCurrency);
+    const groupMap = groupUnrealized.get(portfolio.groupId);
+    const groupOpen = groupOpenInstrumentIds.get(portfolio.groupId);
+
+    for (const h of data.holdings) {
+      if (h.unrealizedPnL === null) continue;
+      openInstrumentIds.add(h.instrumentId);
+      groupOpen?.add(h.instrumentId);
+
+      const holding = {
+        instrumentId: h.instrumentId,
+        symbol: h.symbol,
+        name: h.name,
+        unrealizedPnL: h.unrealizedPnL.times(toGlobal),
+        costBase: h.costBase.times(toGlobal),
+      };
+      addUnrealized(unrealizedMap, holding);
+      if (groupMap) addUnrealized(groupMap, holding);
+    }
+  }
+
+  const accountUnrealized = pickUnrealizedRecords(unrealizedMap);
+
+  const realizedMap = new Map<string, RealizedEntry>();
+  const groupRealized = new Map<string, Map<string, RealizedEntry>>();
+  for (const group of groups) {
+    groupRealized.set(group.id, new Map());
+  }
+
   type TradeRecord = (typeof allTrades)[number];
   const byPortfolioAndInstrument = new Map<string, TradeRecord[]>();
   for (const t of allTrades) {
@@ -594,88 +775,50 @@ export async function getPortfolioStats(): Promise<PortfolioStats> {
       splits,
     );
     const realizedGlobal = realizedInPortfolioBase.times(toGlobal);
-
-    const instrId = first.instrumentId;
-    const existing = realizedMap.get(instrId);
-    if (existing) {
-      existing.realizedPnL = existing.realizedPnL.plus(realizedGlobal);
-    } else {
-      realizedMap.set(instrId, {
-        instrumentId: instrId,
-        symbol: first.instrument.symbol,
-        name: first.instrument.name,
-        realizedPnL: realizedGlobal,
-      });
-    }
+    const entry: RealizedEntry = {
+      instrumentId: first.instrumentId,
+      symbol: first.instrument.symbol,
+      name: first.instrument.name,
+      realizedPnL: realizedGlobal,
+    };
+    addRealized(realizedMap, entry);
+    const groupMap = groupRealized.get(first.portfolio.groupId);
+    if (groupMap) addRealized(groupMap, entry);
   }
 
-  let bestRealizedAbs: PositionStat | null = null;
-  for (const entry of realizedMap.values()) {
-    if (entry.realizedPnL.lte(0)) continue;
-    if (!bestRealizedAbs || entry.realizedPnL.gt(bestRealizedAbs.value)) {
-      bestRealizedAbs = {
-        instrumentId: entry.instrumentId,
-        symbol: entry.symbol,
-        name: entry.name,
-        value: entry.realizedPnL,
-        percent: null,
-      };
-    }
-  }
-
-  // ── 4. Activity stats ──────────────────────────────────────────────────
-  const [totalTrades, uniqueInstrumentRows] = await Promise.all([
-    db.trade.count({ where: visibleTradeWhere }),
-    db.trade.findMany({
-      where: visibleTradeWhere,
-      select: { instrumentId: true },
-      distinct: ["instrumentId"],
-    }),
-  ]);
-
-  let longestHoldingDays: number | null = null;
-  let longestHoldingSymbol: string | null = null;
-
-  if (openInstrumentIds.size > 0) {
-    const oldestBuys = await db.trade.groupBy({
-      by: ["instrumentId"],
-      where: {
-        ...visibleTradeWhere,
-        type: "BUY",
-        instrumentId: { in: Array.from(openInstrumentIds) },
-      },
-      _min: { date: true },
-      orderBy: { _min: { date: "asc" } },
-      take: 1,
-    });
-
-    if (oldestBuys.length > 0 && oldestBuys[0]._min.date) {
-      const oldestDate = oldestBuys[0]._min.date;
-      longestHoldingDays = Math.floor(
-        (Date.now() - oldestDate.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const instrument = await db.instrument.findUnique({
-        where: { id: oldestBuys[0].instrumentId },
-        select: { symbol: true },
-      });
-      longestHoldingSymbol = instrument?.symbol ?? null;
-    }
-  }
+  const groupStats: GroupRecordStats[] = groups.map((group, index) => {
+    const groupTrades = allTrades.filter(
+      (trade) => trade.portfolio.groupId === group.id,
+    );
+    const unrealized = pickUnrealizedRecords(
+      groupUnrealized.get(group.id) ?? new Map(),
+    );
+    const days = groupMarketRecords[index];
+    return {
+      groupId: group.id,
+      name: group.name,
+      allTimeHigh: groupAllTimeHighs[index] ?? null,
+      bestDay: days.bestDay,
+      worstDay: days.worstDay,
+      ...unrealized,
+      bestRealizedAbs: pickBestRealized(
+        groupRealized.get(group.id) ?? new Map(),
+      ),
+      activity: computeActivity(
+        groupTrades,
+        groupOpenInstrumentIds.get(group.id) ?? new Set(),
+      ),
+    };
+  });
 
   return {
     baseCurrency,
     allTimeHigh,
-    bestDay,
-    worstDay,
-    bestUnrealizedAbs,
-    bestUnrealizedPct,
-    bestRealizedAbs,
-    worstPositionAbs,
-    activity: {
-      totalTrades,
-      uniqueInstruments: uniqueInstrumentRows.length,
-      longestHoldingDays,
-      longestHoldingSymbol,
-    },
+    bestDay: marketRecords.bestDay,
+    worstDay: marketRecords.worstDay,
+    ...accountUnrealized,
+    bestRealizedAbs: pickBestRealized(realizedMap),
+    activity: computeActivity(allTrades, openInstrumentIds),
+    groups: groupStats,
   };
 }
