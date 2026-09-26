@@ -3,8 +3,9 @@
 import { Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 import { generateInvestmentAllocation } from "@/actions/investment-allocator";
-import { type InvestmentAllocation } from "@/lib/investment-allocator";
+import type { InvestmentAllocation } from "@/lib/investment-allocator";
 import { InvestmentAllocationResult } from "./investment-allocation-result";
+import { InvestmentChat } from "./investment-chat";
 
 type Props = {
   groupId: string;
@@ -22,22 +23,28 @@ export function InvestmentAllocatorClient({
   const [pending, start] = useTransition();
   const [cashInput, setCashInput] = useState("");
   const [result, setResult] = useState<InvestmentAllocation | null>(null);
+  const [allocatedCash, setAllocatedCash] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const cashAmount = Number(cashInput);
   const minTradeAmount = (totalGroupValue * minTradePercent) / 100;
-  const valid = cashAmount > 0 && !Number.isNaN(cashAmount);
+  const valid = cashAmount > 0 && Number.isFinite(cashAmount);
 
   function handleGenerate() {
     if (!valid) return;
     setError(null);
     setResult(null);
     start(async () => {
-      const res = await generateInvestmentAllocation(groupId, cashAmount);
-      if (res.ok) {
-        setResult(res.result);
-      } else {
-        setError(res.error);
+      try {
+        const res = await generateInvestmentAllocation(groupId, cashAmount);
+        if (res.ok) {
+          setAllocatedCash(cashAmount);
+          setResult(res.result);
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        setError("Unable to generate an allocation. Please try again.");
       }
     });
   }
@@ -87,9 +94,7 @@ export function InvestmentAllocatorClient({
           </button>
         </div>
 
-        {error ? (
-          <p className="mt-3 text-sm text-loss">{error}</p>
-        ) : null}
+        {error ? <p className="mt-3 text-sm text-loss">{error}</p> : null}
       </div>
 
       {pending ? (
@@ -99,7 +104,18 @@ export function InvestmentAllocatorClient({
       ) : null}
 
       {result && !pending ? (
-        <InvestmentAllocationResult result={result} baseCurrency={baseCurrency} />
+        <>
+          <InvestmentAllocationResult
+            result={result}
+            baseCurrency={baseCurrency}
+          />
+          <InvestmentChat
+            key={result.generatedAt}
+            groupId={groupId}
+            cashToInvest={allocatedCash}
+            allocation={result}
+          />
+        </>
       ) : null}
     </div>
   );
